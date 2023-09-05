@@ -7,6 +7,23 @@
 #include <vector>
 
 struct Def {
+    enum class Use {
+        SIGNAL,
+        POWER,
+        GROUND,
+        CLOCK,
+        TIEOFF,
+        ANALOG,
+        SCAN,
+        RESET
+    };
+
+    struct Layer {
+        std::string name {};
+        std::pair<uint32_t, uint32_t> start {};
+        std::pair<uint32_t, uint32_t> end {};
+    };
+
     struct Via {
         std::string name {};
         std::string viaRule {};
@@ -40,24 +57,7 @@ struct Def {
             FEEDTHRU
         };
 
-        enum class Use {
-            SIGNAL,
-            POWER,
-            GROUND,
-            CLOCK,
-            TIEOFF,
-            ANALOG,
-            SCAN,
-            RESET
-        };
-
         struct Port {
-            struct Layer {
-                std::string layer {};
-                std::pair<uint32_t, uint32_t> topLeft {};
-                std::pair<uint32_t, uint32_t> bottomRight {};
-            };
-
             std::vector<Layer> layers {};
             std::pair<uint32_t, uint32_t> place {};
             char orientation {};
@@ -67,6 +67,21 @@ struct Def {
         Direction direction {};
         Use use {};
         std::vector<Port> ports {};
+    };
+
+    struct Net {
+        enum class RegularWiring {
+            COVER,
+            FIXED,
+            ROUTED,
+            NOSHIELD
+        };
+
+        std::string name {};
+        std::vector<std::pair<std::string, std::string>> connections {};
+        Use use {};
+        RegularWiring regularWiring {};
+        std::vector<Layer> layers {};
     };
 
     uint16_t units {};
