@@ -1,1 +1,1 @@
-add_subdirectory(lef_reader)
+add_subdirectory(reader)
