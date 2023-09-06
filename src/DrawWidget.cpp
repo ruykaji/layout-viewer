@@ -32,6 +32,8 @@ void DrawWidget::paintEvent(QPaintEvent* t_event)
     painter->drawRect(QRect(0 - m_def->dieAria.first / 2.0, 0 - m_def->dieAria.second / 2.0, m_def->dieAria.first, m_def->dieAria.second));
 
     painter->end();
+
+    delete painter;
 }
 
 void DrawWidget::wheelEvent(QWheelEvent* t_event)

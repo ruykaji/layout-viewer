@@ -33,11 +33,9 @@ public:
     Reader(const std::string_view t_fileName);
 
 private:
-    TokenKind defineToken(const std::vector<std::string>& t_tokens);
+    std::vector<std::string> parseLine(const std::string_view t_str, const char ch = ' ') noexcept;
 
-    Def::Via makeVia(const std::stringstream& t_strStream);
-    // Def::Component makeComponent(const std::stringstream& t_strStream);
-    Def::Pin makePin(const std::stringstream& t_strStream);
+    TokenKind defineToken(const std::vector<std::string>& t_tokens) noexcept;
 };
 
 #endif
