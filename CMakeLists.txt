@@ -8,13 +8,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-set(SRC main.cpp)
-# set(HDR ../../../Include/PaintData.hpp ../../../Include/LayerSelectWidget.hpp ../../../Include/GeometryWidget.hpp ../../../Include/LayoutWidget.hpp)
+set(SRC main.cpp ./src/DrawWidget.cpp)
+set(HDR ./include/DrawWidget.hpp)
 
-add_executable(main ${SRC})
+add_executable(main ${SRC} ${HDR})
 
 target_link_libraries(main PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets reader)
-target_include_directories(main PUBLIC ${SHARED_INCLUDE_DIRS})
+target_include_directories(main PUBLIC include)
 
 set (CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "D:\\qt\\5.12.12\\mingw73_64\\")
 

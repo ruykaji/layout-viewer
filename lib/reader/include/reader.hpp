@@ -22,6 +22,8 @@ class Reader {
     };
 
 public:
+    Def def {};
+
     Reader() = default;
     ~Reader() = default;
 

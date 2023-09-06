@@ -5,7 +5,6 @@
 
 Reader::Reader(const std::string_view t_fileName)
 {
-    Def def;
     std::ifstream fin({ t_fileName.begin(), t_fileName.end() });
 
     if (fin.is_open()) {
@@ -30,7 +29,7 @@ Reader::Reader(const std::string_view t_fileName)
                 break;
             }
             case Reader::TokenKind::DIEAREA: {
-                
+                def.dieAria = std::pair<uint32_t, uint32_t>(std::stoi(tokens.at(6)), std::stoi(tokens.at(7)));
                 break;
             }
 
