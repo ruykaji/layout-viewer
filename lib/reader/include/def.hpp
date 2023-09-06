@@ -34,20 +34,20 @@ struct Def {
         std::pair<uint8_t, uint8_t> rowCol {};
     };
 
-    struct Component {
-        enum class Source {
-            NETLIST,
-            DIST,
-            USER,
-            TIMING
-        };
+    // struct Component {
+    //     enum class Source {
+    //         NETLIST,
+    //         DIST,
+    //         USER,
+    //         TIMING
+    //     };
 
-        std::string name {};
-        std::string moduleName {};
-        Source source {};
-        std::pair<uint32_t, uint32_t> location {};
-        char orientation {};
-    };
+    //     std::string name {};
+    //     std::string moduleName {};
+    //     Source source {};
+    //     std::pair<uint32_t, uint32_t> location {};
+    //     char orientation {};
+    // };
 
     struct Pin {
         enum class Direction {
@@ -87,7 +87,7 @@ struct Def {
     uint16_t units {};
     std::pair<uint32_t, uint32_t> dieAria {};
     std::vector<Via> vias {};
-    std::vector<Component> components {};
+    // std::vector<Component> components {};
 };
 
 #endif
