@@ -1,16 +1,25 @@
-#include <QApplication>
+#include <iostream>
+#include <cstdio>
 
-#include "include/DrawWidget.hpp"
-#include "reader.hpp"
+#include <def/defrReader.hpp>
 
 int main(int argc, char* argv[])
 {
-    QApplication app(argc, argv);
+    auto isInit = defrInit();
 
-    Reader reader("F:/circuits/s27/RUN_2023.05.31_11.46.48/results/routing/s27.def");
-    DrawWidget widget(&reader.def);
+    if(isInit){
+        std::cerr << "Error: cant't initialize reader!\n" << std::flush;
+        return 0;
+    }
 
-    widget.show();
+    auto file = fopen("/home/alaie/lefdef/def/TEST/complete.5.8.def", "r");
+    auto isReaded = defrRead(file, "/home/alaie/lefdef/def/TEST/complete.5.8.def", nullptr, 0);
+    auto data = defrGetUserData();
 
-    return app.exec();
+    fclose(file);
+
+    if(isReaded){
+        std::cerr << "Error: could not read the file!\n" << std::flush;
+        return 0;
+    }
 }

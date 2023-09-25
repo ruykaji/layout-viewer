@@ -8,16 +8,19 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-set(SRC main.cpp ./src/DrawWidget.cpp)
-set(HDR ./include/DrawWidget.hpp)
+include_directories(/usr/local/include)
+
+set(DEF /usr/local/lib/def/libdef.a)
+set(LEF /usr/local/lib/lef/liblef.a)
+
+set(SRC main.cpp)
+set(HDR)
+
+link_libraries(/usr/local/lib/lef /usr/local/lib/def)
 
 add_executable(main ${SRC} ${HDR})
 
-target_link_libraries(main PRIVATE Qt5::Core Qt5::Gui Qt5::Widgets reader)
+target_link_libraries(main PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets)
 target_include_directories(main PUBLIC include)
 
-set (CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} "D:\\qt\\5.12.12\\mingw73_64\\")
-
-find_package(Qt5 COMPONENTS Core Gui Widgets REQUIRED)
-
-add_subdirectory(lib)
+find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
