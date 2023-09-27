@@ -8,12 +8,15 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-include_directories(${CMAKE_SOURCE_DIR}/external/def/include ${CMAKE_SOURCE_DIR}/external/lef/include)
+include_directories(${CMAKE_SOURCE_DIR}/external/def/include ${CMAKE_SOURCE_DIR}/external/lef/include ${CMAKE_SOURCE_DIR}/src)
 
 find_library(DEF NAMES libdef.a PATHS ${CMAKE_SOURCE_DIR}/external/def/lib)
 find_library(LEF NAMES liblef.a PATHS ${CMAKE_SOURCE_DIR}/external/lef/lib)
 
-add_executable(main main.cpp)
+file(GLOB_RECURSE SRC ${CMAKE_SOURCE_DIR}/src/**/*.cpp)
+file(GLOB_RECURSE HDR ${CMAKE_SOURCE_DIR}/src/**/*.hpp)
+
+add_executable(main main.cpp ${SRC} ${HDR})
 
 target_link_libraries(main PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets)
 target_include_directories(main PUBLIC include)

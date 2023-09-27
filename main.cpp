@@ -1,29 +1,15 @@
 #include <cstdio>
 #include <iostream>
-
 #include <defrReader.hpp>
+
+#include "def_encoder/def_encoder.hpp"
 
 int main(int argc, char* argv[])
 {
-    auto isInit = defrInit();
+    auto fileName = std::string_view("/home/alaie/projects/layout-viewer/external/def/TEST/complete.5.8.def");
 
-    if (isInit) {
-        std::cerr << "Error: cant't initialize reader!\n"
-                  << std::flush;
-        return 2;
-    }
+    Encoder encoder;
 
-    auto file = fopen("/home/alaie/projects/layout-viewer/__tests__/complete.5.8.def", "r");
-
-    if (file != nullptr) {
-        auto isRead = defrRead(file, "/home/alaie/projects/layout-viewer/layout-viewer/complete.5.8.def", nullptr, 0);
-
-        if (isRead) {
-            std::cerr << "Error: could not read the file!\n"
-                      << std::flush;
-            return 2;
-        }
-    }
-
-    fclose(file);
+    encoder.initParser();
+    encoder.setFile(fileName);
 }
