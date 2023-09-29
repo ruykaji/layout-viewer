@@ -1,10 +1,9 @@
-#include <defrReader.hpp>
 #include <iostream>
 #include <stdexcept>
 
 #include "def_encoder.hpp"
 
-void Encoder::read(const std::string_view t_fileName)
+std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 {
     // Init session
     //=================================================================
@@ -28,6 +27,8 @@ void Encoder::read(const std::string_view t_fileName)
         throw std::runtime_error("Error: Can't open a file!");
     }
 
+    m_def = std::make_shared<Def>();
+
     // Read file
     //=================================================================
 
@@ -36,9 +37,11 @@ void Encoder::read(const std::string_view t_fileName)
     if (readStatus != 0) {
         throw std::runtime_error("Error: Can't read a file!");
     }
+
+    return m_def;
 }
 
-int Encoder::dieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData) noexcept
+int DEFEncoder::dieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData) noexcept
 {
     if (t_type == defrCallbackType_e::defrDieAreaCbkType) {
         auto points = t_box->getPoint();

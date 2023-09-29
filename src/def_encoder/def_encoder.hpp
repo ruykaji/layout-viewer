@@ -2,6 +2,7 @@
 #define __ENCODER_H__
 
 #include <cstdio>
+#include <defrReader.hpp>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -9,17 +10,17 @@
 #include "def.hpp"
 #include "macro.hpp"
 
-class Encoder {
-    std::unique_ptr<Def> m_def { new Def() };
+class DEFEncoder {
+    std::shared_ptr<Def> m_def {};
 
 public:
-    Encoder() = default;
-    ~Encoder() = default;
+    explicit DEFEncoder() = default;
+    ~DEFEncoder() = default;
 
-    COPY_CONSTRUCTOR_REMOVE(Encoder);
-    ASSIGN_OPERATOR_REMOVE(Encoder);
+    COPY_CONSTRUCTOR_REMOVE(DEFEncoder);
+    ASSIGN_OPERATOR_REMOVE(DEFEncoder);
 
-    void read(const std::string_view t_fileName);
+    std::shared_ptr<Def> read(const std::string_view t_fileName);
 
 private:
     static int dieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData) noexcept;

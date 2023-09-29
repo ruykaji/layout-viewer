@@ -1,17 +1,13 @@
-#include <cstdio>
-#include <defrReader.hpp>
-#include <iostream>
+#include <QApplication>
 
-#include "def_encoder/def_encoder.hpp"
+#include "MainWindow.hpp"
 
 int main(int argc, char* argv[])
 {
-    auto fileName = std::string_view("/home/alaie/projects/layout-viewer/external/def/TEST/complete.5.8.def");
+    QApplication app(argc, argv);
 
-    Encoder encoder;
+    MainWindow* mainWindow = new MainWindow();
+    mainWindow->show();
 
-    encoder.initParser();
-    encoder.setFile(fileName);
-    encoder.setCallbacks();
-    encoder.read();
+    return app.exec();
 }
