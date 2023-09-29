@@ -47,11 +47,13 @@ int DEFEncoder::dieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
         auto points = t_box->getPoint();
         auto def = static_cast<Def*>(t_userData);
 
-        if (points.numPoints == 6) {
-            def->dieArea = Rect(points.x[0], points.y[0], std::abs(points.x[1] - points.x[0]), std::abs(points.y[1] - points.y[0]));
+        Polygon poly {};
 
-            return 0;
+        for (std::size_t i = 0; i < points.numPoints; ++i) {
+            def->dieArea.addPoint(points.x[i], points.y[i]);
         }
+
+        return 0;
     }
 
     return 2;
