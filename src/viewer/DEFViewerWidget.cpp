@@ -32,7 +32,7 @@ void DEFViewerWidget::render(QString& t_fileName)
     m_currentScale = m_currentScale / m_initialScale * newInitialScale;
     m_initialScale = newInitialScale;
 
-    m_moveAxesIn = QPointF((m_max.first - m_min.first) / 2.0, (m_max.second - m_min.second) / 2.0);
+    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second)) / 2.0);
     m_axesPos = m_moveAxesIn;
 
     update();
