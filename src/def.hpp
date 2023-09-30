@@ -3,21 +3,25 @@
 
 #include <vector>
 
+#include "types.hpp"
+
 struct Polygon {
-    std::vector<std::pair<int32_t, int32_t>> points {};
+    std::vector<Point> points {};
 
     Polygon() = default;
     ~Polygon() = default;
 
-    void addPoint(const int32_t& t_x, const int32_t& t_y)
+    void append(const int32_t& t_x, const int32_t& t_y)
     {
-        points.emplace_back(std::pair<int32_t, int32_t>(t_x, t_y));
+        points.emplace_back(Point(t_x, t_y));
     }
 };
 
 #pragma pack(push, 1)
 struct Def {
     Polygon dieArea {};
+    std::vector<Polygon> gCellGridX {};
+    std::vector<Polygon> gCellGridY {};
 
     Def() = default;
     ~Def() = default;
