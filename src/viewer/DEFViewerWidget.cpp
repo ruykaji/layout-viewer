@@ -50,13 +50,25 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->scale(m_currentScale, m_currentScale);
         painter->setPen(QPen(QColor(Qt::white), 1.0 / m_currentScale));
 
-        QPolygonF poly {};
+        for (auto& cell : m_def->gCellGrid.cells) {
+            QPolygonF cellPoly {};
 
-        for (auto& [x, y] : m_def->dieArea.points) {
-            poly.append(QPointF(x, y));
+            for (auto& [x, y] : cell.points) {
+                cellPoly.append(QPointF(x, y));
+            }
+
+            painter->drawPolygon(cellPoly);
         }
 
-        painter->drawPolygon(poly);
+        painter->setPen(QPen(QColor(Qt::red), 1.0 / m_currentScale));
+
+        QPolygonF dieAreaPoly {};
+
+        for (auto& [x, y] : m_def->dieArea.points) {
+            dieAreaPoly.append(QPointF(x, y));
+        }
+
+        painter->drawPolygon(dieAreaPoly);
 
         painter->end();
     }

@@ -1,4 +1,5 @@
-#include <iostream>
+#include <algorithm>
+#include <execution>
 #include <stdexcept>
 
 #include "def_encoder.hpp"
@@ -42,6 +43,102 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     // Post processing
     //=================================================================
 
+    // ---> DieArea
+
+    int32_t minX {};
+    int32_t minY {};
+
+    for (auto& [x, y] : m_def->dieArea.points) {
+        minX = std::min(minX, x);
+        minY = std::min(minY, y);
+    }
+
+    // ---> gCellGrid
+
+    std::vector<Polygon> xLines {};
+
+    for (std::size_t x = m_def->gCellGrid.offsetX; x != m_def->gCellGrid.maxX; x += m_def->gCellGrid.stepX) {
+        std::pair<int32_t, bool> yStart { 0, false };
+        std::pair<int32_t, bool> yEnd { 0, false };
+
+        for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
+            if (i->second == (i + 1)->second) {
+                if ((x >= i->first && x <= (i + 1)->first) || (x <= i->first && x >= (i + 1)->first)) {
+                    if (!yStart.second) {
+                        yStart.first = i->second;
+                        yStart.second = true;
+                    } else if (!yEnd.second) {
+                        yEnd.first = i->second;
+                        yEnd.second = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        Polygon path;
+
+        if (yStart < yEnd) {
+            path.append(x + minX, yStart.first);
+            path.append(x + minX, yEnd.first);
+
+        } else {
+            path.append(x + minX, yEnd.first);
+            path.append(x + minX, yStart.first);
+        }
+
+        xLines.emplace_back(path);
+    }
+
+    std::vector<Polygon> yLines {};
+
+    for (std::size_t y = m_def->gCellGrid.offsetY; y != m_def->gCellGrid.maxY; y += m_def->gCellGrid.stepY) {
+        std::pair<int32_t, bool> xStart { 0, false };
+        std::pair<int32_t, bool> xEnd { 0, false };
+
+        for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
+            if (i->first == (i + 1)->first) {
+                if ((y >= i->second && y <= (i + 1)->second) || (y <= i->second && y >= (i + 1)->second)) {
+                    if (!xStart.second) {
+                        xStart.first = i->first;
+                        xStart.second = true;
+                    } else if (!xEnd.second) {
+                        xEnd.first = i->first;
+                        xEnd.second = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        Polygon path;
+
+        if (xStart < xEnd) {
+            path.append(xStart.first, y + minY);
+            path.append(xEnd.first, y + minY);
+        } else {
+            path.append(xEnd.first, y + minY);
+            path.append(xStart.first, y + minY);
+        }
+
+        yLines.emplace_back(path);
+    }
+
+    for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
+        for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
+            if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(1).first >= row->points.at(0).first) {
+                Polygon poly {};
+
+                poly.append(col->points.at(0).first, row->points.at(0).second);
+                poly.append((col + 1)->points.at(0).first, row->points.at(0).second);
+                poly.append((col + 1)->points.at(0).first, (row + 1)->points.at(0).second);
+                poly.append(col->points.at(0).first, (row + 1)->points.at(0).second);
+
+                m_def->gCellGrid.cells.emplace_back(poly);
+            }
+        }
+    }
+
     return m_def;
 }
 
@@ -55,8 +152,16 @@ int DEFEncoder::dieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
         Polygon poly {};
 
-        for (std::size_t i = 0; i < points.numPoints; ++i) {
-            def->dieArea.append(points.x[i], points.y[i]);
+        if (points.numPoints != 2) {
+            for (std::size_t i = 0; i < points.numPoints; ++i) {
+                def->dieArea.append(points.x[i], points.y[i]);
+            }
+        } else {
+            def->dieArea.append(points.x[0], points.y[0]);
+            def->dieArea.append(points.x[1], points.y[0]);
+            def->dieArea.append(points.x[1], points.y[1]);
+            def->dieArea.append(points.x[0], points.y[1]);
+            def->dieArea.append(points.x[0], points.y[0]);
         }
 
         return 0;
@@ -78,27 +183,19 @@ int DEFEncoder::gcellGridCallback(defrCallbackType_e t_type, defiGcellGrid* t_gr
     if (t_type == defrCallbackType_e::defrGcellGridCbkType) {
         auto def = static_cast<Def*>(t_userData);
         auto macro = t_grid->macro();
-        auto step = t_grid->xStep();
-        auto start = t_grid->x();
 
         if (strcmp(macro, "X") == 0) {
-            for (std::size_t i = 0; i < t_grid->xNum(); ++i) {
-                Polygon poly;
-
-                poly.append(start + i * step, 0);
-                def->gCellGridX.emplace_back(poly);
-            }
+            def->gCellGrid.offsetX = t_grid->x();
+            def->gCellGrid.numX = t_grid->xNum();
+            def->gCellGrid.stepX = t_grid->xStep();
+            def->gCellGrid.maxX = def->gCellGrid.offsetX + (def->gCellGrid.numX + 1) * def->gCellGrid.stepX;
 
             return 0;
-        }
-
-        if (strcmp(macro, "Y") == 0) {
-            for (std::size_t i = 0; i < t_grid->xNum(); ++i) {
-                Polygon poly;
-
-                poly.append(0, start + i * step);
-                def->gCellGridY.emplace_back(poly);
-            }
+        } else if (strcmp(macro, "Y") == 0) {
+            def->gCellGrid.offsetY = t_grid->x();
+            def->gCellGrid.numY = t_grid->xNum();
+            def->gCellGrid.stepY = t_grid->xStep();
+            def->gCellGrid.maxY = def->gCellGrid.offsetY + (def->gCellGrid.numY + 1) * def->gCellGrid.stepY;
 
             return 0;
         }
@@ -136,7 +233,5 @@ int DEFEncoder::stylesCallback(defrCallbackType_e t_type, defiStyles* t_style, v
 int DEFEncoder::trackCallback(defrCallbackType_e t_type, defiTrack* t_track, void* t_userData) {};
 
 int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData) {};
-
-int DEFEncoder::voidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData) {};
 
 int DEFEncoder::voidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData) {};

@@ -5,6 +5,10 @@
 
 #include "types.hpp"
 
+struct Def;
+struct Polygon;
+struct GCellGrid;
+
 struct Polygon {
     std::vector<Point> points {};
 
@@ -18,10 +22,28 @@ struct Polygon {
 };
 
 #pragma pack(push, 1)
+struct GCellGrid {
+    std::size_t numY {};
+    int32_t offsetY {};
+    int32_t stepY {};
+    int32_t maxY {};
+
+    std::size_t numX {};
+    int32_t offsetX {};
+    int32_t stepX {};
+    int32_t maxX {};
+
+    std::vector<Polygon> cells {};
+
+    GCellGrid() = default;
+    ~GCellGrid() = default;
+};
+#pragma pack(push)
+
+#pragma pack(push, 1)
 struct Def {
     Polygon dieArea {};
-    std::vector<Polygon> gCellGridX {};
-    std::vector<Polygon> gCellGridY {};
+    GCellGrid gCellGrid {};
 
     Def() = default;
     ~Def() = default;

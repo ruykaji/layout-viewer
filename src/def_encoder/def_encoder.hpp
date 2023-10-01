@@ -68,8 +68,6 @@ private:
     static int viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData);
 
     static int voidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData);
-
-    static int voidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData);
 };
 
 #endif
