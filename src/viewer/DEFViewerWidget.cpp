@@ -48,6 +48,10 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->begin(this);
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
+
+        // gCellGrid drawing
+        //======================================================================
+
         painter->setPen(QPen(QColor(Qt::white), 1.0 / m_currentScale));
 
         for (auto& cell : m_def->gCellGrid.cells) {
@@ -59,6 +63,26 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
             painter->drawPolygon(cellPoly);
         }
+
+        // Pins drawing
+        //======================================================================
+
+        painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
+
+        for (auto& pin : m_def->pins) {
+            QPolygonF pinPoly {};
+
+            for (auto& pinBound : pin.bounds) {
+                for (auto& [x, y] : pinBound.points) {
+                    pinPoly.append(QPointF(x, y));
+                }
+            }
+
+            painter->drawPolygon(pinPoly);
+        }
+
+        // DieArea drawing
+        //======================================================================
 
         painter->setPen(QPen(QColor(Qt::red), 1.0 / m_currentScale));
 

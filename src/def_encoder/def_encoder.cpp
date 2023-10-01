@@ -19,6 +19,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
     defrSetDieAreaCbk(&dieAreaCallback);
     defrSetGcellGridCbk(&gcellGridCallback);
+    defrSetPinCbk(&pinCallback);
 
     // Open file
     //=================================================================
@@ -57,7 +58,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
     std::vector<Polygon> xLines {};
 
-    for (std::size_t x = m_def->gCellGrid.offsetX; x != m_def->gCellGrid.maxX; x += m_def->gCellGrid.stepX) {
+    for (int32_t x = m_def->gCellGrid.offsetX + minX; x != m_def->gCellGrid.maxX + minX; x += m_def->gCellGrid.stepX) {
         std::pair<int32_t, bool> yStart { 0, false };
         std::pair<int32_t, bool> yEnd { 0, false };
 
@@ -79,12 +80,12 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         Polygon path;
 
         if (yStart < yEnd) {
-            path.append(x + minX, yStart.first);
-            path.append(x + minX, yEnd.first);
+            path.append(x, yStart.first);
+            path.append(x, yEnd.first);
 
         } else {
-            path.append(x + minX, yEnd.first);
-            path.append(x + minX, yStart.first);
+            path.append(x, yEnd.first);
+            path.append(x, yStart.first);
         }
 
         xLines.emplace_back(path);
@@ -92,7 +93,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
     std::vector<Polygon> yLines {};
 
-    for (std::size_t y = m_def->gCellGrid.offsetY; y != m_def->gCellGrid.maxY; y += m_def->gCellGrid.stepY) {
+    for (int32_t y = m_def->gCellGrid.offsetY + minY; y != m_def->gCellGrid.maxY + minY; y += m_def->gCellGrid.stepY) {
         std::pair<int32_t, bool> xStart { 0, false };
         std::pair<int32_t, bool> xEnd { 0, false };
 
@@ -114,11 +115,11 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         Polygon path;
 
         if (xStart < xEnd) {
-            path.append(xStart.first, y + minY);
-            path.append(xEnd.first, y + minY);
+            path.append(xStart.first, y);
+            path.append(xEnd.first, y);
         } else {
-            path.append(xEnd.first, y + minY);
-            path.append(xStart.first, y + minY);
+            path.append(xEnd.first, y);
+            path.append(xStart.first, y);
         }
 
         yLines.emplace_back(path);
@@ -126,7 +127,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
     for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
         for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
-            if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(1).first >= row->points.at(0).first) {
+            if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(0).first >= row->points.at(0).first) {
                 Polygon poly {};
 
                 poly.append(col->points.at(0).first, row->points.at(0).second);
@@ -214,7 +215,47 @@ int DEFEncoder::nonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_
 
 int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData) {};
 
-int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pinProp, void* t_userData) {};
+int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pinProp, void* t_userData)
+{
+    if (t_type == defrPinCbkType) {
+        int32_t numLayers = t_pinProp->numLayer();
+        int32_t placeX = t_pinProp->placementX();
+        int32_t placeY = t_pinProp->placementY();
+
+        Pin pin {};
+
+        for (std::size_t i = 0; i < numLayers; ++i) {
+            int32_t xl {};
+            int32_t yl {};
+            int32_t xh {};
+            int32_t yh {};
+
+            t_pinProp->bounds(i, &xl, &yl, &xh, &yh);
+
+            xl = placeX - std::abs(xh - xl) / 2;
+            yl = placeY - std::abs(yh - yl);
+            xh = placeX + std::abs(xh - xl) / 2;
+            yh = placeY;
+
+            Polygon poly {};
+
+            poly.append(xl, yl);
+            poly.append(xh, yl);
+            poly.append(xh, yh);
+            poly.append(xl, yh);
+
+            pin.bounds.emplace_back(poly);
+        }
+
+        auto def = static_cast<Def*>(t_userData);
+
+        def->pins.emplace_back(pin);
+
+        return 0;
+    }
+
+    return 2;
+};
 
 int DEFEncoder::propCallback(defrCallbackType_e t_type, defiProp* t_prop, void* t_userData) {};
 

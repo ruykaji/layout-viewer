@@ -21,7 +21,6 @@ struct Polygon {
     }
 };
 
-#pragma pack(push, 1)
 struct GCellGrid {
     std::size_t numY {};
     int32_t offsetY {};
@@ -38,16 +37,22 @@ struct GCellGrid {
     GCellGrid() = default;
     ~GCellGrid() = default;
 };
-#pragma pack(push)
 
-#pragma pack(push, 1)
+struct Pin {
+    std::vector<Polygon> bounds {};
+
+    Pin() = default;
+    ~Pin() = default;
+};
+
 struct Def {
     Polygon dieArea {};
     GCellGrid gCellGrid {};
 
+    std::vector<Pin> pins {};
+
     Def() = default;
     ~Def() = default;
 };
-#pragma pack(push)
 
 #endif
