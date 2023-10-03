@@ -8,12 +8,22 @@
 struct Def;
 struct Polygon;
 struct GCellGrid;
+struct Port;
+struct Pin;
 
 struct Polygon {
     std::vector<Point> points {};
 
-    Polygon() = default;
+    explicit Polygon() = default;
     ~Polygon() = default;
+
+    Polygon(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh)
+    {
+        points.emplace_back(Point(t_xl, t_yl));
+        points.emplace_back(Point(t_xh, t_yl));
+        points.emplace_back(Point(t_xh, t_yh));
+        points.emplace_back(Point(t_xl, t_yh));
+    }
 
     void append(const int32_t& t_x, const int32_t& t_y)
     {
@@ -38,8 +48,15 @@ struct GCellGrid {
     ~GCellGrid() = default;
 };
 
+struct Port {
+    std::vector<Polygon> polygons {};
+
+    Port() = default;
+    ~Port() = default;
+};
+
 struct Pin {
-    std::vector<Polygon> bounds {};
+    std::vector<Port> ports {};
 
     Pin() = default;
     ~Pin() = default;

@@ -52,7 +52,7 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         // gCellGrid drawing
         //======================================================================
 
-        painter->setPen(QPen(QColor(Qt::white), 1.0 / m_currentScale));
+        painter->setPen(QPen(QColor(QColor(50, 50, 50)), 1.0 / m_currentScale));
 
         for (auto& cell : m_def->gCellGrid.cells) {
             QPolygonF cellPoly {};
@@ -70,15 +70,17 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
 
         for (auto& pin : m_def->pins) {
-            QPolygonF pinPoly {};
+            for (auto& port : pin.ports) {
+                for (auto& polygon : port.polygons) {
+                    QPolygonF portPoly {};
 
-            for (auto& pinBound : pin.bounds) {
-                for (auto& [x, y] : pinBound.points) {
-                    pinPoly.append(QPointF(x, y));
+                    for (auto& [x, y] : polygon.points) {
+                        portPoly.append(QPointF(x, y));
+                    }
+
+                    painter->drawPolygon(portPoly);
                 }
             }
-
-            painter->drawPolygon(pinPoly);
         }
 
         // DieArea drawing

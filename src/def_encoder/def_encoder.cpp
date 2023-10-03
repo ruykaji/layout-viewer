@@ -215,39 +215,36 @@ int DEFEncoder::nonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_
 
 int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData) {};
 
-int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pinProp, void* t_userData)
+int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_userData)
 {
     if (t_type == defrPinCbkType) {
-        int32_t numLayers = t_pinProp->numLayer();
-        int32_t placeX = t_pinProp->placementX();
-        int32_t placeY = t_pinProp->placementY();
-
         Pin pin {};
 
-        for (std::size_t i = 0; i < numLayers; ++i) {
-            int32_t xl {};
-            int32_t yl {};
-            int32_t xh {};
-            int32_t yh {};
+        for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
+            defiPinPort* pinPort = t_pin->pinPort(i);
+            Port port {};
+            int32_t xl {}, yl {}, xh {}, yh {};
 
-            t_pinProp->bounds(i, &xl, &yl, &xh, &yh);
+            for (std::size_t j = 0; j < pinPort->numLayer(); ++j) {
+                pinPort->bounds(j, &xl, &yl, &xh, &yh);
 
-            xl = placeX - std::abs(xh - xl) / 2;
-            yl = placeY - std::abs(yh - yl);
-            xh = placeX + std::abs(xh - xl) / 2;
-            yh = placeY;
+                if (pinPort->isPlaced() || pinPort->isFixed() || pinPort->isCover()) {
+                    int32_t xPlacement = pinPort->placementX();
+                    int32_t yPlacement = pinPort->placementY();
 
-            Polygon poly {};
+                    xl += xPlacement;
+                    yl += yPlacement;
+                    xh += xPlacement;
+                    yh += yPlacement;
+                }
 
-            poly.append(xl, yl);
-            poly.append(xh, yl);
-            poly.append(xh, yh);
-            poly.append(xl, yh);
+                port.polygons.emplace_back(Polygon(xl, yl, xh, yh));
+            }
 
-            pin.bounds.emplace_back(poly);
+            pin.ports.emplace_back(port);
         }
 
-        auto def = static_cast<Def*>(t_userData);
+        Def* def = static_cast<Def*>(t_userData);
 
         def->pins.emplace_back(pin);
 
