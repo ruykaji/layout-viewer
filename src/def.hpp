@@ -10,6 +10,7 @@ struct Polygon;
 struct GCellGrid;
 struct Port;
 struct Pin;
+struct Via;
 
 struct Polygon {
     std::vector<Point> points {};
@@ -62,11 +63,19 @@ struct Pin {
     ~Pin() = default;
 };
 
+struct Via {
+    std::vector<Polygon> polygons {};
+
+    Via() = default;
+    ~Via() = default;
+};
+
 struct Def {
     Polygon dieArea {};
     GCellGrid gCellGrid {};
 
     std::vector<Pin> pins {};
+    std::vector<Via> vias {};
 
     Def() = default;
     ~Def() = default;

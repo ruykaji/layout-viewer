@@ -20,6 +20,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     defrSetDieAreaCbk(&dieAreaCallback);
     defrSetGcellGridCbk(&gcellGridCallback);
     defrSetPinCbk(&pinCallback);
+    defrSetViaCbk(&viaCallback);
 
     // Open file
     //=================================================================
@@ -270,6 +271,32 @@ int DEFEncoder::stylesCallback(defrCallbackType_e t_type, defiStyles* t_style, v
 
 int DEFEncoder::trackCallback(defrCallbackType_e t_type, defiTrack* t_track, void* t_userData) {};
 
-int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData) {};
+int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData)
+{
+    if (t_type == defrViaCbkType) {
+        Via via {};
+
+        char *viaRuleName {}, *botLayer {}, *cutLayer {}, *topLayer {};
+        int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {};
+        int32_t numRow {}, numCol {};
+
+        t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
+        t_via->rowCol(&numRow, &numCol);
+
+        for (std::size_t i = 0; i < numRow; ++i) {
+            for (std::size_t j = 0; j < numCol; ++j) {
+                via.polygons.emplace_back(Polygon(xTopEnc + xCutSpacing * j + xSize * j, yBotEnc + yCutSpacing * i + ySize * i, xTopEnc + xCutSpacing * j + xSize * (j + 1), yBotEnc + yCutSpacing * i + ySize * (i + 1)));
+            }
+        }
+
+        Def* def = static_cast<Def*>(t_userData);
+
+        def->vias.emplace_back(via);
+
+        return 0;
+    }
+
+    return 2;
+};
 
 int DEFEncoder::voidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData) {};

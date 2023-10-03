@@ -52,34 +52,51 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         // gCellGrid drawing
         //======================================================================
 
-        painter->setPen(QPen(QColor(QColor(50, 50, 50)), 1.0 / m_currentScale));
+        // painter->setPen(QPen(QColor(QColor(50, 50, 50)), 1.0 / m_currentScale));
 
-        for (auto& cell : m_def->gCellGrid.cells) {
-            QPolygonF cellPoly {};
+        // for (auto& cell : m_def->gCellGrid.cells) {
+        //     QPolygonF cellPoly {};
 
-            for (auto& [x, y] : cell.points) {
-                cellPoly.append(QPointF(x, y));
-            }
+        //     for (auto& [x, y] : cell.points) {
+        //         cellPoly.append(QPointF(x, y));
+        //     }
 
-            painter->drawPolygon(cellPoly);
-        }
+        //     painter->drawPolygon(cellPoly);
+        // }
 
         // Pins drawing
         //======================================================================
 
-        painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
+        // painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
 
-        for (auto& pin : m_def->pins) {
-            for (auto& port : pin.ports) {
-                for (auto& polygon : port.polygons) {
-                    QPolygonF portPoly {};
+        // for (auto& pin : m_def->pins) {
+        //     for (auto& port : pin.ports) {
+        //         for (auto& polygon : port.polygons) {
+        //             QPolygonF portPoly {};
 
-                    for (auto& [x, y] : polygon.points) {
-                        portPoly.append(QPointF(x, y));
-                    }
+        //             for (auto& [x, y] : polygon.points) {
+        //                 portPoly.append(QPointF(x, y));
+        //             }
 
-                    painter->drawPolygon(portPoly);
+        //             painter->drawPolygon(portPoly);
+        //         }
+        //     }
+        // }
+
+        // Vias drawing
+        //======================================================================
+
+        painter->setPen(QPen(QColor(Qt::cyan), 1.0 / m_currentScale));
+
+        for (auto& via : m_def->vias) {
+            for (auto& polygon : via.polygons) {
+                QPolygonF viaPoly {};
+
+                for (auto& [x, y] : polygon.points) {
+                    viaPoly.append(QPointF(x, y));
                 }
+
+                painter->drawPolygon(viaPoly);
             }
         }
 
