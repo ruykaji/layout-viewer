@@ -14,6 +14,10 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         throw std::runtime_error("Error: cant't initialize parser!");
     }
 
+    // Settings
+    //=================================================================
+    defrSetAddPathToNet();
+
     // Set callbacks
     //=================================================================
 
@@ -22,7 +26,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     defrSetPinCbk(&pinCallback);
     defrSetNetCbk(&netCallback);
     defrSetSNetCbk(&specialNetCallback);
-    defrSetPathCbk(&pathCallback);
     defrSetViaCbk(&viaCallback);
 
     // Open file
@@ -225,6 +228,47 @@ int DEFEncoder::netCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 int DEFEncoder::specialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
 {
     if (t_type == defrSNetCbkType) {
+        for (std::size_t i = 0; i < t_net->numWires(); ++i) {
+            auto wire = t_net->wire(i);
+
+            for (std::size_t j = 0; j < wire->numPaths(); ++j) {
+                auto p = wire->path(j);
+                p->initTraverse();
+
+                int path, i, x, y, newLayer;
+
+                while ((path = (int)p->next()) != DEFIPATH_DONE) {
+                    switch (path) {
+                    case DEFIPATH_LAYER:
+                        if (newLayer == 0) {
+                            printf("%s ", p->getLayer());
+                            newLayer = 1;
+                        } else
+                            printf("NEW %s ", p->getLayer());
+                        break;
+                    case DEFIPATH_VIA:
+                        printf("%s ", p->getVia());
+                        break;
+                    case DEFIPATH_WIDTH:
+                        printf("%d ", p->getWidth());
+                        break;
+                    case DEFIPATH_POINT:
+                        p->getPoint(&x, &y);
+                        printf("( %d %d ) ", x, y);
+                        break;
+                    case DEFIPATH_TAPER:
+                        printf("TAPER ");
+                        break;
+                    case DEFIPATH_SHAPE:
+                        printf(" SHAPE %s ", p->getShape());
+                        break;
+                    }
+                }
+
+                printf("\n");
+            }
+        }
+
         return 0;
     }
 
@@ -233,48 +277,7 @@ int DEFEncoder::specialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
 int DEFEncoder::nonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_rul, void* t_userData) {};
 
-int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData)
-{
-    if (t_type == defrPathCbkType) {
-        t_path->initTraverse();
-
-        int path, i, x, y, newLayer;
-
-        while ((path = (int)t_path->next()) != DEFIPATH_DONE) {
-            switch (path) {
-            case DEFIPATH_LAYER:
-                if (newLayer == 0) {
-                    printf("%s ", t_path->getLayer());
-                    newLayer = 1;
-                } else
-                    printf("NEW %s ", t_path->getLayer());
-                break;
-            case DEFIPATH_VIA:
-                printf("%s ", t_path->getVia());
-                break;
-            case DEFIPATH_WIDTH:
-                printf("%d ", t_path->getWidth());
-                break;
-            case DEFIPATH_POINT:
-                t_path->getPoint(&x, &y);
-                printf("( %d %d ) ", x, y);
-                break;
-            case DEFIPATH_TAPER:
-                printf("TAPER ");
-                break;
-            case DEFIPATH_SHAPE:
-                printf(" SHAPE %s ", t_path->getShape());
-                break;
-            }
-        }
-
-        printf("\n");
-        
-        return 0;
-    }
-
-    return 2;
-};
+int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData) {};
 
 int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_userData)
 {
