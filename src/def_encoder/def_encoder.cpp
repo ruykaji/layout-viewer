@@ -20,6 +20,9 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     defrSetDieAreaCbk(&dieAreaCallback);
     defrSetGcellGridCbk(&gcellGridCallback);
     defrSetPinCbk(&pinCallback);
+    defrSetNetCbk(&netCallback);
+    defrSetSNetCbk(&specialNetCallback);
+    defrSetPathCbk(&pathCallback);
     defrSetViaCbk(&viaCallback);
 
     // Open file
@@ -210,11 +213,68 @@ int DEFEncoder::groupCallback(defrCallbackType_e t_type, defiGroup* t_shiftLayer
 
 int DEFEncoder::integerCallback(defrCallbackType_e t_type, int t_number, void* t_userData) {};
 
-int DEFEncoder::netCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData) {};
+int DEFEncoder::netCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
+{
+    if (t_type == defrNetCbkType) {
+        return 0;
+    }
+
+    return 0;
+};
+
+int DEFEncoder::specialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
+{
+    if (t_type == defrSNetCbkType) {
+        return 0;
+    }
+
+    return 0;
+};
 
 int DEFEncoder::nonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_rul, void* t_userData) {};
 
-int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData) {};
+int DEFEncoder::pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData)
+{
+    if (t_type == defrPathCbkType) {
+        t_path->initTraverse();
+
+        int path, i, x, y, newLayer;
+
+        while ((path = (int)t_path->next()) != DEFIPATH_DONE) {
+            switch (path) {
+            case DEFIPATH_LAYER:
+                if (newLayer == 0) {
+                    printf("%s ", t_path->getLayer());
+                    newLayer = 1;
+                } else
+                    printf("NEW %s ", t_path->getLayer());
+                break;
+            case DEFIPATH_VIA:
+                printf("%s ", t_path->getVia());
+                break;
+            case DEFIPATH_WIDTH:
+                printf("%d ", t_path->getWidth());
+                break;
+            case DEFIPATH_POINT:
+                t_path->getPoint(&x, &y);
+                printf("( %d %d ) ", x, y);
+                break;
+            case DEFIPATH_TAPER:
+                printf("TAPER ");
+                break;
+            case DEFIPATH_SHAPE:
+                printf(" SHAPE %s ", t_path->getShape());
+                break;
+            }
+        }
+
+        printf("\n");
+        
+        return 0;
+    }
+
+    return 2;
+};
 
 int DEFEncoder::pinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_userData)
 {
@@ -288,8 +348,7 @@ int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
             }
         }
 
-
-        const char *name = t_via->name();
+        const char* name = t_via->name();
         Def* def = static_cast<Def*>(t_userData);
 
         def->vias[name] = via;

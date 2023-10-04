@@ -147,6 +147,8 @@ public:
   void bumpSize(int size);
 
 protected:
+  defrData *defData;
+  
   int currentType() const;
 
   int* keys_;           // type of item in path
@@ -162,8 +164,6 @@ protected:
   int deltaX_;
   int deltaY_;
   int mask_;
-
-  defrData *defData;
 };
 
 END_LEFDEF_PARSER_NAMESPACE

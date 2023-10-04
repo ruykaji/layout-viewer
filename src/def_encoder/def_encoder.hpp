@@ -43,6 +43,8 @@ private:
 
     static int netCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);
 
+    static int specialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);
+
     static int nonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_rul, void* t_userData);
 
     static int pathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData);
