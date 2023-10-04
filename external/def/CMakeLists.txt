@@ -148,5 +148,5 @@ add_dependencies( defzlib def )
 ######################################################
 # install
 
-install(FILES ${DEFLIB_HEADERS} DESTINATION include)
-install(TARGETS def defzlib DESTINATION lib)
+install(FILES ${DEFLIB_HEADERS} DESTINATION ${DEFLIB_HOME}/include)
+install(TARGETS def defzlib DESTINATION ${DEFLIB_HOME}/lib)

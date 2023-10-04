@@ -86,19 +86,19 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         // Vias drawing
         //======================================================================
 
-        painter->setPen(QPen(QColor(Qt::cyan), 1.0 / m_currentScale));
+        // painter->setPen(QPen(QColor(Qt::cyan), 1.0 / m_currentScale));
 
-        for (auto& via : m_def->vias) {
-            for (auto& polygon : via.polygons) {
-                QPolygonF viaPoly {};
+        // for (auto& via : m_def->vias) {
+        //     for (auto& polygon : via.polygons) {
+        //         QPolygonF viaPoly {};
 
-                for (auto& [x, y] : polygon.points) {
-                    viaPoly.append(QPointF(x, y));
-                }
+        //         for (auto& [x, y] : polygon.points) {
+        //             viaPoly.append(QPointF(x, y));
+        //         }
 
-                painter->drawPolygon(viaPoly);
-            }
-        }
+        //         painter->drawPolygon(viaPoly);
+        //     }
+        // }
 
         // DieArea drawing
         //======================================================================

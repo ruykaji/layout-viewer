@@ -2,6 +2,8 @@
 #define __DEF_H__
 
 #include <vector>
+#include <map>
+#include <string>
 
 #include "types.hpp"
 
@@ -75,7 +77,7 @@ struct Def {
     GCellGrid gCellGrid {};
 
     std::vector<Pin> pins {};
-    std::vector<Via> vias {};
+    std::map<std::string, Via> vias {};
 
     Def() = default;
     ~Def() = default;

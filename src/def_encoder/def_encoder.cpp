@@ -277,8 +277,7 @@ int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
         Via via {};
 
         char *viaRuleName {}, *botLayer {}, *cutLayer {}, *topLayer {};
-        int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {};
-        int32_t numRow {}, numCol {};
+        int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {}, numRow {}, numCol {};
 
         t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
         t_via->rowCol(&numRow, &numCol);
@@ -289,9 +288,11 @@ int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
             }
         }
 
+
+        const char *name = t_via->name();
         Def* def = static_cast<Def*>(t_userData);
 
-        def->vias.emplace_back(via);
+        def->vias[name] = via;
 
         return 0;
     }
