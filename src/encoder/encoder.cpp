@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <execution>
-#include <filesystem>
 #include <sstream>
 #include <stdexcept>
+#include <fstream>
 
 #include "encoder.hpp"
 
@@ -16,6 +16,8 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         throw std::runtime_error("Error: cant't initialize parser!");
     }
 
+    m_def = std::make_shared<Def>();
+
     // Settings
     //=================================================================
     defrSetAddPathToNet();
@@ -23,8 +25,11 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     // Set callbacks
     //=================================================================
 
+    lefrSetPinCbk(&lefPinCallback);
+
     defrSetDieAreaCbk(&defDieAreaCallback);
     defrSetGcellGridCbk(&defGcellGridCallback);
+    defrSetComponentCbk(&defComponentCallback);
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
@@ -39,8 +44,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         throw std::runtime_error("Error: Can't open a file!");
     }
 
-    m_def = std::make_shared<Def>();
-
     // Read file
     //=================================================================
 
@@ -53,98 +56,100 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     // Post processing
     //=================================================================
 
-    // ---> DieArea
+    if(!m_def->gCellGrid.cells.empty()){
+        // ---> DieArea
 
-    int32_t minX {};
-    int32_t minY {};
+        int32_t minX {};
+        int32_t minY {};
 
-    for (auto& [x, y] : m_def->dieArea.points) {
-        minX = std::min(minX, x);
-        minY = std::min(minY, y);
-    }
+        for (auto& [x, y] : m_def->dieArea.points) {
+            minX = std::min(minX, x);
+            minY = std::min(minY, y);
+        }
 
-    // ---> gCellGrid
+        // ---> gCellGrid
 
-    std::vector<Polygon> xLines {};
+        std::vector<Polygon> xLines {};
 
-    for (int32_t x = m_def->gCellGrid.offsetX + minX; x != m_def->gCellGrid.maxX + minX; x += m_def->gCellGrid.stepX) {
-        std::pair<int32_t, bool> yStart { 0, false };
-        std::pair<int32_t, bool> yEnd { 0, false };
+        for (int32_t x = m_def->gCellGrid.offsetX + minX; x != m_def->gCellGrid.maxX + minX; x += m_def->gCellGrid.stepX) {
+            std::pair<int32_t, bool> yStart { 0, false };
+            std::pair<int32_t, bool> yEnd { 0, false };
 
-        for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-            if (i->second == (i + 1)->second) {
-                if ((x >= i->first && x <= (i + 1)->first) || (x <= i->first && x >= (i + 1)->first)) {
-                    if (!yStart.second) {
-                        yStart.first = i->second;
-                        yStart.second = true;
-                    } else if (!yEnd.second) {
-                        yEnd.first = i->second;
-                        yEnd.second = true;
-                        break;
+            for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
+                if (i->second == (i + 1)->second) {
+                    if ((x >= i->first && x <= (i + 1)->first) || (x <= i->first && x >= (i + 1)->first)) {
+                        if (!yStart.second) {
+                            yStart.first = i->second;
+                            yStart.second = true;
+                        } else if (!yEnd.second) {
+                            yEnd.first = i->second;
+                            yEnd.second = true;
+                            break;
+                        }
                     }
                 }
             }
+
+            Polygon path;
+
+            if (yStart < yEnd) {
+                path.append(x, yStart.first);
+                path.append(x, yEnd.first);
+
+            } else {
+                path.append(x, yEnd.first);
+                path.append(x, yStart.first);
+            }
+
+            xLines.emplace_back(path);
         }
 
-        Polygon path;
+        std::vector<Polygon> yLines {};
 
-        if (yStart < yEnd) {
-            path.append(x, yStart.first);
-            path.append(x, yEnd.first);
+        for (int32_t y = m_def->gCellGrid.offsetY + minY; y != m_def->gCellGrid.maxY + minY; y += m_def->gCellGrid.stepY) {
+            std::pair<int32_t, bool> xStart { 0, false };
+            std::pair<int32_t, bool> xEnd { 0, false };
 
-        } else {
-            path.append(x, yEnd.first);
-            path.append(x, yStart.first);
-        }
-
-        xLines.emplace_back(path);
-    }
-
-    std::vector<Polygon> yLines {};
-
-    for (int32_t y = m_def->gCellGrid.offsetY + minY; y != m_def->gCellGrid.maxY + minY; y += m_def->gCellGrid.stepY) {
-        std::pair<int32_t, bool> xStart { 0, false };
-        std::pair<int32_t, bool> xEnd { 0, false };
-
-        for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-            if (i->first == (i + 1)->first) {
-                if ((y >= i->second && y <= (i + 1)->second) || (y <= i->second && y >= (i + 1)->second)) {
-                    if (!xStart.second) {
-                        xStart.first = i->first;
-                        xStart.second = true;
-                    } else if (!xEnd.second) {
-                        xEnd.first = i->first;
-                        xEnd.second = true;
-                        break;
+            for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
+                if (i->first == (i + 1)->first) {
+                    if ((y >= i->second && y <= (i + 1)->second) || (y <= i->second && y >= (i + 1)->second)) {
+                        if (!xStart.second) {
+                            xStart.first = i->first;
+                            xStart.second = true;
+                        } else if (!xEnd.second) {
+                            xEnd.first = i->first;
+                            xEnd.second = true;
+                            break;
+                        }
                     }
                 }
             }
+
+            Polygon path;
+
+            if (xStart < xEnd) {
+                path.append(xStart.first, y);
+                path.append(xEnd.first, y);
+            } else {
+                path.append(xEnd.first, y);
+                path.append(xStart.first, y);
+            }
+
+            yLines.emplace_back(path);
         }
 
-        Polygon path;
+        for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
+            for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
+                if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(0).first >= row->points.at(0).first) {
+                    Polygon poly {};
 
-        if (xStart < xEnd) {
-            path.append(xStart.first, y);
-            path.append(xEnd.first, y);
-        } else {
-            path.append(xEnd.first, y);
-            path.append(xStart.first, y);
-        }
+                    poly.append(col->points.at(0).first, row->points.at(0).second);
+                    poly.append((col + 1)->points.at(0).first, row->points.at(0).second);
+                    poly.append((col + 1)->points.at(0).first, (row + 1)->points.at(0).second);
+                    poly.append(col->points.at(0).first, (row + 1)->points.at(0).second);
 
-        yLines.emplace_back(path);
-    }
-
-    for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
-        for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
-            if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(0).first >= row->points.at(0).first) {
-                Polygon poly {};
-
-                poly.append(col->points.at(0).first, row->points.at(0).second);
-                poly.append((col + 1)->points.at(0).first, row->points.at(0).second);
-                poly.append((col + 1)->points.at(0).first, (row + 1)->points.at(0).second);
-                poly.append(col->points.at(0).first, (row + 1)->points.at(0).second);
-
-                m_def->gCellGrid.cells.emplace_back(poly);
+                    m_def->gCellGrid.cells.emplace_back(poly);
+                }
             }
         }
     }
@@ -154,7 +159,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
 std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& t_fileName)
 {
-
     std::string libName {};
     std::string cellName {};
     auto itr = t_fileName.begin();
@@ -169,10 +173,52 @@ std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& 
     }
 
     for (; itr != t_fileName.end(); ++itr) {
-        cellName += *itr;
+        // Hardcode for now
+        if(*itr != '_'){
+            cellName += *itr;
+        }else{
+            break;
+        }
     }
 
-    std::string pathToLef = t_folder + "/libraries/" + libName + "/" + cellName + "/" + t_fileName + ".lef";
+    return t_folder + "/libraries/" + libName + "/latest/cells/" + cellName + "/" + t_fileName + ".lef";
+}
+
+int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData){
+    if(t_type == lefrPinCbkType){
+        Def* def = static_cast<Def*>(t_userData);
+
+        int32_t placedX = def->components.back().placedX;
+        int32_t placedY = def->components.back().placedY;
+
+        for(std::size_t i = 0; i < t_pin->numPorts(); ++i){
+            lefiGeometries* portGeom = t_pin->port(i);
+            Pin pin{};
+
+            for(std::size_t j = 0; j < portGeom->numItems(); ++j){
+                Port port{};
+
+                switch (portGeom->itemType(j))
+                {
+                case lefiGeomEnum::lefiGeomRectE:{
+                    lefiGeomRect *rect = portGeom->getRect(j);
+                    port.polygons.emplace_back(Polygon(rect->xl*1000.0 + placedX, rect->yl*1000.0 + placedY, rect->xh*1000.0 + placedX, rect->yh*1000.0 + placedY));
+                    break;
+                }
+                default:
+                    break;
+                }
+
+                pin.ports.emplace_back(port);
+            }
+
+            def->pins.emplace_back(pin);
+        }
+
+        return 0;
+    }
+
+    return 2;
 }
 
 int DEFEncoder::defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData) {};
@@ -203,7 +249,44 @@ int DEFEncoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, vo
     return 2;
 }
 
-int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData) {};
+int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData) {
+    if(t_type == defrComponentCbkType){
+        Component component{};
+
+        if(t_component->isFixed() || t_component->isPlaced()){
+            component.placedX=  t_component->placementX();
+            component.placedY=  t_component->placementY();
+        }
+
+        Def* def = static_cast<Def*>(t_userData);
+
+        def->components.emplace_back(component);
+
+        std::string pathToCell = findLef("/home/alaie/stuff/skywater-pdk", t_component->name());
+
+        int initStatus = lefrInit();
+
+        if (initStatus != 0) {
+            throw std::runtime_error("Error: cant't initialize parser!");
+        }
+
+        auto file = fopen(pathToCell.c_str(), "r");
+
+        if (file == nullptr) {
+            throw std::runtime_error("Error: Can't open a file!");
+        }
+
+        int readStatus = lefrRead(file, pathToCell.c_str(), t_userData);
+
+        if (readStatus != 0) {
+            throw std::runtime_error("Error: Can't read a file!");
+        }
+
+        return 0;
+    }
+
+    return 2;
+};
 
 int DEFEncoder::defComponentMaskShiftLayerCallback(defrCallbackType_e t_type, defiComponentMaskShiftLayer* t_shiftLayers, void* t_userData) {};
 

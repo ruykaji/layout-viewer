@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <defrReader.hpp>
+#include <lefrReader.hpp>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -23,7 +24,9 @@ public:
     std::shared_ptr<Def> read(const std::string_view t_fileName);
 
 private:
-    std::string findLef(const std::string& t_folder, const std::string& t_fileName);
+    static std::string findLef(const std::string& t_folder, const std::string& t_fileName);
+    
+    static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
 
     static int defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData);
 

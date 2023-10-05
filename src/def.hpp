@@ -10,6 +10,7 @@
 struct Def;
 struct Polygon;
 struct GCellGrid;
+struct Component;
 struct Port;
 struct Pin;
 struct Via;
@@ -52,6 +53,14 @@ struct GCellGrid {
     ~GCellGrid() = default;
 };
 
+struct Component{
+    int32_t placedX{};
+    int32_t placedY{};
+
+    Component() = default;
+    ~Component() = default;
+};
+
 struct Port {
     std::vector<Polygon> polygons {};
 
@@ -88,6 +97,7 @@ struct Def {
     Polygon dieArea {};
     GCellGrid gCellGrid {};
 
+    std::vector<Component> components{};
     std::vector<Pin> pins {};
     std::map<std::string, Via> vias {};
     std::vector<Path> paths {};
