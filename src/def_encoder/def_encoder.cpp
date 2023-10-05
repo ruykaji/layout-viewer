@@ -228,44 +228,42 @@ int DEFEncoder::netCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 int DEFEncoder::specialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
 {
     if (t_type == defrSNetCbkType) {
+
+        Def* def = static_cast<Def*>(t_userData);
+
         for (std::size_t i = 0; i < t_net->numWires(); ++i) {
-            auto wire = t_net->wire(i);
+            defiWire* wire = t_net->wire(i);
 
             for (std::size_t j = 0; j < wire->numPaths(); ++j) {
-                auto p = wire->path(j);
-                p->initTraverse();
+                defiPath* wirePath = wire->path(j);
+                Path path {};
+                int tokenType {};
 
-                int path, i, x, y, newLayer;
+                wirePath->initTraverse();
 
-                while ((path = (int)p->next()) != DEFIPATH_DONE) {
-                    switch (path) {
-                    case DEFIPATH_LAYER:
-                        if (newLayer == 0) {
-                            printf("%s ", p->getLayer());
-                            newLayer = 1;
-                        } else
-                            printf("NEW %s ", p->getLayer());
-                        break;
+                while ((tokenType = (int)wirePath->next()) != DEFIPATH_DONE) {
+                    switch (tokenType) {
                     case DEFIPATH_VIA:
-                        printf("%s ", p->getVia());
+                        path.viaName = std::string(wirePath->getVia());
                         break;
                     case DEFIPATH_WIDTH:
-                        printf("%d ", p->getWidth());
+                        path.width = wirePath->getWidth();
                         break;
                     case DEFIPATH_POINT:
-                        p->getPoint(&x, &y);
-                        printf("( %d %d ) ", x, y);
+                        if (!path.isStartSet) {
+                            wirePath->getPoint(&path.start.first, &path.start.second);
+                            wirePath->getPoint(&path.end.first, &path.end.second);
+                            path.isStartSet = true;
+                        } else {
+                            wirePath->getPoint(&path.end.first, &path.end.second);
+                        }
                         break;
-                    case DEFIPATH_TAPER:
-                        printf("TAPER ");
-                        break;
-                    case DEFIPATH_SHAPE:
-                        printf(" SHAPE %s ", p->getShape());
+                    default:
                         break;
                     }
                 }
 
-                printf("\n");
+                def->paths.emplace_back(path);
             }
         }
 
@@ -345,9 +343,14 @@ int DEFEncoder::viaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
         t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
         t_via->rowCol(&numRow, &numCol);
 
-        for (std::size_t i = 0; i < numRow; ++i) {
-            for (std::size_t j = 0; j < numCol; ++j) {
-                via.polygons.emplace_back(Polygon(xTopEnc + xCutSpacing * j + xSize * j, yBotEnc + yCutSpacing * i + ySize * i, xTopEnc + xCutSpacing * j + xSize * (j + 1), yBotEnc + yCutSpacing * i + ySize * (i + 1)));
+        for (int32_t i = 0; i < numRow; ++i) {
+            for (int32_t j = 0; j < numCol; ++j) {
+                int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
+                int32_t yTop = yCutSpacing * i + ySize * i - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
+                int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
+                int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
+
+                via.polygons.emplace_back(Polygon(xLeft, yTop, xRight, yBottom));
             }
         }
 

@@ -1,9 +1,9 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
-#include <vector>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "types.hpp"
 
@@ -13,6 +13,7 @@ struct GCellGrid;
 struct Port;
 struct Pin;
 struct Via;
+struct Path;
 
 struct Polygon {
     std::vector<Point> points {};
@@ -72,12 +73,24 @@ struct Via {
     ~Via() = default;
 };
 
+struct Path {
+    Point start {};
+    Point end {};
+    int32_t width {};
+    std::string viaName {};
+    bool isStartSet { false };
+
+    Path() = default;
+    ~Path() = default;
+};
+
 struct Def {
     Polygon dieArea {};
     GCellGrid gCellGrid {};
 
     std::vector<Pin> pins {};
     std::map<std::string, Via> vias {};
+    std::vector<Path> paths {};
 
     Def() = default;
     ~Def() = default;

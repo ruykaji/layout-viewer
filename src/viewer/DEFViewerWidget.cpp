@@ -64,41 +64,65 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         //     painter->drawPolygon(cellPoly);
         // }
 
+        // Path drawing
+        //======================================================================
+
+        for (auto& path : m_def->paths) {
+            if (path.viaName.empty()) {
+                {
+                    painter->setPen(QPen(QColor(Qt::yellow), 1.0 / m_currentScale));
+
+                    QPolygonF pathPoly {};
+
+                    if (path.start.first != path.end.first) {
+                        pathPoly.append(QPointF(path.start.first, path.start.second - path.width / 2.0));
+                        pathPoly.append(QPointF(path.end.first, path.end.second - path.width / 2.0));
+                        pathPoly.append(QPointF(path.end.first, path.end.second + path.width / 2.0));
+                        pathPoly.append(QPointF(path.start.first, path.start.second + path.width / 2.0));
+                    } else {
+                        pathPoly.append(QPointF(path.start.first - path.width / 2.0, path.start.second));
+                        pathPoly.append(QPointF(path.end.first - path.width / 2.0, path.end.second));
+                        pathPoly.append(QPointF(path.end.first + path.width / 2.0, path.end.second));
+                        pathPoly.append(QPointF(path.start.first + path.width / 2.0, path.start.second));
+                    }
+
+                    painter->drawPolygon(pathPoly);
+                }
+            } else {
+                painter->setPen(QPen(QColor(Qt::cyan), 1.0 / m_currentScale));
+
+                Via via = m_def->vias[path.viaName];
+
+                for (auto& polygon : via.polygons) {
+                    QPolygonF viaPoly {};
+
+                    for (auto& [x, y] : polygon.points) {
+                        viaPoly.append(QPointF(x + path.end.first, y + path.end.second));
+                    }
+
+                    painter->drawPolygon(viaPoly);
+                }
+            }
+        }
+
         // Pins drawing
         //======================================================================
 
-        // painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
+        painter->setPen(QPen(QColor(Qt::green), 1.0 / m_currentScale));
 
-        // for (auto& pin : m_def->pins) {
-        //     for (auto& port : pin.ports) {
-        //         for (auto& polygon : port.polygons) {
-        //             QPolygonF portPoly {};
+        for (auto& pin : m_def->pins) {
+            for (auto& port : pin.ports) {
+                for (auto& polygon : port.polygons) {
+                    QPolygonF portPoly {};
 
-        //             for (auto& [x, y] : polygon.points) {
-        //                 portPoly.append(QPointF(x, y));
-        //             }
+                    for (auto& [x, y] : polygon.points) {
+                        portPoly.append(QPointF(x, y));
+                    }
 
-        //             painter->drawPolygon(portPoly);
-        //         }
-        //     }
-        // }
-
-        // Vias drawing
-        //======================================================================
-
-        // painter->setPen(QPen(QColor(Qt::cyan), 1.0 / m_currentScale));
-
-        // for (auto& via : m_def->vias) {
-        //     for (auto& polygon : via.polygons) {
-        //         QPolygonF viaPoly {};
-
-        //         for (auto& [x, y] : polygon.points) {
-        //             viaPoly.append(QPointF(x, y));
-        //         }
-
-        //         painter->drawPolygon(viaPoly);
-        //     }
-        // }
+                    painter->drawPolygon(portPoly);
+                }
+            }
+        }
 
         // DieArea drawing
         //======================================================================
