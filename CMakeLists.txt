@@ -13,7 +13,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/external/lef/include
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/decoder
-    ${CMAKE_SOURCE_DIR}/src/def_encoder
+    ${CMAKE_SOURCE_DIR}/src/encoder
     ${CMAKE_SOURCE_DIR}/src/neural_network
     ${CMAKE_SOURCE_DIR}/src/viewer
 )

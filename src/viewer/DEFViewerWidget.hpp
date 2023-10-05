@@ -8,7 +8,7 @@
 #include <QString>
 #include <QWidget>
 
-#include "def_encoder.hpp"
+#include "encoder.hpp"
 
 class DEFViewerWidget : public QWidget {
     Q_OBJECT
