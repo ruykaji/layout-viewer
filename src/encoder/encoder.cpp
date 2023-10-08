@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <execution>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
-#include <fstream>
 
 #include "encoder.hpp"
 
@@ -17,6 +17,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     }
 
     m_def = std::make_shared<Def>();
+    m_def->components["__THIS__"] = Component();
 
     // Settings
     //=================================================================
@@ -56,7 +57,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     // Post processing
     //=================================================================
 
-    if(!m_def->gCellGrid.cells.empty()){
+    if (!m_def->gCellGrid.cells.empty()) {
         // ---> DieArea
 
         int32_t minX {};
@@ -76,13 +77,13 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
             std::pair<int32_t, bool> yEnd { 0, false };
 
             for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-                if (i->second == (i + 1)->second) {
-                    if ((x >= i->first && x <= (i + 1)->first) || (x <= i->first && x >= (i + 1)->first)) {
+                if (i->y == (i + 1)->y) {
+                    if ((x >= i->x && x <= (i + 1)->x) || (x <= i->x && x >= (i + 1)->x)) {
                         if (!yStart.second) {
-                            yStart.first = i->second;
+                            yStart.first = i->y;
                             yStart.second = true;
                         } else if (!yEnd.second) {
-                            yEnd.first = i->second;
+                            yEnd.first = i->y;
                             yEnd.second = true;
                             break;
                         }
@@ -111,13 +112,13 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
             std::pair<int32_t, bool> xEnd { 0, false };
 
             for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-                if (i->first == (i + 1)->first) {
-                    if ((y >= i->second && y <= (i + 1)->second) || (y <= i->second && y >= (i + 1)->second)) {
+                if (i->x == (i + 1)->x) {
+                    if ((y >= i->y && y <= (i + 1)->y) || (y <= i->y && y >= (i + 1)->y)) {
                         if (!xStart.second) {
-                            xStart.first = i->first;
+                            xStart.first = i->x;
                             xStart.second = true;
                         } else if (!xEnd.second) {
-                            xEnd.first = i->first;
+                            xEnd.first = i->x;
                             xEnd.second = true;
                             break;
                         }
@@ -140,13 +141,13 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
         for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
             for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
-                if ((col + 1)->points.at(1).second >= (row + 1)->points.at(0).second && col->points.at(0).first >= row->points.at(0).first) {
+                if ((col + 1)->points.at(1).y >= (row + 1)->points.at(0).y && col->points.at(0).x >= row->points.at(0).x) {
                     Polygon poly {};
 
-                    poly.append(col->points.at(0).first, row->points.at(0).second);
-                    poly.append((col + 1)->points.at(0).first, row->points.at(0).second);
-                    poly.append((col + 1)->points.at(0).first, (row + 1)->points.at(0).second);
-                    poly.append(col->points.at(0).first, (row + 1)->points.at(0).second);
+                    poly.append(col->points.at(0).x, row->points.at(0).y);
+                    poly.append((col + 1)->points.at(0).x, row->points.at(0).y);
+                    poly.append((col + 1)->points.at(0).x, (row + 1)->points.at(0).y);
+                    poly.append(col->points.at(0).x, (row + 1)->points.at(0).y);
 
                     m_def->gCellGrid.cells.emplace_back(poly);
                 }
@@ -154,7 +155,36 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         }
     }
 
+    std::sort(m_def->polygon.begin(), m_def->polygon.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+
     return m_def;
+}
+
+Polygon::ML DEFEncoder::convertNameToML(const char* t_name)
+{
+    if (strcmp(t_name, "li1") == 0) {
+        return Polygon::ML::L1;
+    } else if (strcmp(t_name, "met1") == 0) {
+        return Polygon::ML::M1;
+    } else if (strcmp(t_name, "met2") == 0) {
+        return Polygon::ML::M2;
+    } else if (strcmp(t_name, "met3") == 0) {
+        return Polygon::ML::M3;
+    } else if (strcmp(t_name, "met4") == 0) {
+        return Polygon::ML::M4;
+    } else if (strcmp(t_name, "met5") == 0) {
+        return Polygon::ML::M5;
+    } else if (strcmp(t_name, "met6") == 0) {
+        return Polygon::ML::M6;
+    } else if (strcmp(t_name, "met7") == 0) {
+        return Polygon::ML::M7;
+    } else if (strcmp(t_name, "met8") == 0) {
+        return Polygon::ML::M8;
+    } else if (strcmp(t_name, "met9") == 0) {
+        return Polygon::ML::M9;
+    }
+
+    return Polygon::ML::NONE;
 }
 
 std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& t_fileName)
@@ -174,9 +204,9 @@ std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& 
 
     for (; itr != t_fileName.end(); ++itr) {
         // Hardcode for now
-        if(*itr != '_'){
+        if (*itr != '_') {
             cellName += *itr;
-        }else{
+        } else {
             break;
         }
     }
@@ -184,36 +214,39 @@ std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& 
     return t_folder + "/libraries/" + libName + "/latest/cells/" + cellName + "/" + t_fileName + ".lef";
 }
 
-int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData){
-    if(t_type == lefrPinCbkType){
+int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData)
+{
+    if (t_type == lefrPinCbkType) {
         Def* def = static_cast<Def*>(t_userData);
+        Component& component = def->components[def->lastComponentId];
+        Point placed = component.placed;
+        Pin pin {};
 
-        int32_t placedX = def->components.back().placedX;
-        int32_t placedY = def->components.back().placedY;
-
-        for(std::size_t i = 0; i < t_pin->numPorts(); ++i){
+        for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
             lefiGeometries* portGeom = t_pin->port(i);
-            Pin pin{};
+            Polygon::ML layer = convertNameToML(portGeom->getLayer(0));
 
-            for(std::size_t j = 0; j < portGeom->numItems(); ++j){
-                Port port{};
+            for (std::size_t j = 0; j < portGeom->numItems(); ++j) {
+                switch (portGeom->itemType(j)) {
+                case lefiGeomEnum::lefiGeomRectE: {
+                    lefiGeomRect* rect = portGeom->getRect(j);
+                    int32_t xLeft = rect->xl * 1000.0 + placed.x;
+                    int32_t yTop = rect->yl * 1000.0 + placed.y;
+                    int32_t xRight = rect->xh * 1000.0 + placed.x;
+                    int32_t yBottom = rect->yh * 1000.0 + placed.y;
+                    std::shared_ptr<Polygon> poly = std::make_shared<Polygon>(xLeft, yTop, xRight, yBottom, layer);
 
-                switch (portGeom->itemType(j))
-                {
-                case lefiGeomEnum::lefiGeomRectE:{
-                    lefiGeomRect *rect = portGeom->getRect(j);
-                    port.polygons.emplace_back(Polygon(rect->xl*1000.0 + placedX, rect->yl*1000.0 + placedY, rect->xh*1000.0 + placedX, rect->yh*1000.0 + placedY));
+                    def->polygon.emplace_back(poly);
+                    pin.polygons.emplace_back(poly);
                     break;
                 }
                 default:
                     break;
                 }
-
-                pin.ports.emplace_back(port);
             }
-
-            def->pins.emplace_back(pin);
         }
+
+        component.pins[t_pin->name()] = pin;
 
         return 0;
     }
@@ -249,18 +282,19 @@ int DEFEncoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, vo
     return 2;
 }
 
-int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData) {
-    if(t_type == defrComponentCbkType){
-        Component component{};
+int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData)
+{
+    if (t_type == defrComponentCbkType) {
+        Component component {};
 
-        if(t_component->isFixed() || t_component->isPlaced()){
-            component.placedX=  t_component->placementX();
-            component.placedY=  t_component->placementY();
+        if (t_component->isFixed() || t_component->isPlaced()) {
+            component.placed = Point(t_component->placementX(), t_component->placementY());
         }
 
         Def* def = static_cast<Def*>(t_userData);
 
-        def->components.emplace_back(component);
+        def->lastComponentId = t_component->id();
+        def->components[t_component->id()] = component;
 
         std::string pathToCell = findLef("/home/alaie/stuff/skywater-pdk", t_component->name());
 
@@ -273,13 +307,13 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
         auto file = fopen(pathToCell.c_str(), "r");
 
         if (file == nullptr) {
-            throw std::runtime_error("Error: Can't open a file!");
+            throw std::runtime_error("Error: Can't open a file: " + pathToCell);
         }
 
         int readStatus = lefrRead(file, pathToCell.c_str(), t_userData);
 
         if (readStatus != 0) {
-            throw std::runtime_error("Error: Can't read a file!");
+            throw std::runtime_error("Error: Can't read a file: " + pathToCell);
         }
 
         return 0;
@@ -330,7 +364,7 @@ int DEFEncoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* 
         return 0;
     }
 
-    return 0;
+    return 2;
 };
 
 int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
@@ -344,26 +378,33 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
 
             for (std::size_t j = 0; j < wire->numPaths(); ++j) {
                 defiPath* wirePath = wire->path(j);
-                Path path {};
-                int tokenType {};
 
                 wirePath->initTraverse();
 
-                while ((tokenType = (int)wirePath->next()) != DEFIPATH_DONE) {
+                int tokenType {};
+                int width {};
+                bool isStartSet = false;
+                const char* layerName {};
+                std::string viaName {};
+                Point start {};
+                Point end {};
+
+                while ((tokenType = wirePath->next()) != DEFIPATH_DONE) {
                     switch (tokenType) {
-                    case DEFIPATH_VIA:
-                        path.viaName = std::string(wirePath->getVia());
-                        break;
+                    case DEFIPATH_LAYER:
+                        layerName = wirePath->getLayer();
                     case DEFIPATH_WIDTH:
-                        path.width = wirePath->getWidth();
+                        width = wirePath->getWidth();
+                        break;
+                    case DEFIPATH_VIA:
+                        viaName = std::string(wirePath->getVia());
                         break;
                     case DEFIPATH_POINT:
-                        if (!path.isStartSet) {
-                            wirePath->getPoint(&path.start.first, &path.start.second);
-                            wirePath->getPoint(&path.end.first, &path.end.second);
-                            path.isStartSet = true;
+                        if (!isStartSet) {
+                            isStartSet = true;
+                            wirePath->getPoint(&start.x, &start.y);
                         } else {
-                            wirePath->getPoint(&path.end.first, &path.end.second);
+                            wirePath->getPoint(&end.x, &end.y);
                         }
                         break;
                     default:
@@ -371,14 +412,47 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                     }
                 }
 
-                def->paths.emplace_back(path);
+                if (viaName.empty()) {
+                    std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
+
+                    poly->layer = convertNameToML(layerName);
+
+                    if (start.x != end.x) {
+                        poly->append(start.x, start.y - width / 2.0);
+                        poly->append(end.x, end.y - width / 2.0);
+                        poly->append(end.x, end.y + width / 2.0);
+                        poly->append(start.x, start.y + width / 2.0);
+                    } else {
+                        poly->append(start.x - width / 2.0, start.y);
+                        poly->append(end.x - width / 2.0, end.y);
+                        poly->append(end.x + width / 2.0, end.y);
+                        poly->append(start.x + width / 2.0, start.y);
+                    }
+
+                    def->polygon.emplace_back(poly);
+                } else {
+                    if (def->vias.count(viaName) != 0) {
+                        Via via = def->vias[viaName];
+                        std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
+
+                        for (auto& polygon : via.polygons) {
+                            for (auto& point : polygon.points) {
+                                poly->append(point.x + end.x, point.y + end.y);
+                            }
+                        }
+
+                        def->polygon.emplace_back(poly);
+                    } else {
+                        throw std::runtime_error("Via used before it's declaration!");
+                    }
+                }
             }
         }
 
         return 0;
     }
 
-    return 0;
+    return 2;
 };
 
 int DEFEncoder::defNonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_rul, void* t_userData) {};
@@ -388,11 +462,11 @@ int DEFEncoder::defPathCallback(defrCallbackType_e t_type, defiPath* t_path, voi
 int DEFEncoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_userData)
 {
     if (t_type == defrPinCbkType) {
+        Def* def = static_cast<Def*>(t_userData);
         Pin pin {};
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
             defiPinPort* pinPort = t_pin->pinPort(i);
-            Port port {};
             int32_t xl {}, yl {}, xh {}, yh {};
 
             for (std::size_t j = 0; j < pinPort->numLayer(); ++j) {
@@ -408,15 +482,14 @@ int DEFEncoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* 
                     yh += yPlacement;
                 }
 
-                port.polygons.emplace_back(Polygon(xl, yl, xh, yh));
-            }
+                std::shared_ptr<Polygon> poly = std::make_shared<Polygon>(xl, yl, xh, yh, convertNameToML(pinPort->layer(j)));
 
-            pin.ports.emplace_back(port);
+                def->polygon.emplace_back(poly);
+                pin.polygons.emplace_back(poly);
+            }
         }
 
-        Def* def = static_cast<Def*>(t_userData);
-
-        def->pins.emplace_back(pin);
+        def->components["__THIS__"].pins[t_pin->pinName()] = pin;
 
         return 0;
     }
@@ -458,7 +531,7 @@ int DEFEncoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* 
                 int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
                 int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
 
-                via.polygons.emplace_back(Polygon(xLeft, yTop, xRight, yBottom));
+                via.polygons.emplace_back(Polygon(xLeft, yTop, xRight, yBottom, Polygon::ML::NONE));
             }
         }
 
