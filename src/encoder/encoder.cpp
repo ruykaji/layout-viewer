@@ -371,14 +371,14 @@ int DEFEncoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* 
 
                 wirePath->initTraverse();
 
-                int32_t tokenType {};
-                int32_t width {};
-                int32_t extStart {};
-                int32_t extEnd {};
                 bool isStartSet = false;
                 bool isEndSet = false;
                 const char* layerName {};
                 const char* viaName {};
+                int32_t tokenType {};
+                int32_t width {};
+                int32_t extStart {};
+                int32_t extEnd {};
                 Point start {};
                 Point end {};
 
