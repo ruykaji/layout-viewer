@@ -361,6 +361,83 @@ int DEFEncoder::defIntegerCallback(defrCallbackType_e t_type, int t_number, void
 int DEFEncoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
 {
     if (t_type == defrNetCbkType) {
+        Def* def = static_cast<Def*>(t_userData);
+
+        for (std::size_t i = 0; i < t_net->numWires(); ++i) {
+            defiWire* wire = t_net->wire(i);
+
+            for (std::size_t j = 0; j < wire->numPaths(); ++j) {
+                defiPath* wirePath = wire->path(j);
+
+                wirePath->initTraverse();
+
+                int32_t tokenType {};
+                int32_t width {};
+                int32_t extStart {};
+                int32_t extEnd {};
+                bool isStartSet = false;
+                bool isEndSet = false;
+                const char* layerName {};
+                const char* viaName {};
+                Point start {};
+                Point end {};
+
+                while ((tokenType = wirePath->next()) != DEFIPATH_DONE) {
+                    switch (tokenType) {
+                    case DEFIPATH_LAYER:
+                        layerName = wirePath->getLayer();
+                        break;
+                    case DEFIPATH_WIDTH:
+                        width = wirePath->getWidth();
+                        break;
+                    case DEFIPATH_VIA:
+                        viaName = wirePath->getVia();
+                        break;
+                    case DEFIPATH_POINT:
+                        if (!isStartSet) {
+                            isStartSet = true;
+                            wirePath->getPoint(&start.x, &start.y);
+                        } else {
+                            isEndSet = true;
+                            wirePath->getPoint(&end.x, &end.y);
+                        }
+                        break;
+                    case DEFIPATH_FLUSHPOINT:
+                        if (!isStartSet) {
+                            isStartSet = true;
+                            wirePath->getFlushPoint(&start.x, &start.y, &extStart);
+                        } else {
+                            isEndSet = true;
+                            wirePath->getFlushPoint(&end.x, &end.y, &extEnd);
+                        }
+                        break;
+                    case DEFIPATH_RECT:
+                        break;
+                    default:
+                        break;
+                    }
+                }
+
+                if (viaName == nullptr || strcmp(viaName, "") == 0) {
+                    if (isEndSet) {
+                        std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
+
+                        poly->layer = convertNameToML(layerName);
+
+                        if (start.x != end.x) {
+                            poly->append(start.x - extStart, start.y);
+                            poly->append(end.x + extEnd, end.y);
+                        } else {
+                            poly->append(start.x, start.y - extStart);
+                            poly->append(end.x, end.y + extEnd);
+                        }
+
+                        def->polygon.emplace_back(poly);
+                    }
+                }
+            }
+        }
+
         return 0;
     }
 
@@ -385,7 +462,7 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                 int width {};
                 bool isStartSet = false;
                 const char* layerName {};
-                std::string viaName {};
+                const char* viaName {};
                 Point start {};
                 Point end {};
 
@@ -397,7 +474,7 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                         width = wirePath->getWidth();
                         break;
                     case DEFIPATH_VIA:
-                        viaName = std::string(wirePath->getVia());
+                        viaName = wirePath->getVia();
                         break;
                     case DEFIPATH_POINT:
                         if (!isStartSet) {
@@ -412,7 +489,7 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                     }
                 }
 
-                if (viaName.empty()) {
+                if (viaName == nullptr || (viaName, "") == 0) {
                     std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
 
                     poly->layer = convertNameToML(layerName);
@@ -433,15 +510,17 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                 } else {
                     if (def->vias.count(viaName) != 0) {
                         Via via = def->vias[viaName];
-                        std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
 
                         for (auto& polygon : via.polygons) {
+                            std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
+
                             for (auto& point : polygon.points) {
-                                poly->append(point.x + end.x, point.y + end.y);
+                                poly->append(point.x + start.x, point.y + start.y);
                             }
+
+                            def->polygon.emplace_back(poly);
                         }
 
-                        def->polygon.emplace_back(poly);
                     } else {
                         throw std::runtime_error("Via used before it's declaration!");
                     }
@@ -524,6 +603,11 @@ int DEFEncoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* 
         t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
         t_via->rowCol(&numRow, &numCol);
 
+        if (numRow == 0 && numCol == 0) {
+            numRow = 1;
+            numCol = 1;
+        }
+
         for (int32_t i = 0; i < numRow; ++i) {
             for (int32_t j = 0; j < numCol; ++j) {
                 int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
@@ -535,10 +619,9 @@ int DEFEncoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* 
             }
         }
 
-        const char* name = t_via->name();
         Def* def = static_cast<Def*>(t_userData);
 
-        def->vias[name] = via;
+        def->vias[t_via->name()] = via;
 
         return 0;
     }

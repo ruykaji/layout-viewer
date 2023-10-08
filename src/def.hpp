@@ -30,7 +30,6 @@ struct Point {
 
 struct Polygon {
     enum class ML {
-        NONE,
         L1,
         M1,
         M2,
@@ -40,7 +39,8 @@ struct Polygon {
         M6,
         M7,
         M8,
-        M9
+        M9,
+        NONE,
     };
 
     ML layer { ML::NONE };

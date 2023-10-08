@@ -59,6 +59,8 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const Polygon::ML& 
         t_painter->setBrush(QBrush(QColor(255, 75, 125, 55)));
         break;
     default:
+        t_painter->setPen(QPen(QColor(255, 255, 255), 1.0 / m_currentScale));
+        t_painter->setBrush(QBrush(QColor(255, 255, 255, 55)));
         break;
     }
 };
