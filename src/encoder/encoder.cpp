@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <execution>
 #include <fstream>
 #include <sstream>
@@ -29,7 +30,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     lefrSetPinCbk(&lefPinCallback);
 
     defrSetDieAreaCbk(&defDieAreaCallback);
-    defrSetGcellGridCbk(&defGcellGridCallback);
     defrSetComponentCbk(&defComponentCallback);
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
@@ -52,107 +52,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
 
     if (readStatus != 0) {
         throw std::runtime_error("Error: Can't read a file!");
-    }
-
-    // Post processing
-    //=================================================================
-
-    if (!m_def->gCellGrid.cells.empty()) {
-        // ---> DieArea
-
-        int32_t minX {};
-        int32_t minY {};
-
-        for (auto& [x, y] : m_def->dieArea.points) {
-            minX = std::min(minX, x);
-            minY = std::min(minY, y);
-        }
-
-        // ---> gCellGrid
-
-        std::vector<Polygon> xLines {};
-
-        for (int32_t x = m_def->gCellGrid.offsetX + minX; x != m_def->gCellGrid.maxX + minX; x += m_def->gCellGrid.stepX) {
-            std::pair<int32_t, bool> yStart { 0, false };
-            std::pair<int32_t, bool> yEnd { 0, false };
-
-            for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-                if (i->y == (i + 1)->y) {
-                    if ((x >= i->x && x <= (i + 1)->x) || (x <= i->x && x >= (i + 1)->x)) {
-                        if (!yStart.second) {
-                            yStart.first = i->y;
-                            yStart.second = true;
-                        } else if (!yEnd.second) {
-                            yEnd.first = i->y;
-                            yEnd.second = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            Polygon path;
-
-            if (yStart < yEnd) {
-                path.append(x, yStart.first);
-                path.append(x, yEnd.first);
-
-            } else {
-                path.append(x, yEnd.first);
-                path.append(x, yStart.first);
-            }
-
-            xLines.emplace_back(path);
-        }
-
-        std::vector<Polygon> yLines {};
-
-        for (int32_t y = m_def->gCellGrid.offsetY + minY; y != m_def->gCellGrid.maxY + minY; y += m_def->gCellGrid.stepY) {
-            std::pair<int32_t, bool> xStart { 0, false };
-            std::pair<int32_t, bool> xEnd { 0, false };
-
-            for (auto i = m_def->dieArea.points.begin(); i != m_def->dieArea.points.end() - 1; ++i) {
-                if (i->x == (i + 1)->x) {
-                    if ((y >= i->y && y <= (i + 1)->y) || (y <= i->y && y >= (i + 1)->y)) {
-                        if (!xStart.second) {
-                            xStart.first = i->x;
-                            xStart.second = true;
-                        } else if (!xEnd.second) {
-                            xEnd.first = i->x;
-                            xEnd.second = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            Polygon path;
-
-            if (xStart < xEnd) {
-                path.append(xStart.first, y);
-                path.append(xEnd.first, y);
-            } else {
-                path.append(xEnd.first, y);
-                path.append(xStart.first, y);
-            }
-
-            yLines.emplace_back(path);
-        }
-
-        for (auto col = xLines.begin(); col != xLines.end() - 1; ++col) {
-            for (auto row = yLines.begin(); row != yLines.end() - 1; ++row) {
-                if ((col + 1)->points.at(1).y >= (row + 1)->points.at(0).y && col->points.at(0).x >= row->points.at(0).x) {
-                    Polygon poly {};
-
-                    poly.append(col->points.at(0).x, row->points.at(0).y);
-                    poly.append((col + 1)->points.at(0).x, row->points.at(0).y);
-                    poly.append((col + 1)->points.at(0).x, (row + 1)->points.at(0).y);
-                    poly.append(col->points.at(0).x, (row + 1)->points.at(0).y);
-
-                    m_def->gCellGrid.cells.emplace_back(poly);
-                }
-            }
-        }
     }
 
     std::sort(m_def->polygon.begin(), m_def->polygon.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
@@ -214,12 +113,47 @@ std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& 
     return t_folder + "/libraries/" + libName + "/latest/cells/" + cellName + "/" + t_fileName + ".lef";
 }
 
+void DEFEncoder::setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y)
+{
+    switch (t_orientation) {
+    case 0:
+        break;
+    case 1:
+        t_x = -t_y * sin(-M_PI_2);
+        t_y = t_x * sin(-M_PI_2);
+        break;
+    case 2:
+        t_x = t_x * cos(M_PI);
+        t_y = t_y * cos(M_PI);
+        break;
+    case 3:
+        t_x = -t_y * sin(M_PI_2);
+        t_y = t_x * sin(M_PI_2);
+        break;
+    case 4:
+        t_x = -t_x;
+        break;
+    case 5:
+        t_x = t_y * sin(M_PI_2);
+        t_y = t_x * sin(M_PI_2);
+        break;
+    case 6:
+        t_y = -t_y;
+        break;
+    case 7:
+        t_x = -t_y * sin(-M_PI_2);
+        t_y = -t_x * sin(-M_PI_2);
+        break;
+    default:
+        break;
+    }
+}
+
 int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData)
 {
     if (t_type == lefrPinCbkType) {
         Def* def = static_cast<Def*>(t_userData);
         Component& component = def->components[def->lastComponentId];
-        Point placed = component.placed;
         Pin pin {};
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
@@ -230,10 +164,10 @@ int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* 
                 switch (portGeom->itemType(j)) {
                 case lefiGeomEnum::lefiGeomRectE: {
                     lefiGeomRect* rect = portGeom->getRect(j);
-                    int32_t xLeft = rect->xl * 1000.0 + placed.x;
-                    int32_t yTop = rect->yl * 1000.0 + placed.y;
-                    int32_t xRight = rect->xh * 1000.0 + placed.x;
-                    int32_t yBottom = rect->yh * 1000.0 + placed.y;
+                    int32_t xLeft = rect->xl * 1000.0;
+                    int32_t yTop = rect->yl * 1000.0;
+                    int32_t xRight = rect->xh * 1000.0;
+                    int32_t yBottom = rect->yh * 1000.0;
                     std::shared_ptr<Polygon> poly = std::make_shared<Polygon>(xLeft, yTop, xRight, yBottom, layer);
 
                     def->polygon.emplace_back(poly);
@@ -287,14 +221,14 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
     if (t_type == defrComponentCbkType) {
         Component component {};
 
-        if (t_component->isFixed() || t_component->isPlaced()) {
-            component.placed = Point(t_component->placementX(), t_component->placementY());
-        }
-
         Def* def = static_cast<Def*>(t_userData);
 
         def->lastComponentId = t_component->id();
         def->components[t_component->id()] = component;
+
+        if (def->lastComponentId == "_0_") {
+            printf("Some");
+        }
 
         std::string pathToCell = findLef("/home/alaie/stuff/skywater-pdk", t_component->name());
 
@@ -316,6 +250,40 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
             throw std::runtime_error("Error: Can't read a file: " + pathToCell);
         }
 
+        // Component orientation and placement
+        // =====================================================================
+
+        Point leftBottom = { INT32_MAX, INT32_MAX };
+        Point newLeftBottom { INT32_MAX, INT32_MAX };
+        Point placed {};
+
+        if (t_component->isFixed() || t_component->isPlaced()) {
+            placed = Point(t_component->placementX(), t_component->placementY());
+        }
+
+        for (auto& [_, pin] : def->components[def->lastComponentId].pins) {
+            for (auto& poly : pin.polygons) {
+                for (auto& point : poly->points) {
+                    leftBottom.x = std::min(point.x, leftBottom.x);
+                    leftBottom.y = std::min(point.y, leftBottom.y);
+
+                    setGeomOrientation(t_component->placementOrient(), point.x, point.y);
+
+                    newLeftBottom.x = std::min(point.x, newLeftBottom.x);
+                    newLeftBottom.y = std::min(point.y, newLeftBottom.y);
+                }
+            }
+        }
+
+        for (auto& [_, pin] : def->components[def->lastComponentId].pins) {
+            for (auto& poly : pin.polygons) {
+                for (auto& point : poly->points) {
+                    point.x += (leftBottom.x - newLeftBottom.x) + placed.x;
+                    point.y += (leftBottom.y - newLeftBottom.y) + placed.y;
+                }
+            }
+        }
+
         return 0;
     }
 
@@ -328,31 +296,7 @@ int DEFEncoder::defDoubleCallback(defrCallbackType_e t_type, double* t_number, v
 
 int DEFEncoder::defFillCallback(defrCallbackType_e t_type, defiFill* t_shiftLayers, void* t_userData) {};
 
-int DEFEncoder::defGcellGridCallback(defrCallbackType_e t_type, defiGcellGrid* t_grid, void* t_userData)
-{
-    if (t_type == defrCallbackType_e::defrGcellGridCbkType) {
-        auto def = static_cast<Def*>(t_userData);
-        auto macro = t_grid->macro();
-
-        if (strcmp(macro, "X") == 0) {
-            def->gCellGrid.offsetX = t_grid->x();
-            def->gCellGrid.numX = t_grid->xNum();
-            def->gCellGrid.stepX = t_grid->xStep();
-            def->gCellGrid.maxX = def->gCellGrid.offsetX + (def->gCellGrid.numX + 1) * def->gCellGrid.stepX;
-
-            return 0;
-        } else if (strcmp(macro, "Y") == 0) {
-            def->gCellGrid.offsetY = t_grid->x();
-            def->gCellGrid.numY = t_grid->xNum();
-            def->gCellGrid.stepY = t_grid->xStep();
-            def->gCellGrid.maxY = def->gCellGrid.offsetY + (def->gCellGrid.numY + 1) * def->gCellGrid.stepY;
-
-            return 0;
-        }
-    }
-
-    return 2;
-};
+int DEFEncoder::defGcellGridCallback(defrCallbackType_e t_type, defiGcellGrid* t_grid, void* t_userData) {};
 
 int DEFEncoder::defGroupCallback(defrCallbackType_e t_type, defiGroup* t_shiftLayers, void* t_userData) {};
 
@@ -363,79 +307,82 @@ int DEFEncoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* 
     if (t_type == defrNetCbkType) {
         Def* def = static_cast<Def*>(t_userData);
 
-        for (std::size_t i = 0; i < t_net->numWires(); ++i) {
-            defiWire* wire = t_net->wire(i);
+        if (t_net->isRouted() == 0) {
+            for (std::size_t i = 0; i < t_net->numWires(); ++i) {
+                defiWire* wire = t_net->wire(i);
 
-            for (std::size_t j = 0; j < wire->numPaths(); ++j) {
-                defiPath* wirePath = wire->path(j);
+                for (std::size_t j = 0; j < wire->numPaths(); ++j) {
+                    defiPath* wirePath = wire->path(j);
 
-                wirePath->initTraverse();
+                    wirePath->initTraverse();
 
-                bool isStartSet = false;
-                bool isEndSet = false;
-                const char* layerName {};
-                const char* viaName {};
-                int32_t tokenType {};
-                int32_t width {};
-                int32_t extStart {};
-                int32_t extEnd {};
-                Point start {};
-                Point end {};
+                    bool isStartSet = false;
+                    bool isEndSet = false;
+                    const char* layerName {};
+                    const char* viaName {};
+                    int32_t tokenType {};
+                    int32_t width {};
+                    int32_t extStart {};
+                    int32_t extEnd {};
+                    Point start {};
+                    Point end {};
 
-                while ((tokenType = wirePath->next()) != DEFIPATH_DONE) {
-                    switch (tokenType) {
-                    case DEFIPATH_LAYER:
-                        layerName = wirePath->getLayer();
-                        break;
-                    case DEFIPATH_WIDTH:
-                        width = wirePath->getWidth();
-                        break;
-                    case DEFIPATH_VIA:
-                        viaName = wirePath->getVia();
-                        break;
-                    case DEFIPATH_POINT:
-                        if (!isStartSet) {
-                            isStartSet = true;
-                            wirePath->getPoint(&start.x, &start.y);
-                        } else {
-                            isEndSet = true;
-                            wirePath->getPoint(&end.x, &end.y);
+                    while ((tokenType = wirePath->next()) != DEFIPATH_DONE) {
+                        switch (tokenType) {
+                        case DEFIPATH_LAYER:
+                            layerName = wirePath->getLayer();
+                            break;
+                        case DEFIPATH_WIDTH:
+                            width = wirePath->getWidth();
+                            break;
+                        case DEFIPATH_VIA:
+                            viaName = wirePath->getVia();
+                            break;
+                        case DEFIPATH_POINT:
+                            if (!isStartSet) {
+                                isStartSet = true;
+                                wirePath->getPoint(&start.x, &start.y);
+                            } else {
+                                isEndSet = true;
+                                wirePath->getPoint(&end.x, &end.y);
+                            }
+                            break;
+                        case DEFIPATH_FLUSHPOINT:
+                            if (!isStartSet) {
+                                isStartSet = true;
+                                wirePath->getFlushPoint(&start.x, &start.y, &extStart);
+                            } else {
+                                isEndSet = true;
+                                wirePath->getFlushPoint(&end.x, &end.y, &extEnd);
+                            }
+                            break;
+                        case DEFIPATH_RECT:
+                            break;
+                        default:
+                            break;
                         }
-                        break;
-                    case DEFIPATH_FLUSHPOINT:
-                        if (!isStartSet) {
-                            isStartSet = true;
-                            wirePath->getFlushPoint(&start.x, &start.y, &extStart);
-                        } else {
-                            isEndSet = true;
-                            wirePath->getFlushPoint(&end.x, &end.y, &extEnd);
-                        }
-                        break;
-                    case DEFIPATH_RECT:
-                        break;
-                    default:
-                        break;
                     }
-                }
 
-                if (viaName == nullptr || strcmp(viaName, "") == 0) {
-                    if (isEndSet) {
-                        std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
+                    if (viaName == nullptr) {
+                        if (isStartSet && isEndSet) {
+                            std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
 
-                        poly->layer = convertNameToML(layerName);
+                            poly->layer = convertNameToML(layerName);
 
-                        if (start.x != end.x) {
-                            poly->append(start.x - extStart, start.y);
-                            poly->append(end.x + extEnd, end.y);
-                        } else {
-                            poly->append(start.x, start.y - extStart);
-                            poly->append(end.x, end.y + extEnd);
+                            if (start.x != end.x) {
+                                poly->append(start.x - extStart, start.y);
+                                poly->append(end.x + extEnd, end.y);
+                            } else {
+                                poly->append(start.x, start.y - extStart);
+                                poly->append(end.x, end.y + extEnd);
+                            }
+
+                            def->polygon.emplace_back(poly);
                         }
-
-                        def->polygon.emplace_back(poly);
                     }
                 }
             }
+        } else {
         }
 
         return 0;
@@ -489,7 +436,7 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                     }
                 }
 
-                if (viaName == nullptr || (viaName, "") == 0) {
+                if (viaName == nullptr) {
                     std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
 
                     poly->layer = convertNameToML(layerName);

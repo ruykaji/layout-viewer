@@ -29,6 +29,16 @@ struct Point {
 };
 
 struct Polygon {
+    enum class Type {
+        NONE,
+        VPWR,
+        VGND,
+        VIA,
+        PIN,
+        PIN_ROUTE,
+        CLK_ROUTE,
+    };
+
     enum class ML {
         L1,
         M1,
@@ -43,6 +53,7 @@ struct Polygon {
         NONE,
     };
 
+    Type type { Type::NONE };
     ML layer { ML::NONE };
     std::vector<Point> points {};
 
@@ -64,13 +75,6 @@ struct Polygon {
     }
 };
 
-struct Pin {
-    std::vector<std::shared_ptr<Polygon>> polygons {};
-
-    Pin() = default;
-    ~Pin() = default;
-};
-
 struct Via {
     std::vector<Polygon> polygons {};
 
@@ -78,35 +82,34 @@ struct Via {
     ~Via() = default;
 };
 
-struct Component {
-    Point placed {};
+struct Pin {
+    std::vector<std::shared_ptr<Polygon>> polygons {};
 
+    Pin() = default;
+    ~Pin() = default;
+};
+
+struct Component {
     std::map<std::string, Pin> pins {};
 
     Component() = default;
     ~Component() = default;
 };
 
-struct GCellGrid {
-    std::size_t numY {};
-    int32_t offsetY {};
-    int32_t stepY {};
-    int32_t maxY {};
+struct Route {
+    std::string pinA {};
+    std::vector<std::string> pinB {};
+    std::vector<std::shared_ptr<Polygon>> polygons {};
 
-    std::size_t numX {};
-    int32_t offsetX {};
-    int32_t stepX {};
-    int32_t maxX {};
+    Route() = default;
+    ~Route() = default;
 
-    std::vector<Polygon> cells {};
-
-    GCellGrid() = default;
-    ~GCellGrid() = default;
+    Route(const std::string& t_pinA)
+        : pinA(t_pinA) {};
 };
 
 struct Def {
     Polygon dieArea {};
-    GCellGrid gCellGrid {};
 
     std::vector<std::shared_ptr<Polygon>> polygon {};
 

@@ -3,8 +3,8 @@
 
 #include <cstdio>
 #include <defrReader.hpp>
-#include <lefrReader.hpp>
 #include <functional>
+#include <lefrReader.hpp>
 #include <memory>
 #include <string_view>
 
@@ -27,7 +27,9 @@ private:
     static Polygon::ML convertNameToML(const char* t_name);
 
     static std::string findLef(const std::string& t_folder, const std::string& t_fileName);
-    
+
+    static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y);
+
     static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
 
     static int defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData);

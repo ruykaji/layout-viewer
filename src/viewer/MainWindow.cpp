@@ -17,7 +17,7 @@ MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
 
     setWindowTitle("Viewer");
     setMinimumSize(480, 480);
-    resize(1280, 720);
+    resize(480, 480);
 }
 
 void MainWindow::createMenus()

@@ -98,21 +98,19 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->begin(this);
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
+        painter->setPen(QPen(QColor(QColor(255, 255, 255, 125)), 1.0 / m_currentScale));
+        painter->setBrush(QBrush(QColor(Qt::transparent)));
 
-        // gCellGrid drawing
+        // DieArea drawing
         //======================================================================
 
-        // painter->setPen(QPen(QColor(QColor(50, 50, 50)), 1.0 / m_currentScale));
+        QPolygonF dieAreaPoly {};
 
-        // for (auto& cell : m_def->gCellGrid.cells) {
-        //     QPolygonF cellPoly {};
+        for (auto& [x, y] : m_def->dieArea.points) {
+            dieAreaPoly.append(QPointF(x, y));
+        }
 
-        //     for (auto& [x, y] : cell.points) {
-        //         cellPoly.append(QPointF(x, y));
-        //     }
-
-        //     painter->drawPolygon(cellPoly);
-        // }
+        painter->drawPolygon(dieAreaPoly);
 
         // Pins drawing
         //======================================================================
@@ -127,20 +125,6 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
             selectBrushAndPen(painter, polygon->layer);
             painter->drawPolygon(portPoly);
         }
-
-        // DieArea drawing
-        //======================================================================
-
-        painter->setPen(QPen(QColor(Qt::white), 1.0 / m_currentScale));
-        painter->setBrush(QBrush(QColor(Qt::transparent)));
-
-        QPolygonF dieAreaPoly {};
-
-        for (auto& [x, y] : m_def->dieArea.points) {
-            dieAreaPoly.append(QPointF(x, y));
-        }
-
-        painter->drawPolygon(dieAreaPoly);
 
         painter->end();
     }
