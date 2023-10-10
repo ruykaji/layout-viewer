@@ -39,7 +39,7 @@ public:
     explicit DEFViewerWidget(QWidget* t_parent = nullptr);
 
 private:
-    void selectBrushAndPen(QPainter* t_painter, const Polygon::ML& t_layer);
+    void selectBrushAndPen(QPainter* t_painter, const Geometry::ML& t_layer);
 
 protected:
     void paintEvent(QPaintEvent* t_event);

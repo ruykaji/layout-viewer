@@ -24,7 +24,7 @@ public:
     std::shared_ptr<Def> read(const std::string_view t_fileName);
 
 private:
-    static Polygon::ML convertNameToML(const char* t_name);
+    static Geometry::ML convertNameToML(const char* t_name);
 
     static std::string findLef(const std::string& t_folder, const std::string& t_fileName);
 

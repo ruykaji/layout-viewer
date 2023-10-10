@@ -18,7 +18,6 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     }
 
     m_def = std::make_shared<Def>();
-    m_def->components["__THIS__"] = Component();
 
     // Settings
     //=================================================================
@@ -54,36 +53,36 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
         throw std::runtime_error("Error: Can't read a file!");
     }
 
-    std::sort(m_def->polygon.begin(), m_def->polygon.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+    std::sort(m_def->geometries.begin(), m_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
 
     return m_def;
 }
 
-Polygon::ML DEFEncoder::convertNameToML(const char* t_name)
+Geometry::ML DEFEncoder::convertNameToML(const char* t_name)
 {
     if (strcmp(t_name, "li1") == 0) {
-        return Polygon::ML::L1;
+        return Geometry::ML::L1;
     } else if (strcmp(t_name, "met1") == 0) {
-        return Polygon::ML::M1;
+        return Geometry::ML::M1;
     } else if (strcmp(t_name, "met2") == 0) {
-        return Polygon::ML::M2;
+        return Geometry::ML::M2;
     } else if (strcmp(t_name, "met3") == 0) {
-        return Polygon::ML::M3;
+        return Geometry::ML::M3;
     } else if (strcmp(t_name, "met4") == 0) {
-        return Polygon::ML::M4;
+        return Geometry::ML::M4;
     } else if (strcmp(t_name, "met5") == 0) {
-        return Polygon::ML::M5;
+        return Geometry::ML::M5;
     } else if (strcmp(t_name, "met6") == 0) {
-        return Polygon::ML::M6;
+        return Geometry::ML::M6;
     } else if (strcmp(t_name, "met7") == 0) {
-        return Polygon::ML::M7;
+        return Geometry::ML::M7;
     } else if (strcmp(t_name, "met8") == 0) {
-        return Polygon::ML::M8;
+        return Geometry::ML::M8;
     } else if (strcmp(t_name, "met9") == 0) {
-        return Polygon::ML::M9;
+        return Geometry::ML::M9;
     }
 
-    return Polygon::ML::NONE;
+    return Geometry::ML::NONE;
 }
 
 std::string DEFEncoder::findLef(const std::string& t_folder, const std::string& t_fileName)
@@ -153,25 +152,24 @@ int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* 
 {
     if (t_type == lefrPinCbkType) {
         Def* def = static_cast<Def*>(t_userData);
-        Component& component = def->components[def->lastComponentId];
         Pin pin {};
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
             lefiGeometries* portGeom = t_pin->port(i);
-            Polygon::ML layer = convertNameToML(portGeom->getLayer(0));
+            Geometry::ML layer = convertNameToML(portGeom->getLayer(0));
 
             for (std::size_t j = 0; j < portGeom->numItems(); ++j) {
                 switch (portGeom->itemType(j)) {
                 case lefiGeomEnum::lefiGeomRectE: {
-                    lefiGeomRect* rect = portGeom->getRect(j);
-                    int32_t xLeft = rect->xl * 1000.0;
-                    int32_t yTop = rect->yl * 1000.0;
-                    int32_t xRight = rect->xh * 1000.0;
-                    int32_t yBottom = rect->yh * 1000.0;
-                    std::shared_ptr<Polygon> poly = std::make_shared<Polygon>(xLeft, yTop, xRight, yBottom, layer);
+                    lefiGeomRect* portRect = portGeom->getRect(j);
+                    int32_t xLeft = portRect->xl * 1000.0;
+                    int32_t yTop = portRect->yl * 1000.0;
+                    int32_t xRight = portRect->xh * 1000.0;
+                    int32_t yBottom = portRect->yh * 1000.0;
+                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, Rectangle::RType::PIN, layer);
 
-                    def->polygon.emplace_back(poly);
-                    pin.polygons.emplace_back(poly);
+                    pin.rects.emplace_back(rect);
+                    def->geometries.emplace_back(std::static_pointer_cast<Geometry>(rect));
                     break;
                 }
                 default:
@@ -180,7 +178,7 @@ int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* 
             }
         }
 
-        component.pins[t_pin->name()] = pin;
+        def->component.emplace_back(pin);
 
         return 0;
     }
@@ -196,18 +194,55 @@ int DEFEncoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, vo
         auto points = t_box->getPoint();
         auto def = static_cast<Def*>(t_userData);
 
-        Polygon poly {};
-
         if (points.numPoints != 2) {
             for (std::size_t i = 0; i < points.numPoints; ++i) {
-                def->dieArea.append(points.x[i], points.y[i]);
+                def->dieArea.emplace_back(Point(points.x[i], points.y[i]));
             }
         } else {
-            def->dieArea.append(points.x[0], points.y[0]);
-            def->dieArea.append(points.x[1], points.y[0]);
-            def->dieArea.append(points.x[1], points.y[1]);
-            def->dieArea.append(points.x[0], points.y[1]);
-            def->dieArea.append(points.x[0], points.y[0]);
+            def->dieArea.emplace_back(Point(points.x[0], points.y[0]));
+            def->dieArea.emplace_back(Point(points.x[1], points.y[0]));
+            def->dieArea.emplace_back(Point(points.x[1], points.y[1]));
+            def->dieArea.emplace_back(Point(points.x[0], points.y[1]));
+            def->dieArea.emplace_back(Point(points.x[0], points.y[0]));
+        }
+
+        Point leftTop { INT32_MAX, INT32_MAX };
+        Point rightBottom { 0, 0 };
+
+        for (auto& point : def->dieArea) {
+            leftTop.x = std::min(point.x, leftTop.x);
+            leftTop.y = std::min(point.y, leftTop.y);
+            rightBottom.x = std::max(point.x, rightBottom.x);
+            rightBottom.y = std::max(point.y, rightBottom.y);
+        }
+
+        uint32_t width = rightBottom.x - leftTop.x;
+        uint32_t height = rightBottom.y - leftTop.y;
+        uint32_t scaledWidth = width / 20;
+        uint32_t scaledHeight = height / 20;
+
+        def->matrixSize = 480;
+        def->numMatrixX = scaledWidth / def->matrixSize;
+        def->numMatrixY = scaledHeight / def->matrixSize;
+        def->matrixStepX = width / def->numMatrixX;
+        def->matrixStepY = height / def->numMatrixY;
+        def->matrixOffsetX = leftTop.x;
+        def->matrixOffsetY = leftTop.y;
+
+        for (std::size_t j = 0; j < def->numMatrixY; ++j) {
+            for (std::size_t i = 0; i < def->numMatrixX; ++i) {
+                Matrix matrix {};
+
+                matrix.originalPlace = Rectangle(
+                    def->matrixOffsetX + i * def->matrixStepX,
+                    def->matrixOffsetY + j * def->matrixStepY,
+                    def->matrixOffsetX + (i + 1) * def->matrixStepX,
+                    def->matrixOffsetY + (j + 1) * def->matrixStepY,
+                    Rectangle::RType::NONE,
+                    Geometry::ML::NONE);
+
+                def->matrixes.emplace_back(matrix);
+            }
         }
 
         return 0;
@@ -219,16 +254,7 @@ int DEFEncoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, vo
 int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData)
 {
     if (t_type == defrComponentCbkType) {
-        Component component {};
-
         Def* def = static_cast<Def*>(t_userData);
-
-        def->lastComponentId = t_component->id();
-        def->components[t_component->id()] = component;
-
-        if (def->lastComponentId == "_0_") {
-            printf("Some");
-        }
 
         std::string pathToCell = findLef("/home/alaie/stuff/skywater-pdk", t_component->name());
 
@@ -261,28 +287,30 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
             placed = Point(t_component->placementX(), t_component->placementY());
         }
 
-        for (auto& [_, pin] : def->components[def->lastComponentId].pins) {
-            for (auto& poly : pin.polygons) {
-                for (auto& point : poly->points) {
-                    leftBottom.x = std::min(point.x, leftBottom.x);
-                    leftBottom.y = std::min(point.y, leftBottom.y);
+        for (auto& pin : def->component) {
+            for (auto& rect : pin.rects) {
+                for (auto& vertex : rect->vertex) {
+                    leftBottom.x = std::min(vertex.x, leftBottom.x);
+                    leftBottom.y = std::min(vertex.y, leftBottom.y);
 
-                    setGeomOrientation(t_component->placementOrient(), point.x, point.y);
+                    setGeomOrientation(t_component->placementOrient(), vertex.x, vertex.y);
 
-                    newLeftBottom.x = std::min(point.x, newLeftBottom.x);
-                    newLeftBottom.y = std::min(point.y, newLeftBottom.y);
+                    newLeftBottom.x = std::min(vertex.x, newLeftBottom.x);
+                    newLeftBottom.y = std::min(vertex.y, newLeftBottom.y);
                 }
             }
         }
 
-        for (auto& [_, pin] : def->components[def->lastComponentId].pins) {
-            for (auto& poly : pin.polygons) {
-                for (auto& point : poly->points) {
-                    point.x += (leftBottom.x - newLeftBottom.x) + placed.x;
-                    point.y += (leftBottom.y - newLeftBottom.y) + placed.y;
+        for (auto& pin : def->component) {
+            for (auto& rect : pin.rects) {
+                for (auto& vertex : rect->vertex) {
+                    vertex.x += (leftBottom.x - newLeftBottom.x) + placed.x;
+                    vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
                 }
             }
         }
+
+        def->component.clear();
 
         return 0;
     }
@@ -365,24 +393,20 @@ int DEFEncoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* 
 
                     if (viaName == nullptr) {
                         if (isStartSet && isEndSet) {
-                            std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
-
-                            poly->layer = convertNameToML(layerName);
+                            std::shared_ptr<Line> line {};
 
                             if (start.x != end.x) {
-                                poly->append(start.x - extStart, start.y);
-                                poly->append(end.x + extEnd, end.y);
+                                line = std::make_shared<Line>(start.x - extStart, start.y, end.x + extEnd, end.y, Line::LType::COMPONENT_ROUTE, convertNameToML(layerName));
                             } else {
-                                poly->append(start.x, start.y - extStart);
-                                poly->append(end.x, end.y + extEnd);
+
+                                line = std::make_shared<Line>(start.x, start.y - extStart, end.x, end.y + extEnd, Line::LType::COMPONENT_ROUTE, convertNameToML(layerName));
                             }
 
-                            def->polygon.emplace_back(poly);
+                            def->geometries.emplace_back(std::static_pointer_cast<Geometry>(line));
                         }
                     }
                 }
             }
-        } else {
         }
 
         return 0;
@@ -437,35 +461,26 @@ int DEFEncoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net,
                 }
 
                 if (viaName == nullptr) {
-                    std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
-
-                    poly->layer = convertNameToML(layerName);
+                    std::shared_ptr<Rectangle> rect {};
 
                     if (start.x != end.x) {
-                        poly->append(start.x, start.y - width / 2.0);
-                        poly->append(end.x, end.y - width / 2.0);
-                        poly->append(end.x, end.y + width / 2.0);
-                        poly->append(start.x, start.y + width / 2.0);
+                        rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, Rectangle::RType::NONE, convertNameToML(layerName));
                     } else {
-                        poly->append(start.x - width / 2.0, start.y);
-                        poly->append(end.x - width / 2.0, end.y);
-                        poly->append(end.x + width / 2.0, end.y);
-                        poly->append(start.x + width / 2.0, start.y);
+                        rect = std::make_shared<Rectangle>(start.x - width / 2.0, start.y, end.x + width / 2.0, end.y, Rectangle::RType::NONE, convertNameToML(layerName));
                     }
 
-                    def->polygon.emplace_back(poly);
+                    def->geometries.emplace_back(std::static_pointer_cast<Geometry>(rect));
                 } else {
                     if (def->vias.count(viaName) != 0) {
                         Via via = def->vias[viaName];
 
-                        for (auto& polygon : via.polygons) {
-                            std::shared_ptr<Polygon> poly = std::make_shared<Polygon>();
-
-                            for (auto& point : polygon.points) {
-                                poly->append(point.x + start.x, point.y + start.y);
+                        for (auto& rect : via.rects) {
+                            for (auto& vertex : rect.vertex) {
+                                vertex.x += start.x;
+                                vertex.y += start.y;
                             }
 
-                            def->polygon.emplace_back(poly);
+                            def->geometries.emplace_back(std::static_pointer_cast<Geometry>(std::make_shared<Rectangle>(rect)));
                         }
 
                     } else {
@@ -489,7 +504,7 @@ int DEFEncoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* 
 {
     if (t_type == defrPinCbkType) {
         Def* def = static_cast<Def*>(t_userData);
-        Pin pin {};
+        std::shared_ptr<Pin> pin = std::make_shared<Pin>();
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
             defiPinPort* pinPort = t_pin->pinPort(i);
@@ -508,14 +523,14 @@ int DEFEncoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* 
                     yh += yPlacement;
                 }
 
-                std::shared_ptr<Polygon> poly = std::make_shared<Polygon>(xl, yl, xh, yh, convertNameToML(pinPort->layer(j)));
+                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, Rectangle::RType::PIN, convertNameToML(pinPort->layer(j)));
 
-                def->polygon.emplace_back(poly);
-                pin.polygons.emplace_back(poly);
+                pin->rects.emplace_back(rect);
+                def->geometries.emplace_back(std::static_pointer_cast<Geometry>(rect));
             }
         }
 
-        def->components["__THIS__"].pins[t_pin->pinName()] = pin;
+        def->pins[t_pin->pinName()] = pin;
 
         return 0;
     }
@@ -562,7 +577,7 @@ int DEFEncoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* 
                 int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
                 int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
 
-                via.polygons.emplace_back(Polygon(xLeft, yTop, xRight, yBottom, Polygon::ML::NONE));
+                via.rects.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, Rectangle::RType::VIA, Geometry::ML::NONE));
             }
         }
 

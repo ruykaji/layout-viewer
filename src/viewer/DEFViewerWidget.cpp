@@ -15,46 +15,46 @@ DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     setPalette(pal);
 };
 
-void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const Polygon::ML& t_layer)
+void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const Geometry::ML& t_layer)
 {
     switch (t_layer) {
-    case Polygon::ML::L1:
+    case Geometry::ML::L1:
         t_painter->setPen(QPen(QColor(0, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 0, 255, 55)));
         break;
-    case Polygon::ML::M1:
+    case Geometry::ML::M1:
         t_painter->setPen(QPen(QColor(255, 0, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 0, 55)));
         break;
-    case Polygon::ML::M2:
+    case Geometry::ML::M2:
         t_painter->setPen(QPen(QColor(0, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 0, 55)));
         break;
-    case Polygon::ML::M3:
+    case Geometry::ML::M3:
         t_painter->setPen(QPen(QColor(255, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 255, 0, 55)));
         break;
-    case Polygon::ML::M4:
+    case Geometry::ML::M4:
         t_painter->setPen(QPen(QColor(0, 255, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 255, 55)));
         break;
-    case Polygon::ML::M5:
+    case Geometry::ML::M5:
         t_painter->setPen(QPen(QColor(255, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 255, 55)));
         break;
-    case Polygon::ML::M6:
+    case Geometry::ML::M6:
         t_painter->setPen(QPen(QColor(125, 125, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 125, 255, 55)));
         break;
-    case Polygon::ML::M7:
+    case Geometry::ML::M7:
         t_painter->setPen(QPen(QColor(255, 125, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 125, 125, 55)));
         break;
-    case Polygon::ML::M8:
+    case Geometry::ML::M8:
         t_painter->setPen(QPen(QColor(125, 255, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 255, 125, 55)));
         break;
-    case Polygon::ML::M9:
+    case Geometry::ML::M9:
         t_painter->setPen(QPen(QColor(255, 75, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 75, 125, 55)));
         break;
@@ -69,7 +69,7 @@ void DEFViewerWidget::render(QString& t_fileName)
 {
     m_def = m_defEncoder.read(std::string_view(t_fileName.toStdString()));
 
-    for (auto& [x, y] : m_def->dieArea.points) {
+    for (auto& [x, y] : m_def->dieArea) {
         m_max.first = std::max(x, m_max.first);
         m_max.second = std::max(y, m_max.second);
 
@@ -98,32 +98,58 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->begin(this);
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
-        painter->setPen(QPen(QColor(QColor(255, 255, 255, 125)), 1.0 / m_currentScale));
+        painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 1.0 / m_currentScale));
         painter->setBrush(QBrush(QColor(Qt::transparent)));
 
         // DieArea drawing
         //======================================================================
 
-        QPolygonF dieAreaPoly {};
+        QPolygon dieAreaPoly {};
 
-        for (auto& [x, y] : m_def->dieArea.points) {
-            dieAreaPoly.append(QPointF(x, y));
+        for (auto& [x, y] : m_def->dieArea) {
+            dieAreaPoly.append(QPoint(x, y));
         }
 
         painter->drawPolygon(dieAreaPoly);
 
-        // Pins drawing
-        //======================================================================
+        for (auto& matrix : m_def->matrixes) {
+            QPolygon matrixPoly {};
 
-        for (auto& polygon : m_def->polygon) {
-            QPolygonF portPoly {};
-
-            for (auto& [x, y] : polygon->points) {
-                portPoly.append(QPointF(x, y));
+            for (auto& [x, y] : matrix.originalPlace.vertex) {
+                matrixPoly.append(QPoint(x, y));
             }
 
-            selectBrushAndPen(painter, polygon->layer);
-            painter->drawPolygon(portPoly);
+            painter->drawPolygon(matrixPoly);
+        }
+
+        // Polygons drawing
+        //======================================================================
+
+        for (auto& geom : m_def->geometries) {
+            selectBrushAndPen(painter, geom->layer);
+
+            switch (geom->gType) {
+            case Geometry::GType::LINE: {
+                std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
+                painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
+                break;
+            }
+            case Geometry::GType::RECTANGLE: {
+                std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+
+                QPolygon poly {};
+
+                poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+                poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+                poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+                poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+
+                painter->drawPolygon(poly);
+                break;
+            }
+            default:
+                break;
+            };
         }
 
         painter->end();
