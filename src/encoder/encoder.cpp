@@ -27,6 +27,7 @@ std::shared_ptr<Def> DEFEncoder::read(const std::string_view t_fileName)
     //=================================================================
 
     lefrSetPinCbk(&lefPinCallback);
+    lefrSetObstructionCbk(&lefObstructionCallback);
 
     defrSetDieAreaCbk(&defDieAreaCallback);
     defrSetComponentCbk(&defComponentCallback);
@@ -152,23 +153,28 @@ int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* 
 {
     if (t_type == lefrPinCbkType) {
         Def* def = static_cast<Def*>(t_userData);
-        Pin pin {};
+        std::shared_ptr<Pin> pin = std::make_shared<Pin>();
+        lefiGeometries* portGeom {};
+        const char* layer {};
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
-            lefiGeometries* portGeom = t_pin->port(i);
-            Geometry::ML layer = convertNameToML(portGeom->getLayer(0));
+            portGeom = t_pin->port(i);
 
             for (std::size_t j = 0; j < portGeom->numItems(); ++j) {
                 switch (portGeom->itemType(j)) {
+                case lefiGeomEnum::lefiGeomLayerE: {
+                    layer = portGeom->getLayer(j);
+                    break;
+                }
                 case lefiGeomEnum::lefiGeomRectE: {
                     lefiGeomRect* portRect = portGeom->getRect(j);
                     int32_t xLeft = portRect->xl * 1000.0;
                     int32_t yTop = portRect->yl * 1000.0;
                     int32_t xRight = portRect->xh * 1000.0;
                     int32_t yBottom = portRect->yh * 1000.0;
-                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, Rectangle::RType::PIN, layer);
+                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, Rectangle::RType::PIN, convertNameToML(layer));
 
-                    pin.rects.emplace_back(rect);
+                    pin->rects.emplace_back(rect);
                     def->geometries.emplace_back(std::static_pointer_cast<Geometry>(rect));
                     break;
                 }
@@ -179,6 +185,46 @@ int DEFEncoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* 
         }
 
         def->component.emplace_back(pin);
+        def->pins[def->componentName + t_pin->name()] = pin;
+
+        return 0;
+    }
+
+    return 2;
+}
+
+int DEFEncoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t_obstruction, void* t_userData)
+{
+    if (t_type == lefrObstructionCbkType) {
+        Def* def = static_cast<Def*>(t_userData);
+        std::shared_ptr<Pin> obs = std::make_shared<Pin>(); // Not actual pin
+        lefiGeometries* osbrGeom = t_obstruction->geometries();
+        const char* layer {};
+
+        for (std::size_t i = 0; i < osbrGeom->numItems(); ++i) {
+            switch (osbrGeom->itemType(i)) {
+            case lefiGeomEnum::lefiGeomLayerE: {
+                layer = osbrGeom->getLayer(i);
+                break;
+            }
+            case lefiGeomEnum::lefiGeomRectE: {
+                lefiGeomRect* portRect = osbrGeom->getRect(i);
+                int32_t xLeft = portRect->xl * 1000.0;
+                int32_t yTop = portRect->yl * 1000.0;
+                int32_t xRight = portRect->xh * 1000.0;
+                int32_t yBottom = portRect->yh * 1000.0;
+                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, Rectangle::RType::PIN, convertNameToML(layer));
+
+                obs->rects.emplace_back(rect);
+                def->geometries.emplace_back(std::static_pointer_cast<Geometry>(rect));
+                break;
+            }
+            default:
+                break;
+            }
+        }
+
+        def->component.emplace_back(obs);
 
         return 0;
     }
@@ -256,6 +302,8 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
     if (t_type == defrComponentCbkType) {
         Def* def = static_cast<Def*>(t_userData);
 
+        def->componentName = t_component->id();
+
         std::string pathToCell = findLef("/home/alaie/stuff/skywater-pdk", t_component->name());
 
         int initStatus = lefrInit();
@@ -288,7 +336,7 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
         }
 
         for (auto& pin : def->component) {
-            for (auto& rect : pin.rects) {
+            for (auto& rect : pin->rects) {
                 for (auto& vertex : rect->vertex) {
                     leftBottom.x = std::min(vertex.x, leftBottom.x);
                     leftBottom.y = std::min(vertex.y, leftBottom.y);
@@ -302,7 +350,7 @@ int DEFEncoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t
         }
 
         for (auto& pin : def->component) {
-            for (auto& rect : pin.rects) {
+            for (auto& rect : pin->rects) {
                 for (auto& vertex : rect->vertex) {
                     vertex.x += (leftBottom.x - newLeftBottom.x) + placed.x;
                     vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
@@ -530,7 +578,7 @@ int DEFEncoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* 
             }
         }
 
-        def->pins[t_pin->pinName()] = pin;
+        def->pins["PIN" + std::string(t_pin->pinName())] = pin;
 
         return 0;
     }

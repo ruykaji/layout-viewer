@@ -32,6 +32,8 @@ private:
 
     static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
 
+    static int lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t_obstruction, void* t_userData);
+
     static int defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData);
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
