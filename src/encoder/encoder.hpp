@@ -11,24 +11,24 @@
 #include "def.hpp"
 #include "macro.hpp"
 
-class DEFEncoder {
+class Encoder {
     std::shared_ptr<Def> m_def {};
 
 public:
-    explicit DEFEncoder() = default;
-    ~DEFEncoder() = default;
+    explicit Encoder() = default;
+    ~Encoder() = default;
 
-    COPY_CONSTRUCTOR_REMOVE(DEFEncoder);
-    ASSIGN_OPERATOR_REMOVE(DEFEncoder);
+    COPY_CONSTRUCTOR_REMOVE(Encoder);
+    ASSIGN_OPERATOR_REMOVE(Encoder);
 
-    std::shared_ptr<Def> read(const std::string_view t_fileName);
+    std::shared_ptr<Def> readDef(const std::string_view t_fileName);
 
 private:
-    static Geometry::ML convertNameToML(const char* t_name);
-
-    static std::string findLef(const std::string& t_folder, const std::string& t_fileName);
+    static ML convertNameToML(const char* t_name);
 
     static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y);
+
+    static void readLef(const std::string& t_folder, const std::string& t_fileName, void* t_userData);
 
     static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
 

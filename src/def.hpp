@@ -8,14 +8,42 @@
 #include <vector>
 
 struct Point;
-struct Def;
-struct Polygon;
-struct GCellGrid;
-struct Component;
-struct Port;
 struct Pin;
 struct Via;
-struct Path;
+struct Def;
+
+// Geometry type
+enum class GType {
+    RECTANGLE = 0,
+    LINE,
+};
+
+// Line type
+enum class LType {
+    COMPONENT_ROUTE = 0,
+    CLK_ROUTE,
+};
+
+// Rectangle type
+enum class RType {
+    NONE = 0,
+    PIN
+};
+
+// Metal layers
+enum class ML {
+    L1 = 0,
+    M1,
+    M2,
+    M3,
+    M4,
+    M5,
+    M6,
+    M7,
+    M8,
+    M9,
+    NONE,
+};
 
 struct Point {
     int32_t x {};
@@ -30,25 +58,6 @@ struct Point {
 };
 
 struct Geometry {
-    enum class GType {
-        RECTANGLE,
-        LINE,
-    };
-
-    enum class ML {
-        L1,
-        M1,
-        M2,
-        M3,
-        M4,
-        M5,
-        M6,
-        M7,
-        M8,
-        M9,
-        NONE,
-    };
-
     GType gType { GType::RECTANGLE };
     ML layer { ML::NONE };
 
@@ -61,11 +70,6 @@ struct Geometry {
 };
 
 struct Line : public Geometry {
-    enum class LType {
-        COMPONENT_ROUTE,
-        CLK_ROUTE,
-    };
-
     LType lType { LType::COMPONENT_ROUTE };
     Point start {};
     Point end {};
@@ -81,12 +85,6 @@ struct Line : public Geometry {
 };
 
 struct Rectangle : public Geometry {
-    enum class RType {
-        NONE,
-        PIN,
-        VIA
-    };
-
     RType rType { RType::NONE };
     std::array<Point, 4> vertex {};
 
@@ -97,55 +95,67 @@ struct Rectangle : public Geometry {
         : rType(t_type)
         , Geometry(GType::RECTANGLE, t_layer)
     {
-        vertex[0] = Point(t_xl, t_yl);
-        vertex[1] = Point(t_xh, t_yl);
-        vertex[2] = Point(t_xh, t_yh);
-        vertex[3] = Point(t_xl, t_yh);
+        // Protection from improper declaration of rect
+        int32_t minX = std::min(t_xh, t_xl);
+        int32_t maxX = std::max(t_xh, t_xl);
+        int32_t minY = std::min(t_yh, t_yl);
+        int32_t maxY = std::max(t_yh, t_yl);
+
+        vertex[0] = Point(minX, minY);
+        vertex[1] = Point(maxX, minY);
+        vertex[2] = Point(maxX, maxY);
+        vertex[3] = Point(minX, maxY);
+    }
+
+    void fixVertex()
+    {
+        int32_t minX = std::min(vertex[0].x, vertex[2].x);
+        int32_t maxX = std::max(vertex[0].x, vertex[2].x);
+        int32_t minY = std::min(vertex[0].y, vertex[2].y);
+        int32_t maxY = std::max(vertex[0].y, vertex[2].y);
+
+        vertex[0] = Point(minX, minY);
+        vertex[1] = Point(maxX, minY);
+        vertex[2] = Point(maxX, maxY);
+        vertex[3] = Point(minX, maxY);
     }
 };
 
-struct Via {
-    std::vector<Rectangle> rects {};
-
-    Via() = default;
-    ~Via() = default;
-};
-
-struct Pin {
-    std::vector<std::shared_ptr<Rectangle>> rects {};
-    std::vector<std::shared_ptr<Pin>> targets {};
+struct Pin : public Rectangle {
+    std::string name {};
 
     Pin() = default;
     ~Pin() = default;
+
+    Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const ML& t_layer)
+        : name(t_name)
+        , Rectangle(t_xl, t_yl, t_xh, t_yh, RType::PIN, t_layer) {};
 };
 
 struct Matrix {
     Rectangle originalPlace {};
 
-    std::vector<std::shared_ptr<Rectangle>> rects {};
-    std::vector<std::shared_ptr<Pin>> pins {};
-    std::vector<std::shared_ptr<Line>> paths {};
-    std::vector<std::shared_ptr<Line>> routes {};
+    std::vector<std::shared_ptr<Geometry>> geometries {};
 };
 
 struct Def {
-    uint32_t matrixSize {};
-    uint32_t matrixStepX {};
-    uint32_t matrixStepY {};
-    uint32_t numMatrixX {};
-    uint32_t numMatrixY {};
+    int32_t matrixSize {};
+    int32_t matrixStepX {};
+    int32_t matrixStepY {};
+    int32_t numMatrixX {};
+    int32_t numMatrixY {};
     int32_t matrixOffsetX {};
     int32_t matrixOffsetY {};
 
     std::vector<Point> dieArea {};
     std::vector<Matrix> matrixes {};
 
-    std::vector<std::shared_ptr<Pin>> component {};
+    std::vector<std::shared_ptr<Rectangle>> component {};
     std::string componentName {};
 
     std::vector<std::shared_ptr<Geometry>> geometries {};
-    std::map<std::string, std::shared_ptr<Pin>> pins {};
-    std::map<std::string, Via> vias {};
+    std::map<std::string, std::vector<std::string>> pinConnections {};
+    std::map<std::string, std::vector<Rectangle>> vias {};
 
     Def() = default;
     ~Def() = default;

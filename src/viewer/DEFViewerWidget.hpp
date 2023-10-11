@@ -21,7 +21,7 @@ class DEFViewerWidget : public QWidget {
     Mode m_mode {};
 
     std::shared_ptr<Def> m_def {};
-    DEFEncoder m_defEncoder {};
+    Encoder m_encoder {};
 
     std::pair<int32_t, int32_t> m_max { 0, 0 };
     std::pair<int32_t, int32_t> m_min { INT32_MAX, INT32_MAX };
@@ -39,7 +39,7 @@ public:
     explicit DEFViewerWidget(QWidget* t_parent = nullptr);
 
 private:
-    void selectBrushAndPen(QPainter* t_painter, const Geometry::ML& t_layer);
+    void selectBrushAndPen(QPainter* t_painter, const ML& t_layer);
 
 protected:
     void paintEvent(QPaintEvent* t_event);

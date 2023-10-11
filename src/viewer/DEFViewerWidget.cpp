@@ -15,46 +15,46 @@ DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     setPalette(pal);
 };
 
-void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const Geometry::ML& t_layer)
+void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
 {
     switch (t_layer) {
-    case Geometry::ML::L1:
+    case ML::L1:
         t_painter->setPen(QPen(QColor(0, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 0, 255, 55)));
         break;
-    case Geometry::ML::M1:
+    case ML::M1:
         t_painter->setPen(QPen(QColor(255, 0, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 0, 55)));
         break;
-    case Geometry::ML::M2:
+    case ML::M2:
         t_painter->setPen(QPen(QColor(0, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 0, 55)));
         break;
-    case Geometry::ML::M3:
+    case ML::M3:
         t_painter->setPen(QPen(QColor(255, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 255, 0, 55)));
         break;
-    case Geometry::ML::M4:
+    case ML::M4:
         t_painter->setPen(QPen(QColor(0, 255, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 255, 55)));
         break;
-    case Geometry::ML::M5:
+    case ML::M5:
         t_painter->setPen(QPen(QColor(255, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 255, 55)));
         break;
-    case Geometry::ML::M6:
+    case ML::M6:
         t_painter->setPen(QPen(QColor(125, 125, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 125, 255, 55)));
         break;
-    case Geometry::ML::M7:
+    case ML::M7:
         t_painter->setPen(QPen(QColor(255, 125, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 125, 125, 55)));
         break;
-    case Geometry::ML::M8:
+    case ML::M8:
         t_painter->setPen(QPen(QColor(125, 255, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 255, 125, 55)));
         break;
-    case Geometry::ML::M9:
+    case ML::M9:
         t_painter->setPen(QPen(QColor(255, 75, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 75, 125, 55)));
         break;
@@ -67,7 +67,7 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const Geometry::ML&
 
 void DEFViewerWidget::render(QString& t_fileName)
 {
-    m_def = m_defEncoder.read(std::string_view(t_fileName.toStdString()));
+    m_def = m_encoder.readDef(std::string_view(t_fileName.toStdString()));
 
     for (auto& [x, y] : m_def->dieArea) {
         m_max.first = std::max(x, m_max.first);
@@ -125,31 +125,60 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         // Polygons drawing
         //======================================================================
 
-        for (auto& geom : m_def->geometries) {
-            selectBrushAndPen(painter, geom->layer);
+        // for (auto& geom : m_def->geometries) {
+        //     selectBrushAndPen(painter, geom->layer);
 
-            switch (geom->gType) {
-            case Geometry::GType::LINE: {
-                std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
-                painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
-                break;
+        //     switch (geom->gType) {
+        //     case GType::LINE: {
+        //         std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
+        //         painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
+        //         break;
+        //     }
+        //     case GType::RECTANGLE: {
+        //         std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+
+        //         QPolygon poly {};
+
+        //         poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+        //         poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+        //         poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+        //         poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+
+        //         painter->drawPolygon(poly);
+        //         break;
+        //     }
+        //     default:
+        //         break;
+        //     };
+        // }
+
+        for (auto& matrix : m_def->matrixes) {
+            for (auto& geom : matrix.geometries) {
+                selectBrushAndPen(painter, geom->layer);
+
+                switch (geom->gType) {
+                case GType::LINE: {
+                    std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
+                    painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
+                    break;
+                }
+                case GType::RECTANGLE: {
+                    std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+
+                    QPolygon poly {};
+
+                    poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+                    poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+                    poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+                    poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+
+                    painter->drawPolygon(poly);
+                    break;
+                }
+                default:
+                    break;
+                };
             }
-            case Geometry::GType::RECTANGLE: {
-                std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
-
-                QPolygon poly {};
-
-                poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
-                poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
-                poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
-                poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
-
-                painter->drawPolygon(poly);
-                break;
-            }
-            default:
-                break;
-            };
         }
 
         painter->end();
