@@ -6,59 +6,10 @@
 
 #include "encoder.hpp"
 
-std::shared_ptr<Def> Encoder::readDef(const std::string_view t_fileName)
-{
-    // Init session
-    //=================================================================
-    int initStatus = defrInitSession();
+// Static functions
+// ======================================================================================
 
-    if (initStatus != 0) {
-        throw std::runtime_error("Error: cant't initialize parser!");
-    }
-
-    m_def = std::make_shared<Def>();
-
-    // Settings
-    //=================================================================
-    defrSetAddPathToNet();
-
-    // Set callbacks
-    //=================================================================
-
-    lefrSetPinCbk(&lefPinCallback);
-    lefrSetObstructionCbk(&lefObstructionCallback);
-
-    defrSetDieAreaCbk(&defDieAreaCallback);
-    defrSetComponentCbk(&defComponentCallback);
-    defrSetPinCbk(&defPinCallback);
-    defrSetNetCbk(&defNetCallback);
-    defrSetSNetCbk(&defSpecialNetCallback);
-    defrSetViaCbk(&defViaCallback);
-
-    // Open file
-    //=================================================================
-
-    auto file = fopen(t_fileName.cbegin(), "r");
-
-    if (file == nullptr) {
-        throw std::runtime_error("Error: Can't open a file!");
-    }
-
-    // Read file
-    //=================================================================
-
-    int readStatus = defrRead(file, t_fileName.cbegin(), static_cast<void*>(m_def.get()), 0);
-
-    if (readStatus != 0) {
-        throw std::runtime_error("Error: Can't read a file!");
-    }
-
-    std::sort(m_def->geometries.begin(), m_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
-
-    return m_def;
-}
-
-ML Encoder::convertNameToML(const char* t_name)
+static ML convertNameToML(const char* t_name)
 {
     if (strcmp(t_name, "li1") == 0) {
         return ML::L1;
@@ -85,7 +36,7 @@ ML Encoder::convertNameToML(const char* t_name)
     return ML::NONE;
 }
 
-void Encoder::setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y)
+static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y)
 {
     switch (t_orientation) {
     case 0:
@@ -121,7 +72,7 @@ void Encoder::setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32
     }
 }
 
-void Encoder::readLef(const std::string& t_folder, const std::string& t_fileName, void* t_userData)
+static void readLef(const std::string& t_folder, const std::string& t_fileName)
 {
     std::string libName {};
     std::string cellName {};
@@ -159,11 +110,69 @@ void Encoder::readLef(const std::string& t_folder, const std::string& t_fileName
         throw std::runtime_error("Error: Can't open a file: " + pathToCell);
     }
 
-    int readStatus = lefrRead(file, pathToCell.c_str(), t_userData);
+    void* userData = lefrGetUserData();
+    int readStatus = lefrRead(file, pathToCell.c_str(), userData);
 
     if (readStatus != 0) {
         throw std::runtime_error("Error: Can't read a file: " + pathToCell);
     }
+}
+
+void Encoder::readDef(const std::string_view t_fileName, const std::shared_ptr<Def> t_def)
+{
+    // Init session
+    //=================================================================
+    int initStatus = defrInitSession();
+
+    if (initStatus != 0) {
+        throw std::runtime_error("Error: cant't initialize parser!");
+    }
+
+    // Open file
+    //=================================================================
+
+    auto file = fopen(t_fileName.cbegin(), "r");
+
+    if (file == nullptr) {
+        throw std::runtime_error("Error: Can't open a file!");
+    }
+
+    // Settings
+    //=================================================================
+
+    // Def settings
+    defrSetAddPathToNet();
+    defrSetUserData(static_cast<void*>(t_def.get()));
+
+    // Lef settings
+    lefrSetUserData(static_cast<void*>(t_def.get()));
+
+    // Set callbacks
+    //=================================================================
+
+    // Lef callbacks
+    lefrSetPinCbk(&lefPinCallback);
+    lefrSetObstructionCbk(&lefObstructionCallback);
+
+    // Def callbacks
+    defrSetDieAreaCbk(&defDieAreaCallback);
+    defrSetComponentCbk(&defComponentCallback);
+    defrSetPinCbk(&defPinCallback);
+    defrSetNetCbk(&defNetCallback);
+    defrSetSNetCbk(&defSpecialNetCallback);
+    defrSetViaCbk(&defViaCallback);
+
+    // Read file
+    //=================================================================
+
+    void* userData = defrGetUserData();
+    int readStatus = defrRead(file, t_fileName.cbegin(), userData, 0);
+
+    if (readStatus != 0) {
+        throw std::runtime_error("Error: Can't read a file!");
+    }
+
+    std::sort(t_def->geometries.begin(), t_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
 }
 
 int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData)
@@ -319,7 +328,7 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
 
         def->componentName = t_component->id();
 
-        readLef("/home/alaie/stuff/skywater-pdk", t_component->name(), t_userData);
+        readLef("/home/alaie/stuff/skywater-pdk", t_component->name());
 
         // Component orientation and placement
         // =====================================================================

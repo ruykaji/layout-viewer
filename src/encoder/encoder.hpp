@@ -12,27 +12,24 @@
 #include "macro.hpp"
 
 class Encoder {
-    std::shared_ptr<Def> m_def {};
-
 public:
-    explicit Encoder() = default;
+    Encoder() = default;
     ~Encoder() = default;
 
     COPY_CONSTRUCTOR_REMOVE(Encoder);
     ASSIGN_OPERATOR_REMOVE(Encoder);
 
-    std::shared_ptr<Def> readDef(const std::string_view t_fileName);
+    void readDef(const std::string_view t_fileName, const std::shared_ptr<Def> t_def);
 
 private:
-    static ML convertNameToML(const char* t_name);
-
-    static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y);
-
-    static void readLef(const std::string& t_folder, const std::string& t_fileName, void* t_userData);
-
+    // Lef callbacks
+    // ==================================================================================================================================================
     static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
 
     static int lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t_obstruction, void* t_userData);
+
+    // Def callbacks
+    // ==================================================================================================================================================
 
     static int defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData);
 

@@ -7,6 +7,8 @@
 DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
+    m_def = std::make_shared<Def>();
+
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     QPalette pal;
@@ -67,7 +69,7 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
 
 void DEFViewerWidget::render(QString& t_fileName)
 {
-    m_def = m_encoder.readDef(std::string_view(t_fileName.toStdString()));
+    m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_def);
 
     for (auto& [x, y] : m_def->dieArea) {
         m_max.first = std::max(x, m_max.first);
