@@ -370,16 +370,57 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
             Point rb = Point(rect->vertex[2].x / def->matrixStepX, rect->vertex[2].y / def->matrixStepY);
             Point lb = Point(rect->vertex[3].x / def->matrixStepX, rect->vertex[3].y / def->matrixStepY);
 
-            for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
-                for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                    Rectangle matrixRect = def->matrixes[j][i].originalPlace;
+            if (rect->rType == RType::PIN) {
+                auto pin = std::static_pointer_cast<Pin>(rect);
+                int32_t largestArea {};
+                Point pinCoors {};
 
-                    int32_t maxX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
-                    int32_t minX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
-                    int32_t maxY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
-                    int32_t minY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
+                for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+                    for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                        Rectangle matrixRect = def->matrixes[j][i].originalPlace;
 
-                    def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(minX, minY, maxX, maxY, RType::NONE, rect->layer));
+                        int32_t maxX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
+                        int32_t minX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
+                        int32_t maxY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
+                        int32_t minY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
+                        int32_t area = (maxX - minX) * (maxY - minY);
+
+                        if (area > largestArea) {
+                            largestArea = area;
+                            pinCoors.x = i;
+                            pinCoors.y = j;
+                        }
+                    }
+                }
+
+                for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+                    for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                        Rectangle matrixRect = def->matrixes[j][i].originalPlace;
+
+                        int32_t maxX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
+                        int32_t minX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
+                        int32_t maxY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
+                        int32_t minY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
+
+                        if (i != pinCoors.x && j != pinCoors.y) {
+                            def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(minX, minY, maxX, maxY, RType::NONE, rect->layer));
+                        } else {
+                            def->matrixes[j][i].geometries.emplace_back(std::make_shared<Pin>(pin->name, minX, minY, maxX, maxY, rect->layer));
+                        }
+                    }
+                }
+            } else {
+                for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+                    for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                        Rectangle matrixRect = def->matrixes[j][i].originalPlace;
+
+                        int32_t maxX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
+                        int32_t minX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
+                        int32_t maxY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
+                        int32_t minY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
+
+                        def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(minX, minY, maxX, maxY, RType::NONE, rect->layer));
+                    }
                 }
             }
         }
