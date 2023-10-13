@@ -118,6 +118,9 @@ static void readLef(const std::string& t_folder, const std::string& t_fileName)
     }
 }
 
+// Class methods
+// ======================================================================================
+
 void Encoder::readDef(const std::string_view t_fileName, const std::shared_ptr<Def> t_def)
 {
     // Init session
@@ -299,6 +302,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
         def->matrixStepY = height / def->numMatrixY;
         def->matrixOffsetX = leftTop.x;
         def->matrixOffsetY = leftTop.y;
+        def->matrixes = std::vector<std::vector<Matrix>>(def->numMatrixY, std::vector<Matrix>(def->numMatrixX, Matrix()));
 
         for (std::size_t j = 0; j < def->numMatrixY; ++j) {
             for (std::size_t i = 0; i < def->numMatrixX; ++i) {
@@ -311,7 +315,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
                     def->matrixOffsetY + (j + 1) * def->matrixStepY,
                     RType::NONE, ML::NONE);
 
-                def->matrixes.emplace_back(matrix);
+                def->matrixes[j][i] = matrix;
             }
         }
 
@@ -361,44 +365,21 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
                 vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
             }
 
-            int32_t lt = rect->vertex[0].x / def->matrixStepX + rect->vertex[0].y / def->matrixStepY * def->numMatrixX;
-            int32_t rt = rect->vertex[1].x / def->matrixStepX + rect->vertex[1].y / def->matrixStepY * def->numMatrixX;
-            int32_t rb = rect->vertex[2].x / def->matrixStepX + rect->vertex[2].y / def->matrixStepY * def->numMatrixX;
-            int32_t lb = rect->vertex[3].x / def->matrixStepX + rect->vertex[3].y / def->matrixStepY * def->numMatrixX;
+            Point lt = Point(rect->vertex[0].x / def->matrixStepX, rect->vertex[0].y / def->matrixStepY);
+            Point rt = Point(rect->vertex[1].x / def->matrixStepX, rect->vertex[1].y / def->matrixStepY);
+            Point rb = Point(rect->vertex[2].x / def->matrixStepX, rect->vertex[2].y / def->matrixStepY);
+            Point lb = Point(rect->vertex[3].x / def->matrixStepX, rect->vertex[3].y / def->matrixStepY);
 
-            if (lt == lb && rt == rb && rt == lt) {
-                def->matrixes[lt].geometries.emplace_back(rect);
-            } else if (lt == lb && rt == rb) {
-                if (std::abs(lt - rt) == 1) {
-                    // First area of intersection
-                    Rectangle ltMatrix = def->matrixes[lt].originalPlace;
-                    int32_t firstArea = (ltMatrix.vertex[1].x - rect->vertex[0].x) * (rect->vertex[3].y - rect->vertex[0].y);
+            for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+                for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                    Rectangle matrixRect = def->matrixes[j][i].originalPlace;
 
-                    // Second area of intersection
-                    Rectangle rtMatrix = def->matrixes[rt].originalPlace;
-                    int32_t secondArea = (rect->vertex[1].x - rtMatrix.vertex[0].x) * (rect->vertex[2].y - rect->vertex[0].y);
+                    int32_t maxX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
+                    int32_t minX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
+                    int32_t maxY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
+                    int32_t minY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
 
-                    if (firstArea >= secondArea) {
-                        if (rect->rType == RType::PIN) {
-                            // TODO : REFACTOR
-                            auto pin = std::static_pointer_cast<Pin>(rect);
-                            def->matrixes[lt].geometries.emplace_back(std::make_shared<Pin>(pin->name, rect->vertex[0].x, rect->vertex[0].y, ltMatrix.vertex[1].x, rect->vertex[2].y, rect->layer));
-                        } else {
-                            def->matrixes[lt].geometries.emplace_back(std::make_shared<Rectangle>(rect->vertex[0].x, rect->vertex[0].y, ltMatrix.vertex[1].x, rect->vertex[2].y, RType::NONE, rect->layer));
-                        }
-
-                        def->matrixes[rt].geometries.emplace_back(std::make_shared<Rectangle>(rtMatrix.vertex[0].x, rect->vertex[0].y, rect->vertex[2].x, rect->vertex[2].y, RType::NONE, rect->layer));
-                    } else {
-                        if (rect->rType == RType::PIN) {
-                            // TODO : REFACTOR
-                            auto pin = std::static_pointer_cast<Pin>(rect);
-                            def->matrixes[rt].geometries.emplace_back(std::make_shared<Pin>(pin->name, rtMatrix.vertex[0].x, rect->vertex[0].y, rect->vertex[1].x, rect->vertex[2].y, rect->layer));
-                        } else {
-                            def->matrixes[rt].geometries.emplace_back(std::make_shared<Rectangle>(rtMatrix.vertex[0].x, rect->vertex[0].y, rect->vertex[1].x, rect->vertex[2].y, RType::NONE, rect->layer));
-                        }
-
-                        def->matrixes[lt].geometries.emplace_back(std::make_shared<Rectangle>(rect->vertex[0].x, rect->vertex[0].y, ltMatrix.vertex[1].x, rect->vertex[2].y, RType::NONE, rect->layer));
-                    }
+                    def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(minX, minY, maxX, maxY, RType::NONE, rect->layer));
                 }
             }
         }

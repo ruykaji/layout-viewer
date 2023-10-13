@@ -114,14 +114,16 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
         painter->drawPolygon(dieAreaPoly);
 
-        for (auto& matrix : m_def->matrixes) {
-            QPolygon matrixPoly {};
+        for (auto& row : m_def->matrixes) {
+            for (auto& col : row) {
+                QPolygon matrixPoly {};
 
-            for (auto& [x, y] : matrix.originalPlace.vertex) {
-                matrixPoly.append(QPoint(x, y));
+                for (auto& [x, y] : col.originalPlace.vertex) {
+                    matrixPoly.append(QPoint(x, y));
+                }
+
+                painter->drawPolygon(matrixPoly);
             }
-
-            painter->drawPolygon(matrixPoly);
         }
 
         // Polygons drawing
@@ -154,32 +156,34 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         //     };
         // }
 
-        for (auto& matrix : m_def->matrixes) {
-            for (auto& geom : matrix.geometries) {
-                selectBrushAndPen(painter, geom->layer);
+        for (auto& row : m_def->matrixes) {
+            for (auto& col : row) {
+                for (auto& geom : col.geometries) {
+                    selectBrushAndPen(painter, geom->layer);
 
-                switch (geom->gType) {
-                case GType::LINE: {
-                    std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
-                    painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
-                    break;
+                    switch (geom->gType) {
+                    case GType::LINE: {
+                        std::shared_ptr<Line> line = std::static_pointer_cast<Line>(geom);
+                        painter->drawLine(QPoint(line->start.x, line->start.y), QPoint(line->end.x, line->end.y));
+                        break;
+                    }
+                    case GType::RECTANGLE: {
+                        std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+
+                        QPolygon poly {};
+
+                        poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+                        poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+                        poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+                        poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+
+                        painter->drawPolygon(poly);
+                        break;
+                    }
+                    default:
+                        break;
+                    };
                 }
-                case GType::RECTANGLE: {
-                    std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
-
-                    QPolygon poly {};
-
-                    poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
-                    poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
-                    poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
-                    poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
-
-                    painter->drawPolygon(poly);
-                    break;
-                }
-                default:
-                    break;
-                };
             }
         }
 

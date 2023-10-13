@@ -130,6 +130,14 @@ struct Pin : public Rectangle {
     Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const ML& t_layer)
         : name(t_name)
         , Rectangle(t_xl, t_yl, t_xh, t_yh, RType::PIN, t_layer) {};
+
+    Pin(const std::string& t_name, const Rectangle& t_rect)
+        : name(t_name)
+    {
+        vertex = t_rect.vertex;
+        layer = t_rect.layer;
+        rType = RType::PIN;
+    };
 };
 
 struct Matrix {
@@ -148,7 +156,7 @@ struct Def {
     int32_t matrixOffsetY {};
 
     std::vector<Point> dieArea {};
-    std::vector<Matrix> matrixes {};
+    std::vector<std::vector<Matrix>> matrixes {};
 
     std::vector<std::shared_ptr<Rectangle>> component {};
     std::string componentName {};
