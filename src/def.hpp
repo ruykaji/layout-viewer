@@ -12,18 +12,6 @@ struct Pin;
 struct Via;
 struct Def;
 
-// Geometry type
-enum class GType {
-    RECTANGLE = 0,
-    LINE,
-};
-
-// Line type
-enum class LType {
-    COMPONENT_ROUTE = 0,
-    CLK_ROUTE,
-};
-
 // Rectangle type
 enum class RType {
     NONE = 0,
@@ -58,38 +46,13 @@ struct Point {
 };
 
 struct Geometry {
-    GType gType { GType::RECTANGLE };
     ML layer { ML::NONE };
 
     Geometry() = default;
     ~Geometry() = default;
 
-    Geometry(const GType& t_type, const ML& t_layer)
-        : gType(t_type)
-        , layer(t_layer) {};
-};
-
-struct Line : public Geometry {
-    LType lType { LType::COMPONENT_ROUTE };
-    Point start {};
-    Point end {};
-
-    Line() = default;
-    ~Line() = default;
-
-    Line(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const LType& t_type, const ML& t_layer)
-        : lType(t_type)
-        , Geometry(GType::LINE, t_layer)
-    {
-        // Protection from improper declaration of rect
-        if (t_xh >= t_xl && t_yh >= t_yl) {
-            start = Point(t_xl, t_yl);
-            end = Point(t_xh, t_yh);
-        } else {
-            start = Point(t_xh, t_yh);
-            end = Point(t_xl, t_yl);
-        }
-    };
+    Geometry(const ML& t_layer)
+        : layer(t_layer) {};
 };
 
 struct Rectangle : public Geometry {
@@ -101,7 +64,7 @@ struct Rectangle : public Geometry {
 
     Rectangle(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const RType& t_type, const ML& t_layer)
         : rType(t_type)
-        , Geometry(GType::RECTANGLE, t_layer)
+        , Geometry(t_layer)
     {
         // Protection from improper declaration of rect
         int32_t minX = std::min(t_xh, t_xl);
