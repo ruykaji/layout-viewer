@@ -126,7 +126,7 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
             }
         }
 
-        // Polygons drawing
+        // Geometries drawing
         //======================================================================
 
         // for (auto& geom : m_def->geometries) {
@@ -141,14 +141,16 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         //     case GType::RECTANGLE: {
         //         std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
 
-        //         QPolygon poly {};
+        //         if (rect->rType == RType::PIN) {
+        //             QPolygon poly {};
 
-        //         poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
-        //         poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
-        //         poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
-        //         poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+        //             poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+        //             poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+        //             poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+        //             poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
 
-        //         painter->drawPolygon(poly);
+        //             painter->drawPolygon(poly);
+        //         }
         //         break;
         //     }
         //     default:

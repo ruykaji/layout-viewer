@@ -79,9 +79,17 @@ struct Line : public Geometry {
 
     Line(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const LType& t_type, const ML& t_layer)
         : lType(t_type)
-        , start(Point(t_xl, t_yl))
-        , end(Point(t_xh, t_yh))
-        , Geometry(GType::LINE, t_layer) {};
+        , Geometry(GType::LINE, t_layer)
+    {
+        // Protection from improper declaration of rect
+        if (t_xh >= t_xl && t_yh >= t_yl) {
+            start = Point(t_xl, t_yl);
+            end = Point(t_xh, t_yh);
+        } else {
+            start = Point(t_xh, t_yh);
+            end = Point(t_xl, t_yl);
+        }
+    };
 };
 
 struct Rectangle : public Geometry {
