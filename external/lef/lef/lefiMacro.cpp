@@ -80,10 +80,11 @@ lefiObstruction::Destroy()
 void
 lefiObstruction::clear()
 {
-//    if (geometries_) {
-//        geometries_->Destroy();
-//        lefFree((char*) (geometries_));
-//    }
+   if (geometries_) {
+       geometries_->Destroy();
+       lefFree((char*) (geometries_));
+   }
+   
     geometries_ = 0;
 }
 

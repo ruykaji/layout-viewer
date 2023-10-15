@@ -191,12 +191,6 @@ static void readLef(const std::string& t_folder, const std::string& t_fileName)
 
     std::string pathToCell = t_folder + "/libraries/" + libName + "/latest/cells/" + cellName + "/" + t_fileName + ".lef";
 
-    int initStatus = lefrInit();
-
-    if (initStatus != 0) {
-        throw std::runtime_error("Error: cant't initialize parser!");
-    }
-
     auto file = fopen(pathToCell.c_str(), "r");
 
     if (file == nullptr) {
@@ -211,6 +205,7 @@ static void readLef(const std::string& t_folder, const std::string& t_fileName)
     }
 
     fclose(file);
+    lefrClear();
 }
 
 // Class methods
@@ -220,10 +215,16 @@ void Encoder::readDef(const std::string_view t_fileName, const std::shared_ptr<D
 {
     // Init session
     //=================================================================
-    int initStatus = defrInitSession();
+    int initStatusDef = defrInitSession();
 
-    if (initStatus != 0) {
-        throw std::runtime_error("Error: cant't initialize parser!");
+    if (initStatusDef != 0) {
+        throw std::runtime_error("Error: cant't initialize def parser!");
+    }
+
+    int initStatusLef = lefrInitSession();
+
+    if (initStatusLef != 0) {
+        throw std::runtime_error("Error: cant't initialize lef parser!");
     }
 
     // Open file
@@ -273,10 +274,6 @@ void Encoder::readDef(const std::string_view t_fileName, const std::shared_ptr<D
     }
 
     fclose(file);
-
-    // std::sort(t_def->geometries.begin(), t_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
-
-    lefrClear();
     defrClear();
 }
 
@@ -302,7 +299,6 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
                     layer = portGeom->getLayer(j);
                     break;
                 }
-
                 case lefiGeomEnum::lefiGeomRectE: {
                     portRect = portGeom->getRect(j);
                     xLeft = portRect->xl * 1000.0;
@@ -320,9 +316,9 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
                     break;
                 }
             }
-        }
 
-        t_pin->clear();
+            portGeom->Destroy();
+        }
 
         return 0;
     }
@@ -365,8 +361,6 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
                 break;
             }
         }
-
-        t_obstruction->clear();
 
         return 0;
     }
@@ -483,7 +477,6 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
         }
 
         def->component.clear();
-        t_component->clear();
 
         return 0;
     }
@@ -606,8 +599,6 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                     }
                 }
             }
-
-            t_net->clear();
         }
 
         return 0;
@@ -697,8 +688,6 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
             }
         }
 
-        t_net->clear();
-
         return 0;
     }
 
@@ -738,8 +727,6 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
                 addToMatrices(pinRect, def);
             }
         }
-
-        t_pin->clear();
 
         return 0;
     }
@@ -795,8 +782,6 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
         Def* def = static_cast<Def*>(t_userData);
 
         def->vias[t_via->name()] = via;
-
-        t_via->clear();
 
         return 0;
     }

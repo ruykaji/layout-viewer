@@ -58,9 +58,7 @@ defiPath::defiPath(defiPath *defiPathRef)
 {
     *this = *defiPathRef;
 
-    defiPathRef->pointer_ = NULL;
-    defiPathRef->keys_ = NULL;
-    defiPathRef->data_ = NULL;    
+    defiPathRef->Destroy();
 }
 
 DEF_COPY_CONSTRUCTOR_C( defiPath ) 
@@ -189,8 +187,6 @@ DEF_ASSIGN_OPERATOR_C( defiPath ) {
 
 //    DEF_COPY_FUNC( numUsed_ );
 //    DEF_COPY_FUNC( numAllocated_ );
-
-    DEF_MALLOC_FUNC( keys_, int, sizeof(int) * prev.numUsed_ );
 
     // numUsed_ and numAllocated_ is automatically increasing
     // by using below functions. 

@@ -11,7 +11,7 @@ int main(int argc, char const* argv[])
     Encoder encoder {};
     std::shared_ptr<Def> def = std::make_shared<Def>();
 
-    encoder.readDef("/home/alaie/11-inverter.resized.def", def);
+    encoder.readDef("/home/alaie/aes.def", def);
 
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);

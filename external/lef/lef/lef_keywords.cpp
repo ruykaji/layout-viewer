@@ -1232,11 +1232,11 @@ lefWarning(int          msgNum,
 void *
 lefMalloc(size_t lef_size)
 {
-    void *mallocVar;
-
     if (lefSettings && lefSettings->MallocFunction)
         return (*lefSettings->MallocFunction)(lef_size);
     else {
+        void *mallocVar;
+        
         mallocVar = (void*) malloc(lef_size);
         if (!mallocVar) {
             fprintf(stderr, "ERROR (LEFPARS-1009): Not enough memory, stop parsing!\n");

@@ -2605,7 +2605,7 @@ lefiLayer::Destroy()
 
 lefiLayer::~lefiLayer()
 {
-//    Destroy();
+   Destroy();
 }
 
 void

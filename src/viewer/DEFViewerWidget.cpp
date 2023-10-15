@@ -71,6 +71,8 @@ void DEFViewerWidget::render(QString& t_fileName)
 {
     m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_def);
 
+    std::sort(m_def->geometries.begin(), m_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+
     for (auto& [x, y] : m_def->dieArea) {
         m_max.first = std::max(x, m_max.first);
         m_max.second = std::max(y, m_max.second);
