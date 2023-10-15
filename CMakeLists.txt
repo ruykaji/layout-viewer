@@ -21,11 +21,27 @@ include_directories(
 find_library(DEF NAMES libdef.a PATHS ${CMAKE_SOURCE_DIR}/external/def/lib)
 find_library(LEF NAMES liblef.a PATHS ${CMAKE_SOURCE_DIR}/external/lef/lib)
 
-file(GLOB_RECURSE SRC ${CMAKE_SOURCE_DIR}/src/**/*.cpp)
-file(GLOB_RECURSE HDR ${CMAKE_SOURCE_DIR}/src/**/*.hpp)
+file(GLOB GLOBAL ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.hpp)
+file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/encoder/*.hpp)
+file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viwer/*.cpp ${CMAKE_SOURCE_DIR}/src/viwer/*.hpp)
 
-add_executable(main main.cpp ${SRC} ${HDR})
+set(DESKTOP
+    ${GLOBAL}
+    ${ENCODER}
+    ${VIEWER}
+)
 
-target_link_libraries(main PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets)
+add_executable(desktop desktop.cpp ${DESKTOP})
+
+target_link_libraries(desktop PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets)
 
 find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+
+set(CONSOLE 
+    ${GLOBAL}
+    ${ENCODER}
+)
+
+add_executable(console console.cpp ${CONSOLE})
+
+target_link_libraries(console PRIVATE ${DEF} ${LEF})

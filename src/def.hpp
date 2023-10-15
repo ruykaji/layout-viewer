@@ -128,13 +128,13 @@ struct Def {
     int32_t matrixOffsetY {};
 
     std::vector<Point> dieArea {};
+
     std::vector<std::vector<Matrix>> matrixes {};
+    std::vector<std::shared_ptr<Geometry>> geometries {};
 
     std::vector<std::shared_ptr<Rectangle>> component {};
     std::string componentName {};
 
-    std::vector<std::shared_ptr<Geometry>> geometries {};
-    std::map<std::string, std::vector<std::string>> pinConnections {};
     std::map<std::string, std::vector<Rectangle>> vias {};
 
     Def() = default;
