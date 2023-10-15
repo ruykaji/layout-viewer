@@ -23,13 +23,9 @@ find_library(LEF NAMES liblef.a PATHS ${CMAKE_SOURCE_DIR}/external/lef/lib)
 
 file(GLOB GLOBAL ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.hpp)
 file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/encoder/*.hpp)
-file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viwer/*.cpp ${CMAKE_SOURCE_DIR}/src/viwer/*.hpp)
+file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
 
-set(DESKTOP
-    ${GLOBAL}
-    ${ENCODER}
-    ${VIEWER}
-)
+set(DESKTOP ${GLOBAL} ${ENCODER} ${VIEWER})
 
 add_executable(desktop desktop.cpp ${DESKTOP})
 
@@ -37,10 +33,7 @@ target_link_libraries(desktop PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widg
 
 find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 
-set(CONSOLE 
-    ${GLOBAL}
-    ${ENCODER}
-)
+set(CONSOLE ${GLOBAL} ${ENCODER})
 
 add_executable(console console.cpp ${CONSOLE})
 

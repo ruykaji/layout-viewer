@@ -43,6 +43,8 @@ struct defiPoints {
   int* y;
 
   defiPoints();
+  ~defiPoints();
+  
   DEF_COPY_CONSTRUCTOR_H( defiPoints );
   DEF_ASSIGN_OPERATOR_H( defiPoints );
 };

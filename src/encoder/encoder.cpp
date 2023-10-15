@@ -209,6 +209,8 @@ static void readLef(const std::string& t_folder, const std::string& t_fileName)
     if (readStatus != 0) {
         throw std::runtime_error("Error: Can't read a file: " + pathToCell);
     }
+
+    fclose(file);
 }
 
 // Class methods
@@ -270,7 +272,12 @@ void Encoder::readDef(const std::string_view t_fileName, const std::shared_ptr<D
         throw std::runtime_error("Error: Can't parse a file: " + std::string(t_fileName));
     }
 
-    std::sort(t_def->geometries.begin(), t_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+    fclose(file);
+
+    // std::sort(t_def->geometries.begin(), t_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+
+    lefrClear();
+    defrClear();
 }
 
 int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData)
@@ -279,6 +286,11 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
         Def* def = static_cast<Def*>(t_userData);
         std::string pinName = def->componentName + t_pin->name();
         lefiGeometries* portGeom {};
+        lefiGeomRect* portRect {};
+        int32_t xLeft {};
+        int32_t yTop {};
+        int32_t xRight {};
+        int32_t yBottom {};
         const char* layer {};
 
         for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
@@ -292,12 +304,11 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
                 }
 
                 case lefiGeomEnum::lefiGeomRectE: {
-                    lefiGeomRect* portRect = portGeom->getRect(j);
-
-                    int32_t xLeft = portRect->xl * 1000.0;
-                    int32_t yTop = portRect->yl * 1000.0;
-                    int32_t xRight = portRect->xh * 1000.0;
-                    int32_t yBottom = portRect->yh * 1000.0;
+                    portRect = portGeom->getRect(j);
+                    xLeft = portRect->xl * 1000.0;
+                    yTop = portRect->yl * 1000.0;
+                    xRight = portRect->xh * 1000.0;
+                    yBottom = portRect->yh * 1000.0;
 
                     std::shared_ptr<Pin> pinRect = std::make_shared<Pin>(pinName, xLeft, yTop, xRight, yBottom, convertNameToML(layer));
 
@@ -311,6 +322,8 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
             }
         }
 
+        t_pin->clear();
+
         return 0;
     }
 
@@ -322,6 +335,11 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
     if (t_type == lefrObstructionCbkType) {
         Def* def = static_cast<Def*>(t_userData);
         lefiGeometries* osbrGeom = t_obstruction->geometries();
+        lefiGeomRect* portRect {};
+        int32_t xLeft {};
+        int32_t yTop {};
+        int32_t xRight {};
+        int32_t yBottom {};
         const char* layer {};
 
         for (std::size_t i = 0; i < osbrGeom->numItems(); ++i) {
@@ -331,12 +349,11 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
                 break;
             }
             case lefiGeomEnum::lefiGeomRectE: {
-                lefiGeomRect* portRect = osbrGeom->getRect(i);
-
-                int32_t xLeft = portRect->xl * 1000.0;
-                int32_t yTop = portRect->yl * 1000.0;
-                int32_t xRight = portRect->xh * 1000.0;
-                int32_t yBottom = portRect->yh * 1000.0;
+                portRect = osbrGeom->getRect(i);
+                xLeft = portRect->xl * 1000.0;
+                yTop = portRect->yl * 1000.0;
+                xRight = portRect->xh * 1000.0;
+                yBottom = portRect->yh * 1000.0;
 
                 std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, RType::NONE, convertNameToML(layer));
 
@@ -348,6 +365,8 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
                 break;
             }
         }
+
+        t_obstruction->clear();
 
         return 0;
     }
@@ -464,6 +483,7 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
         }
 
         def->component.clear();
+        t_component->clear();
 
         return 0;
     }
@@ -487,14 +507,15 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 {
     if (t_type == defrNetCbkType) {
         Def* def = static_cast<Def*>(t_userData);
+        defiWire* wire {};
+        defiPath* wirePath {};
 
         if (t_net->isRouted() == 0) {
             for (std::size_t i = 0; i < t_net->numWires(); ++i) {
-                defiWire* wire = t_net->wire(i);
+                wire = t_net->wire(i);
 
                 for (std::size_t j = 0; j < wire->numPaths(); ++j) {
-                    defiPath* wirePath = wire->path(j);
-
+                    wirePath = wire->path(j);
                     wirePath->initTraverse();
 
                     bool isStartSet = false;
@@ -585,6 +606,8 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                     }
                 }
             }
+
+            t_net->clear();
         }
 
         return 0;
@@ -596,15 +619,15 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
 {
     if (t_type == defrSNetCbkType) {
-
         Def* def = static_cast<Def*>(t_userData);
+        defiWire* wire {};
+        defiPath* wirePath {};
 
         for (std::size_t i = 0; i < t_net->numWires(); ++i) {
-            defiWire* wire = t_net->wire(i);
+            wire = t_net->wire(i);
 
             for (std::size_t j = 0; j < wire->numPaths(); ++j) {
-                defiPath* wirePath = wire->path(j);
-
+                wirePath = wire->path(j);
                 wirePath->initTraverse();
 
                 int tokenType {};
@@ -674,6 +697,8 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
             }
         }
 
+        t_net->clear();
+
         return 0;
     }
 
@@ -713,6 +738,8 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
                 addToMatrices(pinRect, def);
             }
         }
+
+        t_pin->clear();
 
         return 0;
     }
@@ -768,6 +795,8 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
         Def* def = static_cast<Def*>(t_userData);
 
         def->vias[t_via->name()] = via;
+
+        t_via->clear();
 
         return 0;
     }

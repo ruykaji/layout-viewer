@@ -68,7 +68,10 @@ DEF_ASSIGN_OPERATOR_C( defiPoints ) {
     return *this;
 }
 
-
+defiPoints::~defiPoints(){
+  free(x);
+  free(y);
+}
 
 
 ////////////////////////////////////////////////////
