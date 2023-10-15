@@ -2,6 +2,7 @@
 #include <cmath>
 #include <execution>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 #include "encoder.hpp"
@@ -31,6 +32,34 @@ static ML convertNameToML(const char* t_name)
         return ML::M8;
     } else if (strcmp(t_name, "met9") == 0) {
         return ML::M9;
+    }
+
+    return ML::NONE;
+}
+
+static ML viaRuleToML(const char* t_name)
+{
+    std::string botLayer = { t_name[0], t_name[1] };
+    std::string topLayer = { t_name[2], t_name[3] };
+
+    if (botLayer == "L1" && topLayer == "M1") {
+        return ML::L1M1_V;
+    } else if (botLayer == "M1" && topLayer == "M2") {
+        return ML::M1M2_V;
+    } else if (botLayer == "M2" && topLayer == "M3") {
+        return ML::M2M3_V;
+    } else if (botLayer == "M3" && topLayer == "M4") {
+        return ML::M3M4_V;
+    } else if (botLayer == "M4" && topLayer == "M5") {
+        return ML::M4M5_V;
+    } else if (botLayer == "M5" && topLayer == "M6") {
+        return ML::M5M6_V;
+    } else if (botLayer == "M6" && topLayer == "M7") {
+        return ML::M6M7_V;
+    } else if (botLayer == "M7" && topLayer == "M8") {
+        return ML::M7M8_V;
+    } else if (botLayer == "M8" && topLayer == "M9") {
+        return ML::M8M9_V;
     }
 
     return ML::NONE;
@@ -72,7 +101,7 @@ static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t
     }
 }
 
-static void splitBetweenMatrices(const std::shared_ptr<Geometry>& t_target, Def* t_def)
+static void addToMatrices(const std::shared_ptr<Geometry>& t_target, Def* t_def)
 {
     auto rect = std::static_pointer_cast<Rectangle>(t_target);
 
@@ -429,7 +458,7 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
                 vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
             }
 
-            splitBetweenMatrices(rect, def);
+            addToMatrices(rect, def);
         }
 
         def->component.clear();
@@ -468,6 +497,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                     bool isStartSet = false;
                     bool isEndSet = false;
+                    bool isViaRect = false;
                     const char* layerName {};
                     const char* viaName {};
                     int32_t tokenType {};
@@ -476,6 +506,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                     int32_t extEnd {};
                     Point start {};
                     Point end {};
+                    Rectangle rect {};
 
                     while ((tokenType = wirePath->next()) != DEFIPATH_DONE) {
                         switch (tokenType) {
@@ -506,8 +537,18 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                                 wirePath->getFlushPoint(&end.x, &end.y, &extEnd);
                             }
                             break;
-                        case DEFIPATH_RECT:
+                        case DEFIPATH_RECT: {
+                            int32_t dx1 {};
+                            int32_t dx2 {};
+                            int32_t dy1 {};
+                            int32_t dy2 {};
+
+                            wirePath->getViaRect(&dx1, &dy1, &dx2, &dy2);
+
+                            rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, RType::NONE, convertNameToML(layerName));
+                            isViaRect = true;
                             break;
+                        }
                         default:
                             break;
                         }
@@ -518,16 +559,27 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                             std::shared_ptr<Rectangle> line {};
 
                             if (start.x != end.x) {
-                                line = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd, end.y + 1, RType::NONE, convertNameToML(layerName));
+                                line = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, RType::NONE, convertNameToML(layerName));
                             } else {
-
-                                line = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd, RType::NONE, convertNameToML(layerName));
+                                line = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, RType::NONE, convertNameToML(layerName));
                             }
 
                             def->geometries.emplace_back(line);
 
-                            splitBetweenMatrices(line, def);
+                            addToMatrices(line, def);
+                        } else if (isViaRect) {
+                            std::shared_ptr<Rectangle> viaRect = std::make_shared<Rectangle>(rect);
+
+                            def->geometries.emplace_back(viaRect);
+
+                            addToMatrices(viaRect, def);
                         }
+                    } else {
+                        std::shared_ptr<Rectangle> via = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, RType::NONE, viaRuleToML(viaName));
+
+                        def->geometries.emplace_back(via);
+
+                        addToMatrices(via, def);
                     }
                 }
             }
@@ -602,7 +654,7 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
                     def->geometries.emplace_back(rect);
 
-                    splitBetweenMatrices(rect, def);
+                    addToMatrices(rect, def);
                 } else {
                     if (def->vias.count(viaName) != 0) {
                         std::vector<Rectangle> via = def->vias[viaName];
@@ -617,7 +669,7 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
                             def->geometries.emplace_back(rect);
 
-                            splitBetweenMatrices(rect, def);
+                            addToMatrices(rect, def);
                         }
 
                     } else {
@@ -661,9 +713,9 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
 
                 std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, convertNameToML(pinPort->layer(j)));
 
-                // def->geometries.emplace_back(pinRect);
+                def->geometries.emplace_back(pinRect);
 
-                splitBetweenMatrices(pinRect, def);
+                addToMatrices(pinRect, def);
             }
         }
 
@@ -705,6 +757,8 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
             numCol = 1;
         }
 
+        ML layer = viaRuleToML(viaRuleName);
+
         for (int32_t i = 0; i < numRow; ++i) {
             for (int32_t j = 0; j < numCol; ++j) {
                 int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
@@ -712,7 +766,7 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
                 int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
                 int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
 
-                via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, RType::NONE, ML::NONE));
+                via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, RType::NONE, layer));
             }
         }
 
