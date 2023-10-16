@@ -292,7 +292,7 @@ lefrData::lefrData()
 
 lefrData::~lefrData()
 {
-    //lef_lex_un_init()
+    // lef_lex_un_init()
     /* Close the file */
     if (lefrLog) {
         fclose(lefrLog);

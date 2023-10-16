@@ -156,6 +156,7 @@ lefiGeometries::clear()
         lefFree((char*) (items_[i]));
     }
     numItems_ = 0;
+    itemsAllocated_ = 0;
 }
 
 void

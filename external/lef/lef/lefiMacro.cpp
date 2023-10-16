@@ -1152,14 +1152,12 @@ void
 lefiPin::clear()
 {
     int                 i;
-    lefiPinAntennaModel *aModel;
 
-//    This destructiong is automatically done in Vector's destructor
-//    for (i = 0; i < numPorts_; i++) {
-//        g = ports_[i];
-//        g->Destroy();
-//        lefFree((char*) g);
-//    }
+   for (i = 0; i < numPorts_; i++) {
+       ports_[i]->Destroy();
+       lefFree((char*) (ports_[i]));
+   }
+
     numPorts_ = 0;
     portsAllocated_ = 0;
 
@@ -1243,13 +1241,8 @@ lefiPin::clear()
     }
     numAntennaDiffArea_ = 0;
 
-    if (numAntennaModel_ > 0) {
-        for (i = 0; i < numAntennaModel_; i++) {        // 5.5
-            aModel = antennaModel_[i];
-            aModel->Destroy();
-        }
-    }
-    for (i = 0; i < numAntennaModel_; i++) {  // 5.5
+    for (i = 0; i < antennaModelAllocated_; i++){        // 5.5
+        antennaModel_[i]->Destroy();
         lefFree((char*) antennaModel_[i]);
     }
     if (antennaModel_)                              // 5.5
