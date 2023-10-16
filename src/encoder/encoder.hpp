@@ -35,7 +35,11 @@ private:
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 
+    static int defComponentStartCallback(defrCallbackType_e t_type, int t_number, void* t_userData);
+    
     static int defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData);
+
+    static int defComponentEndCallback(defrCallbackType_e t_type, void* t, void* t_userData);
 
     static int defComponentMaskShiftLayerCallback(defrCallbackType_e t_type, defiComponentMaskShiftLayer* t_shiftLayers, void* t_userData);
 
