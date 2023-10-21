@@ -2,7 +2,7 @@
 
 Rectangle::Rectangle(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const RType& t_type, const ML& t_layer)
     : type(t_type)
-    , Geometry(t_layer)
+    , layer(t_layer)
 {
     // Protection from improper declaration of rect
     int32_t minX = std::min(t_xh, t_xl);

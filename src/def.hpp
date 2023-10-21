@@ -57,18 +57,9 @@ struct Point {
         , y(t_y) {};
 };
 
-struct Geometry {
-    ML layer { ML::NONE };
-
-    Geometry() = default;
-    ~Geometry() = default;
-
-    Geometry(const ML& t_layer)
-        : layer(t_layer) {};
-};
-
-struct Rectangle : public Geometry {
+struct Rectangle {
     RType type { RType::NONE };
+    ML layer { ML::NONE };
     std::array<Point, 4> vertex {};
 
     Rectangle() = default;
@@ -127,7 +118,7 @@ struct Def {
     std::vector<Point> dieArea {};
 
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
-    std::vector<std::shared_ptr<Geometry>> geometries {};
+    std::vector<std::shared_ptr<Rectangle>> geometries {};
 
     std::vector<std::shared_ptr<Rectangle>> component {};
     std::string componentName {};
