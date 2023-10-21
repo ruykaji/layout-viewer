@@ -1,8 +1,24 @@
 #include <QApplication>
 #include <QPainter>
 #include <QPalette>
+#include <random>
 
 #include "DEFViewerWidget.hpp"
+
+std::vector<RGB> generateRandomUniqueColors(int n)
+{
+    std::set<RGB> uniqueColors;
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    std::uniform_int_distribution<> distr(0, 255);
+
+    while (uniqueColors.size() < n) {
+        RGB color = { distr(eng), distr(eng), distr(eng) };
+        uniqueColors.insert(color);
+    }
+
+    return std::vector<RGB>(uniqueColors.begin(), uniqueColors.end());
+}
 
 DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
@@ -12,7 +28,7 @@ DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     QPalette pal;
-    pal.setColor(QPalette::Window, QColor(16, 16, 16));
+    pal.setColor(QPalette::Window, QColor(11, 11, 11));
     setAutoFillBackground(true);
     setPalette(pal);
 };
@@ -70,6 +86,7 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
 void DEFViewerWidget::render(QString& t_fileName)
 {
     m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_def);
+    m_colors = generateRandomUniqueColors(m_def->totalNets);
 
     std::sort(m_def->geometries.begin(), m_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
 
@@ -102,11 +119,31 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->begin(this);
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
-        painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 1.0 / m_currentScale));
-        painter->setBrush(QBrush(QColor(Qt::transparent)));
+
+        // Geometries drawing
+        //======================================================================
+
+        // for (auto& geom : m_def->geometries) {
+        //     selectBrushAndPen(painter, geom->layer);
+
+        //     std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+
+        //     QPolygon poly {};
+
+        //     poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
+        //     poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
+        //     poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
+        //     poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+
+        //     painter->drawPolygon(poly);
+        // }
 
         // DieArea drawing
         //======================================================================
+
+        painter->setFont(QFont("Times", 32));
+        painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 2.0 / m_currentScale));
+        painter->setBrush(QBrush(QColor(Qt::transparent)));
 
         QPolygon dieAreaPoly {};
 
@@ -116,11 +153,11 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
         painter->drawPolygon(dieAreaPoly);
 
-        for (auto& row : m_def->matrixes) {
+        for (auto& row : m_def->cells) {
             for (auto& col : row) {
                 QPolygon matrixPoly {};
 
-                for (auto& [x, y] : col.originalPlace.vertex) {
+                for (auto& [x, y] : col->originalPlace.vertex) {
                     matrixPoly.append(QPoint(x, y));
                 }
 
@@ -128,42 +165,51 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
             }
         }
 
-        // Geometries drawing
-        //======================================================================
+        for (auto& row : m_def->cells) {
+            for (auto& col : row) {
+                for (auto& pin : col->pins) {
+                    painter->setPen(QPen(QColor(QColor(m_colors[pin->netIndex].r, m_colors[pin->netIndex].g, m_colors[pin->netIndex].b)), 1.0 / m_currentScale));
+                    painter->setBrush(QBrush(QColor(m_colors[pin->netIndex].r, m_colors[pin->netIndex].g, m_colors[pin->netIndex].b, 55)));
 
-        for (auto& geom : m_def->geometries) {
-            selectBrushAndPen(painter, geom->layer);
+                    QPolygon poly {};
 
-            std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
+                    poly.append(QPoint(pin->vertex[0].x, pin->vertex[0].y));
+                    poly.append(QPoint(pin->vertex[1].x, pin->vertex[1].y));
+                    poly.append(QPoint(pin->vertex[2].x, pin->vertex[2].y));
+                    poly.append(QPoint(pin->vertex[3].x, pin->vertex[3].y));
 
-            QPolygon poly {};
+                    painter->drawPolygon(poly);
+                    painter->setPen(QPen(QColor(QColor(255, 255, 255)), 1.0 / m_currentScale));
+                    painter->drawText(QPoint(pin->vertex[0].x, pin->vertex[0].y - 10), QString::fromStdString(pin->name));
+                }
 
-            poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
-            poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
-            poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
-            poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
+                for (auto& route : col->routes) {
+                    selectBrushAndPen(painter, route->layer);
 
-            painter->drawPolygon(poly);
+                    QPolygon poly {};
+
+                    poly.append(QPoint(route->vertex[0].x, route->vertex[0].y));
+                    poly.append(QPoint(route->vertex[1].x, route->vertex[1].y));
+                    poly.append(QPoint(route->vertex[2].x, route->vertex[2].y));
+                    poly.append(QPoint(route->vertex[3].x, route->vertex[3].y));
+
+                    painter->drawPolygon(poly);
+                }
+
+                for (auto& geom : col->geometries) {
+                    selectBrushAndPen(painter, geom->layer);
+
+                    QPolygon poly {};
+
+                    poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y));
+                    poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y));
+                    poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y));
+                    poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y));
+
+                    painter->drawPolygon(poly);
+                }
+            }
         }
-
-        // for (auto& row : m_def->matrixes) {
-        //     for (auto& col : row) {
-        //         for (auto& geom : col.geometries) {
-        //             selectBrushAndPen(painter, geom->layer);
-
-        //             std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(geom);
-
-        //             QPolygon poly {};
-
-        //             poly.append(QPoint(rect->vertex[0].x, rect->vertex[0].y));
-        //             poly.append(QPoint(rect->vertex[1].x, rect->vertex[1].y));
-        //             poly.append(QPoint(rect->vertex[2].x, rect->vertex[2].y));
-        //             poly.append(QPoint(rect->vertex[3].x, rect->vertex[3].y));
-
-        //             painter->drawPolygon(poly);
-        //         }
-        //     }
-        // }
 
         painter->end();
     }

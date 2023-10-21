@@ -1,14 +1,25 @@
 #ifndef __DEF_VIEWER_WIDGET_H__
 #define __DEF_VIEWER_WIDGET_H__
 
+#include <QMouseEvent>
 #include <QPaintEvent>
 #include <QResizeEvent>
-#include <QWheelEvent>
-#include <QMouseEvent>
 #include <QString>
+#include <QWheelEvent>
 #include <QWidget>
 
 #include "encoder.hpp"
+
+struct RGB {
+    int r;
+    int g;
+    int b;
+
+    bool operator<(const RGB& other) const
+    {
+        return std::tie(r, g, b) < std::tie(other.r, other.g, other.b);
+    }
+};
 
 class DEFViewerWidget : public QWidget {
     Q_OBJECT
@@ -21,6 +32,7 @@ class DEFViewerWidget : public QWidget {
     Mode m_mode {};
 
     std::shared_ptr<Def> m_def {};
+    std::vector<RGB> m_colors {};
     Encoder m_encoder {};
 
     std::pair<int32_t, int32_t> m_max { 0, 0 };

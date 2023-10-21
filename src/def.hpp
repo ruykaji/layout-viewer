@@ -2,19 +2,22 @@
 #define __DEF_H__
 
 #include <array>
-#include <map>
 #include <memory>
+#include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct Point;
 struct Pin;
+struct WorkingCell;
 struct Via;
 struct Def;
 
 // Rectangle type
 enum class RType {
     NONE = 0,
+    SIGNAL,
     PIN
 };
 
@@ -65,7 +68,7 @@ struct Geometry {
 };
 
 struct Rectangle : public Geometry {
-    RType rType { RType::NONE };
+    RType type { RType::NONE };
     std::array<Point, 4> vertex {};
 
     Rectangle() = default;
@@ -77,7 +80,9 @@ struct Rectangle : public Geometry {
 };
 
 struct Pin : public Rectangle {
+    int32_t netIndex {};
     std::string name {};
+    std::shared_ptr<WorkingCell> parentCell {};
 
     Pin() = default;
     ~Pin() = default;
@@ -87,30 +92,48 @@ struct Pin : public Rectangle {
         , Rectangle(t_xl, t_yl, t_xh, t_yh, RType::PIN, t_layer) {};
 };
 
-struct Matrix {
+struct Net {
+    int32_t index {};
+    std::vector<int8_t> pins {};
+
+    Net() = default;
+    ~Net() = default;
+
+    bool operator<(const Net& t_net) const;
+};
+
+struct WorkingCell {
     Rectangle originalPlace {};
 
-    std::vector<std::shared_ptr<Geometry>> geometries {};
+    std::vector<std::shared_ptr<Rectangle>> geometries {};
+    std::vector<std::shared_ptr<Rectangle>> routes {};
+    std::vector<std::shared_ptr<Pin>> pins {};
+    std::set<Net> nets {};
+
+    WorkingCell() = default;
+    ~WorkingCell() = default;
 };
 
 struct Def {
-    int32_t matrixSize {};
-    int32_t matrixStepX {};
-    int32_t matrixStepY {};
-    int32_t numMatrixX {};
-    int32_t numMatrixY {};
-    int32_t matrixOffsetX {};
-    int32_t matrixOffsetY {};
+    int32_t cellSize {};
+    int32_t cellStepX {};
+    int32_t cellStepY {};
+    int32_t numCellX {};
+    int32_t numCellY {};
+    int32_t cellOffsetX {};
+    int32_t cellOffsetY {};
+    int32_t totalNets {};
 
     std::vector<Point> dieArea {};
 
-    std::vector<std::vector<Matrix>> matrixes {};
+    std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
     std::vector<std::shared_ptr<Geometry>> geometries {};
 
     std::vector<std::shared_ptr<Rectangle>> component {};
     std::string componentName {};
 
-    std::map<std::string, std::vector<Rectangle>> vias {};
+    std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
+    std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 
     Def() = default;
     ~Def() = default;

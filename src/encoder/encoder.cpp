@@ -102,22 +102,23 @@ inline static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, 
     }
 }
 
-inline static void addToMatrices(const std::shared_ptr<Geometry>& t_target, Def* t_def)
+inline static void addToWorkingCells(const std::shared_ptr<Geometry>& t_target, Def* t_def)
 {
-    auto rect = std::static_pointer_cast<Rectangle>(t_target);
+    std::shared_ptr<Rectangle> rect = std::static_pointer_cast<Rectangle>(t_target);
 
-    Point lt = Point((rect->vertex[0].x - t_def->matrixOffsetX) / t_def->matrixStepX, (rect->vertex[0].y - t_def->matrixOffsetY) / t_def->matrixStepY);
-    Point rt = Point((rect->vertex[1].x - t_def->matrixOffsetX) / t_def->matrixStepX, (rect->vertex[1].y - t_def->matrixOffsetY) / t_def->matrixStepY);
-    Point lb = Point((rect->vertex[3].x - t_def->matrixOffsetX) / t_def->matrixStepX, (rect->vertex[3].y - t_def->matrixOffsetY) / t_def->matrixStepY);
+    Point lt = Point((rect->vertex[0].x - t_def->cellOffsetX) / t_def->cellStepX, (rect->vertex[0].y - t_def->cellOffsetY) / t_def->cellStepY);
+    Point rt = Point((rect->vertex[1].x - t_def->cellOffsetX) / t_def->cellStepX, (rect->vertex[1].y - t_def->cellOffsetY) / t_def->cellStepY);
+    Point lb = Point((rect->vertex[3].x - t_def->cellOffsetX) / t_def->cellStepX, (rect->vertex[3].y - t_def->cellOffsetY) / t_def->cellStepY);
 
-    if (rect->rType == RType::PIN) {
-        auto pin = std::static_pointer_cast<Pin>(rect);
+    switch (rect->type) {
+    case RType::PIN: {
+        std::shared_ptr<Pin> pin = std::static_pointer_cast<Pin>(rect);
         int32_t largestArea {};
-        Point pinCoors {};
+        Point pinCoords {};
 
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_def->matrixes[j][i].originalPlace;
+                Rectangle matrixRect = t_def->cells[j][i]->originalPlace;
 
                 int32_t ltX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
                 int32_t rbX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
@@ -127,41 +128,65 @@ inline static void addToMatrices(const std::shared_ptr<Geometry>& t_target, Def*
 
                 if (area > largestArea) {
                     largestArea = area;
-                    pinCoors.x = i;
-                    pinCoors.y = j;
+                    pinCoords.x = i;
+                    pinCoords.y = j;
                 }
             }
         }
 
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_def->matrixes[j][i].originalPlace;
+                Rectangle matrixRect = t_def->cells[j][i]->originalPlace;
 
                 int32_t ltX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
                 int32_t rbX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
                 int32_t ltY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
 
-                if (i == pinCoors.x && j == pinCoors.y) {
-                    t_def->matrixes[j][i].geometries.emplace_back(std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, rect->layer));
-                } else {
-                    t_def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, RType::NONE, rect->layer));
+                if (i == pinCoords.x && j == pinCoords.y) {
+                    std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, rect->layer);
+
+                    pinCut->parentCell = t_def->cells[j][i];
+
+                    t_def->pins[pin->name] = pinCut;
+                    t_def->cells[j][i]->pins.emplace_back(pinCut);
                 }
             }
         }
-    } else {
+        break;
+    }
+    case RType::SIGNAL: {
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_def->matrixes[j][i].originalPlace;
+                Rectangle matrixRect = t_def->cells[j][i]->originalPlace;
 
                 int32_t ltX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
                 int32_t rbX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
                 int32_t ltY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
 
-                t_def->matrixes[j][i].geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, RType::NONE, rect->layer));
+                t_def->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, rect->type, rect->layer));
             }
         }
+        break;
+    }
+    case RType::NONE: {
+        for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+            for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                Rectangle matrixRect = t_def->cells[j][i]->originalPlace;
+
+                int32_t ltX = std::max(matrixRect.vertex[0].x, rect->vertex[0].x);
+                int32_t rbX = std::min(matrixRect.vertex[2].x, rect->vertex[2].x);
+                int32_t ltY = std::max(matrixRect.vertex[0].y, rect->vertex[0].y);
+                int32_t rbY = std::min(matrixRect.vertex[2].y, rect->vertex[2].y);
+
+                t_def->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, rect->type, rect->layer));
+            }
+        }
+        break;
+    }
+    default:
+        break;
     }
 }
 
@@ -228,6 +253,7 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
 
     Def* def = static_cast<Def*>(t_userData);
     std::string pinName = def->componentName + t_pin->name();
+    bool isSignal = strcmp(t_pin->use(), "SIGNAL") == 0 && def->componentName.find("clk", 0) == std::string::npos;
     const char* layer {};
 
     for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
@@ -246,10 +272,17 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
                 int32_t xRight = portRect->xh * 1000.0;
                 int32_t yBottom = portRect->yh * 1000.0;
 
-                std::shared_ptr<Pin> pinRect = std::make_shared<Pin>(pinName, xLeft, yTop, xRight, yBottom, convertNameToML(layer));
+                if (isSignal) {
+                    std::shared_ptr<Pin> pinRect = std::make_shared<Pin>(pinName, xLeft, yTop, xRight, yBottom, convertNameToML(layer));
 
-                def->component.emplace_back(pinRect);
-                def->geometries.emplace_back(pinRect);
+                    def->component.emplace_back(pinRect);
+                    def->geometries.emplace_back(pinRect);
+                } else {
+                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, RType::NONE, convertNameToML(layer));
+
+                    def->component.emplace_back(rect);
+                    def->geometries.emplace_back(rect);
+                }
                 break;
             }
             default:
@@ -301,8 +334,6 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
 // Def callbacks
 // ==================================================================================================================================================
 
-int Encoder::defBlockageCallback(defrCallbackType_e t_type, defiBlockage* t_blockage, void* t_userData) {};
-
 int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData)
 {
     if (t_type != defrCallbackType_e::defrDieAreaCbkType) {
@@ -339,27 +370,27 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     uint32_t scaledWidth = width / 20;
     uint32_t scaledHeight = height / 20;
 
-    def->matrixSize = 480;
-    def->numMatrixX = scaledWidth / def->matrixSize;
-    def->numMatrixY = scaledHeight / def->matrixSize;
-    def->matrixStepX = (width + 1000) / def->numMatrixX;
-    def->matrixStepY = (height + 1000) / def->numMatrixY;
-    def->matrixOffsetX = leftTop.x - 500;
-    def->matrixOffsetY = leftTop.y - 500;
-    def->matrixes = std::vector<std::vector<Matrix>>(def->numMatrixY, std::vector<Matrix>(def->numMatrixX, Matrix()));
+    def->cellSize = 480;
+    def->numCellX = scaledWidth / def->cellSize;
+    def->numCellY = scaledHeight / def->cellSize;
+    def->cellStepX = (width + 1000) / def->numCellX;
+    def->cellStepY = (height + 1000) / def->numCellY;
+    def->cellOffsetX = leftTop.x - 500;
+    def->cellOffsetY = leftTop.y - 500;
+    def->cells = std::vector<std::vector<std::shared_ptr<WorkingCell>>>(def->numCellY, std::vector<std::shared_ptr<WorkingCell>>(def->numCellX, nullptr));
 
-    for (std::size_t j = 0; j < def->numMatrixY; ++j) {
-        for (std::size_t i = 0; i < def->numMatrixX; ++i) {
-            Matrix matrix {};
+    for (std::size_t j = 0; j < def->numCellY; ++j) {
+        for (std::size_t i = 0; i < def->numCellX; ++i) {
+            WorkingCell cell {};
 
-            matrix.originalPlace = Rectangle(
-                def->matrixOffsetX + i * def->matrixStepX,
-                def->matrixOffsetY + j * def->matrixStepY,
-                def->matrixOffsetX + (i + 1) * def->matrixStepX,
-                def->matrixOffsetY + (j + 1) * def->matrixStepY,
+            cell.originalPlace = Rectangle(
+                def->cellOffsetX + i * def->cellStepX,
+                def->cellOffsetY + j * def->cellStepY,
+                def->cellOffsetX + (i + 1) * def->cellStepX,
+                def->cellOffsetY + (j + 1) * def->cellStepY,
                 RType::NONE, ML::NONE);
 
-            def->matrixes[j][i] = matrix;
+            def->cells[j][i] = std::make_shared<WorkingCell>(cell);
         }
     }
 
@@ -476,12 +507,14 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
             vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
         }
 
-        addToMatrices(rect, def);
+        if (rect->type == RType::PIN) {
+            addToWorkingCells(rect, def);
+        }
     }
 
     def->component.clear();
 
-    return 0;    
+    return 0;
 };
 
 int Encoder::defComponentEndCallback(defrCallbackType_e t_type, void* t, void* t_userData)
@@ -495,18 +528,6 @@ int Encoder::defComponentEndCallback(defrCallbackType_e t_type, void* t, void* t
     return 0;
 }
 
-int Encoder::defComponentMaskShiftLayerCallback(defrCallbackType_e t_type, defiComponentMaskShiftLayer* t_shiftLayers, void* t_userData) {};
-
-int Encoder::defDoubleCallback(defrCallbackType_e t_type, double* t_number, void* t_userData) {};
-
-int Encoder::defFillCallback(defrCallbackType_e t_type, defiFill* t_shiftLayers, void* t_userData) {};
-
-int Encoder::defGcellGridCallback(defrCallbackType_e t_type, defiGcellGrid* t_grid, void* t_userData) {};
-
-int Encoder::defGroupCallback(defrCallbackType_e t_type, defiGroup* t_shiftLayers, void* t_userData) {};
-
-int Encoder::defIntegerCallback(defrCallbackType_e t_type, int t_number, void* t_userData) {};
-
 int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData)
 {
     if (t_type != defrNetCbkType) {
@@ -514,6 +535,33 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
     }
 
     Def* def = static_cast<Def*>(t_userData);
+
+    if (strcmp(t_net->use(), "SIGNAL") == 0) {
+        std::vector<std::string> pinsNames {};
+
+        ++def->totalNets;
+
+        for (std::size_t i = 0; i < t_net->numConnections(); ++i) {
+            pinsNames.emplace_back(std::string(t_net->instance(i)) + t_net->pin(i));
+        }
+
+        for (auto& name : pinsNames) {
+            std::shared_ptr<WorkingCell> cell = def->pins[name]->parentCell;
+            Net net {};
+
+            net.index = def->totalNets;
+            net.pins = std::vector<int8_t>(pinsNames.size(), 0);
+
+            for (std::size_t i = 0; i < std::min(cell->pins.size(), pinsNames.size()); ++i) {
+                if (std::find_if(cell->pins.begin(), cell->pins.end(), [pinsNames, i](auto& t_pin) { return pinsNames[i] == t_pin->name; }) != cell->pins.end()) {
+                    net.pins[i] = 1;
+                };
+            }
+
+            cell->nets.insert(net);
+            def->pins[name]->netIndex = def->totalNets;
+        }
+    }
 
     if (t_net->isRouted() == 0) {
         for (std::size_t i = 0; i < t_net->numWires(); ++i) {
@@ -585,29 +633,30 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                 if (viaName == nullptr) {
                     if (isStartSet && isEndSet) {
                         std::shared_ptr<Rectangle> line {};
+                        RType rType = strcmp(t_net->use(), "SIGNAL") == 0 ? RType::SIGNAL : RType::NONE;
 
                         if (start.x != end.x) {
-                            line = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, RType::NONE, convertNameToML(layerName));
+                            line = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, rType, convertNameToML(layerName));
                         } else {
-                            line = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, RType::NONE, convertNameToML(layerName));
+                            line = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, rType, convertNameToML(layerName));
                         }
 
                         def->geometries.emplace_back(line);
 
-                        addToMatrices(line, def);
+                        addToWorkingCells(line, def);
                     } else if (isViaRect) {
                         std::shared_ptr<Rectangle> viaRect = std::make_shared<Rectangle>(rect);
 
                         def->geometries.emplace_back(viaRect);
 
-                        addToMatrices(viaRect, def);
+                        addToWorkingCells(viaRect, def);
                     }
                 } else {
                     std::shared_ptr<Rectangle> via = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, RType::NONE, viaRuleToML(viaName));
 
                     def->geometries.emplace_back(via);
 
-                    addToMatrices(via, def);
+                    addToWorkingCells(via, def);
                 }
             }
         }
@@ -664,7 +713,6 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
             if (viaName == nullptr) {
                 std::shared_ptr<Rectangle> rect {};
-
                 if (start.x != end.x) {
                     rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, RType::NONE, convertNameToML(layerName));
                 } else {
@@ -673,7 +721,7 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
                 def->geometries.emplace_back(rect);
 
-                addToMatrices(rect, def);
+                addToWorkingCells(rect, def);
             } else if (def->vias.count(viaName) != 0) {
                 std::vector<Rectangle> via = def->vias[viaName];
 
@@ -687,7 +735,7 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 
                     def->geometries.emplace_back(rect);
 
-                    addToMatrices(rect, def);
+                    addToWorkingCells(rect, def);
                 }
 
             } else {
@@ -699,10 +747,6 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
     return 0;
 };
 
-int Encoder::defNonDefaultCallback(defrCallbackType_e t_type, defiNonDefault* t_rul, void* t_userData) {};
-
-int Encoder::defPathCallback(defrCallbackType_e t_type, defiPath* t_path, void* t_userData) {};
-
 int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_userData)
 {
     if (t_type != defrPinCbkType) {
@@ -710,6 +754,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
     }
 
     Def* def = static_cast<Def*>(t_userData);
+    bool isSignal = strcmp(t_pin->use(), "SIGNAL") == 0 && strcmp(t_pin->pinName(), "clk") != 0;
 
     for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
         defiPinPort* pinPort = t_pin->pinPort(i);
@@ -728,32 +773,24 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
                 yh += yPlacement;
             }
 
-            std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, convertNameToML(pinPort->layer(j)));
+            if (isSignal) {
+                std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, convertNameToML(pinPort->layer(j)));
 
-            def->geometries.emplace_back(pinRect);
+                def->geometries.emplace_back(pinRect);
 
-            addToMatrices(pinRect, def);
+                addToWorkingCells(pinRect, def);
+            } else {
+                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, RType::NONE, convertNameToML(pinPort->layer(j)));
+
+                def->geometries.emplace_back(rect);
+
+                addToWorkingCells(rect, def);
+            }
         }
     }
 
     return 0;
 };
-
-int Encoder::defPropCallback(defrCallbackType_e t_type, defiProp* t_prop, void* t_userData) {};
-
-int Encoder::defRegionCallback(defrCallbackType_e t_type, defiRegion* t_region, void* t_userData) {};
-
-int Encoder::defRowCallback(defrCallbackType_e t_type, defiRow* t_row, void* t_userData) {};
-
-int Encoder::defScanchainCallback(defrCallbackType_e t_type, defiScanchain* t_scanchain, void* t_userData) {};
-
-int Encoder::defSlotCallback(defrCallbackType_e t_type, defiSlot* t_slot, void* t_userData) {};
-
-int Encoder::defStringCallback(defrCallbackType_e t_type, const char* t_string, void* t_userData) {};
-
-int Encoder::defStylesCallback(defrCallbackType_e t_type, defiStyles* t_style, void* t_userData) {};
-
-int Encoder::defTrackCallback(defrCallbackType_e t_type, defiTrack* t_track, void* t_userData) {};
 
 int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData)
 {
@@ -790,5 +827,3 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
 
     return 0;
 };
-
-int Encoder::defVoidCallback(defrCallbackType_e t_type, void* t_variable, void* t_userData) {};

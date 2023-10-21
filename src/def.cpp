@@ -1,7 +1,7 @@
 #include "def.hpp"
 
 Rectangle::Rectangle(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const RType& t_type, const ML& t_layer)
-    : rType(t_type)
+    : type(t_type)
     , Geometry(t_layer)
 {
     // Protection from improper declaration of rect
@@ -27,4 +27,9 @@ void Rectangle::fixVertex()
     vertex[1] = Point(maxX, minY);
     vertex[2] = Point(maxX, maxY);
     vertex[3] = Point(minX, maxY);
+}
+
+bool Net::operator<(const Net& t_net) const
+{
+    return index < t_net.index;
 }
