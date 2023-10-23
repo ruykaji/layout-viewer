@@ -105,7 +105,7 @@ struct WorkingCell {
     ~WorkingCell() = default;
 };
 
-struct Def {
+struct Data {
     int32_t cellSize {};
     int32_t cellStepX {};
     int32_t cellStepY {};
@@ -126,8 +126,8 @@ struct Def {
     std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 
-    Def() = default;
-    ~Def() = default;
+    Data() = default;
+    ~Data() = default;
 };
 
 #endif

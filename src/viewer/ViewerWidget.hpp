@@ -21,7 +21,7 @@ struct RGB {
     }
 };
 
-class DEFViewerWidget : public QWidget {
+class ViewerWidget : public QWidget {
     Q_OBJECT
 
     enum class Mode {
@@ -31,7 +31,7 @@ class DEFViewerWidget : public QWidget {
 
     Mode m_mode {};
 
-    std::shared_ptr<Def> m_def {};
+    std::shared_ptr<Data> m_data {};
     std::vector<RGB> m_colors {};
     Encoder m_encoder {};
 
@@ -48,7 +48,7 @@ class DEFViewerWidget : public QWidget {
     QPointF m_axesPos {};
 
 public:
-    explicit DEFViewerWidget(QWidget* t_parent = nullptr);
+    explicit ViewerWidget(QWidget* t_parent = nullptr);
 
 private:
     void selectBrushAndPen(QPainter* t_painter, const ML& t_layer);

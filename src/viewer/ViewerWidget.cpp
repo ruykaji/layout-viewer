@@ -85,12 +85,12 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
 
 void DEFViewerWidget::render(QString& t_fileName)
 {
-    m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_def);
-    m_colors = generateRandomUniqueColors(m_def->totalNets);
+    m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_data);
+    m_colors = generateRandomUniqueColors(m_data->totalNets);
 
-    std::sort(m_def->geometries.begin(), m_def->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
+    std::sort(m_data->geometries.begin(), m_data->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
 
-    for (auto& [x, y] : m_def->dieArea) {
+    for (auto& [x, y] : m_data->dieArea) {
         m_max.first = std::max(x, m_max.first);
         m_max.second = std::max(y, m_max.second);
 
@@ -147,13 +147,13 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
         QPolygon dieAreaPoly {};
 
-        for (auto& [x, y] : m_def->dieArea) {
+        for (auto& [x, y] : m_data->dieArea) {
             dieAreaPoly.append(QPoint(x, y));
         }
 
         painter->drawPolygon(dieAreaPoly);
 
-        for (auto& row : m_def->cells) {
+        for (auto& row : m_data->cells) {
             for (auto& col : row) {
                 QPolygon matrixPoly {};
 
@@ -165,7 +165,7 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
             }
         }
 
-        for (auto& row : m_def->cells) {
+        for (auto& row : m_data->cells) {
             for (auto& col : row) {
                 for (auto& pin : col->pins) {
                     painter->setPen(QPen(QColor(QColor(m_colors[pin->netIndex].r, m_colors[pin->netIndex].g, m_colors[pin->netIndex].b)), 1.0 / m_currentScale));

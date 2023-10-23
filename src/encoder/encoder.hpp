@@ -8,7 +8,7 @@
 #include <memory>
 #include <string_view>
 
-#include "def.hpp"
+#include "data.hpp"
 #include "macro.hpp"
 
 class Encoder {
@@ -19,7 +19,7 @@ public:
     COPY_CONSTRUCTOR_REMOVE(Encoder);
     ASSIGN_OPERATOR_REMOVE(Encoder);
 
-    void readDef(const std::string_view t_fileName, const std::shared_ptr<Def> t_def);
+    void readDef(const std::string_view t_fileName, const std::shared_ptr<Data> t_data);
 
 private:
     // Lef callbacks
