@@ -8,67 +8,11 @@
 #include <unordered_map>
 #include <vector>
 
-struct Point;
+#include "geometry.hpp"
+
 struct Pin;
+struct Net;
 struct WorkingCell;
-struct Via;
-struct Def;
-
-// Rectangle type
-enum class RType {
-    NONE = 0,
-    SIGNAL,
-    PIN
-};
-
-// Metal layers
-enum class ML {
-    L1 = 0,
-    L1M1_V,
-    M1,
-    M1M2_V,
-    M2,
-    M2M3_V,
-    M3,
-    M3M4_V,
-    M4,
-    M4M5_V,
-    M5,
-    M5M6_V,
-    M6,
-    M6M7_V,
-    M7,
-    M7M8_V,
-    M8,
-    M8M9_V,
-    M9,
-    NONE,
-};
-
-struct Point {
-    int32_t x {};
-    int32_t y {};
-
-    Point() = default;
-    ~Point() = default;
-
-    Point(const int32_t& t_x, const int32_t& t_y)
-        : x(t_x)
-        , y(t_y) {};
-};
-
-struct Rectangle {
-    RType type { RType::NONE };
-    ML layer { ML::NONE };
-    std::array<Point, 4> vertex {};
-
-    Rectangle() = default;
-    ~Rectangle() = default;
-
-    Rectangle(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const RType& t_type, const ML& t_layer);
-
-    void fixVertex();
-};
 
 struct Pin : public Rectangle {
     int32_t netIndex {};
@@ -78,9 +22,10 @@ struct Pin : public Rectangle {
     Pin() = default;
     ~Pin() = default;
 
-    Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const ML& t_layer)
+    Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const MetalLayer& t_layer, const int32_t& t_netIndex = 0)
         : name(t_name)
-        , Rectangle(t_xl, t_yl, t_xh, t_yh, RType::PIN, t_layer) {};
+        , netIndex(t_netIndex)
+        , Rectangle(t_xl, t_yl, t_xh, t_yh, RectangleType::PIN, t_layer) {};
 };
 
 struct Net {

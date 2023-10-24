@@ -6,11 +6,11 @@
 MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
     : QMainWindow(t_parent, t_flags)
 {
-    m_defViewerWidget = new DEFViewerWidget();
+    m_viewerWidget = new ViewerWidget();
 
-    connect(this, &MainWindow::render, m_defViewerWidget, &DEFViewerWidget::render);
+    connect(this, &MainWindow::render, m_viewerWidget, &ViewerWidget::render);
 
-    setCentralWidget(m_defViewerWidget);
+    setCentralWidget(m_viewerWidget);
 
     createActions();
     createMenus();

@@ -4,12 +4,12 @@
 #include <QMainWindow>
 #include <QMenu>
 
-#include "DEFViewerWidget.hpp"
+#include "ViewerWidget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
-    DEFViewerWidget* m_defViewerWidget {};
+    ViewerWidget* m_viewerWidget {};
 
     QMenu* m_fileMenu {};
     QAction* m_openAct {};

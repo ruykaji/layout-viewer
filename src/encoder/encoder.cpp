@@ -11,19 +11,19 @@
 // General functions
 // ======================================================================================
 
-inline static ML convertNameToML(const char* t_name)
+inline static MetalLayer convertNameToML(const char* t_name)
 {
-    static const std::unordered_map<std::string, ML> nameToMLMap = {
-        { "li1", ML::L1 },
-        { "met1", ML::M1 },
-        { "met2", ML::M2 },
-        { "met3", ML::M3 },
-        { "met4", ML::M4 },
-        { "met5", ML::M5 },
-        { "met6", ML::M6 },
-        { "met7", ML::M7 },
-        { "met8", ML::M8 },
-        { "met9", ML::M9 }
+    static const std::unordered_map<std::string, MetalLayer> nameToMLMap = {
+        { "li1", MetalLayer::L1 },
+        { "met1", MetalLayer::M1 },
+        { "met2", MetalLayer::M2 },
+        { "met3", MetalLayer::M3 },
+        { "met4", MetalLayer::M4 },
+        { "met5", MetalLayer::M5 },
+        { "met6", MetalLayer::M6 },
+        { "met7", MetalLayer::M7 },
+        { "met8", MetalLayer::M8 },
+        { "met9", MetalLayer::M9 }
     };
 
     auto it = nameToMLMap.find(t_name);
@@ -32,21 +32,21 @@ inline static ML convertNameToML(const char* t_name)
         return it->second;
     }
 
-    return ML::NONE;
+    return MetalLayer::NONE;
 }
 
-inline static ML viaRuleToML(const char* t_name)
+inline static MetalLayer viaRuleToML(const char* t_name)
 {
-    static const std::unordered_map<std::string, ML> layerToMLMap = {
-        { "L1M1", ML::L1M1_V },
-        { "M1M2", ML::M1M2_V },
-        { "M2M3", ML::M2M3_V },
-        { "M3M4", ML::M3M4_V },
-        { "M4M5", ML::M4M5_V },
-        { "M5M6", ML::M5M6_V },
-        { "M6M7", ML::M6M7_V },
-        { "M7M8", ML::M7M8_V },
-        { "M8M9", ML::M8M9_V }
+    static const std::unordered_map<std::string, MetalLayer> layerToMLMap = {
+        { "L1M1", MetalLayer::L1M1_V },
+        { "M1M2", MetalLayer::M1M2_V },
+        { "M2M3", MetalLayer::M2M3_V },
+        { "M3M4", MetalLayer::M3M4_V },
+        { "M4M5", MetalLayer::M4M5_V },
+        { "M5M6", MetalLayer::M5M6_V },
+        { "M6M7", MetalLayer::M6M7_V },
+        { "M7M8", MetalLayer::M7M8_V },
+        { "M8M9", MetalLayer::M8M9_V }
     };
 
     std::string combinedLayer = { t_name[0], t_name[1], t_name[2], t_name[3] };
@@ -57,7 +57,7 @@ inline static ML viaRuleToML(const char* t_name)
         return it->second;
     }
 
-    return ML::NONE;
+    return MetalLayer::NONE;
 }
 
 inline static void setGeomOrientation(const int8_t t_orientation, int32_t& t_x, int32_t& t_y)
@@ -109,7 +109,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
     Point lb = Point((t_target->vertex[3].x - t_data->cellOffsetX) / t_data->cellStepX, (t_target->vertex[3].y - t_data->cellOffsetY) / t_data->cellStepY);
 
     switch (t_target->type) {
-    case RType::PIN: {
+    case RectangleType::PIN: {
         std::shared_ptr<Pin> pin = std::static_pointer_cast<Pin>(t_target);
         int32_t largestArea {};
         Point pinCoords {};
@@ -153,7 +153,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         }
         break;
     }
-    case RType::SIGNAL: {
+    case RectangleType::SIGNAL: {
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
@@ -168,7 +168,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         }
         break;
     }
-    case RType::NONE: {
+    case RectangleType::NONE: {
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
@@ -276,7 +276,7 @@ int Encoder::lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_u
                     data->component.emplace_back(pinRect);
                     data->geometries.emplace_back(pinRect);
                 } else {
-                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, RType::NONE, convertNameToML(layer));
+                    std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, convertNameToML(layer));
 
                     data->component.emplace_back(rect);
                     data->geometries.emplace_back(rect);
@@ -315,7 +315,7 @@ int Encoder::lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* 
             int32_t xRight = portRect->xh * 1000.0;
             int32_t yBottom = portRect->yh * 1000.0;
 
-            std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, RType::NONE, convertNameToML(layer));
+            std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xLeft, yTop, xRight, yBottom, convertNameToML(layer));
 
             data->component.emplace_back(rect);
             data->geometries.emplace_back(rect);
@@ -365,10 +365,10 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
     uint32_t width = rightBottom.x - leftTop.x;
     uint32_t height = rightBottom.y - leftTop.y;
-    uint32_t scaledWidth = width / 20;
-    uint32_t scaledHeight = height / 20;
+    uint32_t scaledWidth = width / 100;
+    uint32_t scaledHeight = height / 100;
 
-    data->cellSize = 480;
+    data->cellSize = 256;
     data->numCellX = scaledWidth / data->cellSize;
     data->numCellY = scaledHeight / data->cellSize;
     data->cellStepX = (width + 1000) / data->numCellX;
@@ -386,7 +386,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
                 data->cellOffsetY + j * data->cellStepY,
                 data->cellOffsetX + (i + 1) * data->cellStepX,
                 data->cellOffsetY + (j + 1) * data->cellStepY,
-                RType::NONE, ML::NONE);
+                RectangleType::NONE, MetalLayer::NONE);
 
             data->cells[j][i] = std::make_shared<WorkingCell>(cell);
         }
@@ -505,7 +505,7 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
             vertex.y += (leftBottom.y - newLeftBottom.y) + placed.y;
         }
 
-        if (rect->type == RType::PIN) {
+        if (rect->type == RectangleType::PIN) {
             addToWorkingCells(rect, data);
         }
     }
@@ -624,7 +624,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                         wirePath->getViaRect(&dx1, &dy1, &dx2, &dy2);
 
-                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, RType::SIGNAL, convertNameToML(layerName));
+                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, RectangleType::SIGNAL, convertNameToML(layerName));
                         isViaRect = true;
                         break;
                     }
@@ -637,7 +637,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                 if (viaName == nullptr) {
                     if (isStartSet && isEndSet) {
-                        RType rType = strcmp(t_net->use(), "SIGNAL") == 0 ? RType::SIGNAL : RType::NONE;
+                        RectangleType rType = strcmp(t_net->use(), "SIGNAL") == 0 ? RectangleType::SIGNAL : RectangleType::NONE;
 
                         if (start.x != end.x) {
                             routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, rType, convertNameToML(layerName));
@@ -648,7 +648,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                         routRect = std::make_shared<Rectangle>(rect);
                     }
                 } else {
-                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, RType::SIGNAL, viaRuleToML(viaName));
+                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, RectangleType::SIGNAL, viaRuleToML(viaName));
                 }
 
                 if (routRect) {
@@ -712,9 +712,9 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
                 std::shared_ptr<Rectangle> rect {};
 
                 if (start.x != end.x) {
-                    rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, RType::NONE, convertNameToML(layerName));
+                    rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, convertNameToML(layerName));
                 } else {
-                    rect = std::make_shared<Rectangle>(start.x - width / 2.0, start.y, end.x + width / 2.0, end.y, RType::NONE, convertNameToML(layerName));
+                    rect = std::make_shared<Rectangle>(start.x - width / 2.0, start.y, end.x + width / 2.0, end.y, convertNameToML(layerName));
                 }
 
                 data->geometries.emplace_back(rect);
@@ -772,7 +772,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
                 yh += yPlacement;
             }
 
-            ML layerName = convertNameToML(pinPort->layer(j));
+            MetalLayer layerName = convertNameToML(pinPort->layer(j));
 
             if (isSignal) {
                 std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, layerName);
@@ -781,7 +781,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
 
                 addToWorkingCells(pinRect, data);
             } else {
-                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, RType::NONE, layerName);
+                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, layerName);
 
                 data->geometries.emplace_back(rect);
 
@@ -808,7 +808,7 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
     numRow = std::max(1, numRow);
     numCol = std::max(1, numCol);
 
-    ML layer = viaRuleToML(viaRuleName);
+    MetalLayer layer = viaRuleToML(viaRuleName);
     std::vector<Rectangle> via {};
 
     via.reserve(numRow * numCol);
@@ -820,7 +820,7 @@ int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_u
             int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
             int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
 
-            via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, RType::NONE, layer));
+            via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, layer));
         }
     }
 

@@ -51,7 +51,7 @@ public:
     explicit ViewerWidget(QWidget* t_parent = nullptr);
 
 private:
-    void selectBrushAndPen(QPainter* t_painter, const ML& t_layer);
+    void selectBrushAndPen(QPainter* t_painter, const MetalLayer& t_layer);
 
 protected:
     void paintEvent(QPaintEvent* t_event);

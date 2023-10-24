@@ -3,7 +3,7 @@
 #include <QPalette>
 #include <random>
 
-#include "DEFViewerWidget.hpp"
+#include "ViewerWidget.hpp"
 
 std::vector<RGB> generateRandomUniqueColors(int n)
 {
@@ -20,10 +20,10 @@ std::vector<RGB> generateRandomUniqueColors(int n)
     return std::vector<RGB>(uniqueColors.begin(), uniqueColors.end());
 }
 
-DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
+ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
-    m_def = std::make_shared<Def>();
+    m_data = std::make_shared<Data>();
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
@@ -33,46 +33,46 @@ DEFViewerWidget::DEFViewerWidget(QWidget* t_parent)
     setPalette(pal);
 };
 
-void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
+void ViewerWidget::selectBrushAndPen(QPainter* t_painter, const MetalLayer& t_layer)
 {
     switch (t_layer) {
-    case ML::L1:
+    case MetalLayer::L1:
         t_painter->setPen(QPen(QColor(0, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 0, 255, 55)));
         break;
-    case ML::M1:
+    case MetalLayer::M1:
         t_painter->setPen(QPen(QColor(255, 0, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 0, 55)));
         break;
-    case ML::M2:
+    case MetalLayer::M2:
         t_painter->setPen(QPen(QColor(0, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 0, 55)));
         break;
-    case ML::M3:
+    case MetalLayer::M3:
         t_painter->setPen(QPen(QColor(255, 255, 0), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 255, 0, 55)));
         break;
-    case ML::M4:
+    case MetalLayer::M4:
         t_painter->setPen(QPen(QColor(0, 255, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(0, 255, 255, 55)));
         break;
-    case ML::M5:
+    case MetalLayer::M5:
         t_painter->setPen(QPen(QColor(255, 0, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 0, 255, 55)));
         break;
-    case ML::M6:
+    case MetalLayer::M6:
         t_painter->setPen(QPen(QColor(125, 125, 255), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 125, 255, 55)));
         break;
-    case ML::M7:
+    case MetalLayer::M7:
         t_painter->setPen(QPen(QColor(255, 125, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 125, 125, 55)));
         break;
-    case ML::M8:
+    case MetalLayer::M8:
         t_painter->setPen(QPen(QColor(125, 255, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(125, 255, 125, 55)));
         break;
-    case ML::M9:
+    case MetalLayer::M9:
         t_painter->setPen(QPen(QColor(255, 75, 125), 1.0 / m_currentScale));
         t_painter->setBrush(QBrush(QColor(255, 75, 125, 55)));
         break;
@@ -83,7 +83,7 @@ void DEFViewerWidget::selectBrushAndPen(QPainter* t_painter, const ML& t_layer)
     }
 };
 
-void DEFViewerWidget::render(QString& t_fileName)
+void ViewerWidget::render(QString& t_fileName)
 {
     m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_data);
     m_colors = generateRandomUniqueColors(m_data->totalNets);
@@ -98,22 +98,22 @@ void DEFViewerWidget::render(QString& t_fileName)
         m_min.second = std::min(y, m_min.second);
     }
 
-    auto newInitialScale = std::min((width() * 0.8) / std::abs(m_max.first - m_min.first), (height() * 0.8) / std::abs(m_max.second - m_min.second));
+    auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * (1.0 / 100.0)), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * (1.0 / 100.0)));
 
     m_currentScale = m_currentScale / m_initialScale * newInitialScale;
     m_initialScale = newInitialScale;
 
-    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second)) / 2.0);
+    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first) * (1.0 / 100.0)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second) * (1.0 / 100.0)) / 2.0);
     m_axesPos = m_moveAxesIn;
 
     update();
 }
 
-void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
+void ViewerWidget::paintEvent(QPaintEvent* t_event)
 {
     Q_UNUSED(t_event);
 
-    if (m_def != nullptr) {
+    if (m_data != nullptr) {
         QPainter* painter = new QPainter();
 
         painter->begin(this);
@@ -141,27 +141,38 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
         // DieArea drawing
         //======================================================================
 
-        painter->setFont(QFont("Times", 32));
-        painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 2.0 / m_currentScale));
+        painter->setFont(QFont("Times", 1));
+        painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 1.0 / m_currentScale));
         painter->setBrush(QBrush(QColor(Qt::transparent)));
 
         QPolygon dieAreaPoly {};
 
         for (auto& [x, y] : m_data->dieArea) {
-            dieAreaPoly.append(QPoint(x, y));
+            dieAreaPoly.append(QPoint(x, y) * (1.0 / 100.0));
         }
 
         painter->drawPolygon(dieAreaPoly);
 
         for (auto& row : m_data->cells) {
             for (auto& col : row) {
+                painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 1.0 / m_currentScale));
                 QPolygon matrixPoly {};
 
                 for (auto& [x, y] : col->originalPlace.vertex) {
-                    matrixPoly.append(QPoint(x, y));
+                    matrixPoly.append(QPoint(x, y) * (1.0 / 100.0));
                 }
 
                 painter->drawPolygon(matrixPoly);
+
+                painter->setPen(QPen(QColor(QColor(255, 255, 255, 55)), 1.0 / m_currentScale));
+
+                for (std::size_t j = 0; j < (col->originalPlace.vertex[2].y - col->originalPlace.vertex[1].y) * (1.0 / 100.0); ++j) {
+                    painter->drawLine(QLine(col->originalPlace.vertex[0].x * (1.0 / 100.0), col->originalPlace.vertex[0].y * (1.0 / 100.0) + j, col->originalPlace.vertex[1].x * (1.0 / 100.0), col->originalPlace.vertex[0].y * (1.0 / 100.0) + j));
+                }
+
+                for (std::size_t i = 0; i < (col->originalPlace.vertex[1].x - col->originalPlace.vertex[0].x) * (1.0 / 100.0); ++i) {
+                    painter->drawLine(QLine(col->originalPlace.vertex[0].x * (1.0 / 100.0) + i, col->originalPlace.vertex[0].y * (1.0 / 100.0), col->originalPlace.vertex[0].x * (1.0 / 100.0) + i, col->originalPlace.vertex[2].y * (1.0 / 100.0)));
+                }
             }
         }
 
@@ -173,14 +184,14 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
                     QPolygon poly {};
 
-                    poly.append(QPoint(pin->vertex[0].x, pin->vertex[0].y));
-                    poly.append(QPoint(pin->vertex[1].x, pin->vertex[1].y));
-                    poly.append(QPoint(pin->vertex[2].x, pin->vertex[2].y));
-                    poly.append(QPoint(pin->vertex[3].x, pin->vertex[3].y));
+                    poly.append(QPoint(pin->vertex[0].x, pin->vertex[0].y) * (1.0 / 100.0));
+                    poly.append(QPoint(pin->vertex[1].x, pin->vertex[1].y) * (1.0 / 100.0));
+                    poly.append(QPoint(pin->vertex[2].x, pin->vertex[2].y) * (1.0 / 100.0));
+                    poly.append(QPoint(pin->vertex[3].x, pin->vertex[3].y) * (1.0 / 100.0));
 
                     painter->drawPolygon(poly);
                     painter->setPen(QPen(QColor(QColor(255, 255, 255)), 1.0 / m_currentScale));
-                    painter->drawText(QPoint(pin->vertex[0].x, pin->vertex[0].y - 10), QString::fromStdString(pin->name));
+                    painter->drawText(QPoint(pin->vertex[0].x * (1.0 / 100.0), pin->vertex[0].y * (1.0 / 100.0)), QString::fromStdString(pin->name));
                 }
 
                 for (auto& route : col->routes) {
@@ -188,10 +199,10 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
                     QPolygon poly {};
 
-                    poly.append(QPoint(route->vertex[0].x, route->vertex[0].y));
-                    poly.append(QPoint(route->vertex[1].x, route->vertex[1].y));
-                    poly.append(QPoint(route->vertex[2].x, route->vertex[2].y));
-                    poly.append(QPoint(route->vertex[3].x, route->vertex[3].y));
+                    poly.append(QPoint(route->vertex[0].x, route->vertex[0].y) * (1.0 / 100.0));
+                    poly.append(QPoint(route->vertex[1].x, route->vertex[1].y) * (1.0 / 100.0));
+                    poly.append(QPoint(route->vertex[2].x, route->vertex[2].y) * (1.0 / 100.0));
+                    poly.append(QPoint(route->vertex[3].x, route->vertex[3].y) * (1.0 / 100.0));
 
                     painter->drawPolygon(poly);
                 }
@@ -201,10 +212,10 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
 
                     QPolygon poly {};
 
-                    poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y));
-                    poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y));
-                    poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y));
-                    poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y));
+                    poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y) * (1.0 / 100.0));
+                    poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y) * (1.0 / 100.0));
+                    poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y) * (1.0 / 100.0));
+                    poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y) * (1.0 / 100.0));
 
                     painter->drawPolygon(poly);
                 }
@@ -215,19 +226,19 @@ void DEFViewerWidget::paintEvent(QPaintEvent* t_event)
     }
 }
 
-void DEFViewerWidget::resizeEvent(QResizeEvent* t_event)
+void ViewerWidget::resizeEvent(QResizeEvent* t_event)
 {
     Q_UNUSED(t_event);
 
-    if (m_def != nullptr) {
-        auto newInitialScale = std::min((width() * 0.8) / std::abs(m_max.first - m_min.first), (height() * 0.8) / std::abs(m_max.second - m_min.second));
+    if (m_data != nullptr) {
+        auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * (1.0 / 100.0)), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * (1.0 / 100.0)));
 
         m_currentScale = m_currentScale / m_initialScale * newInitialScale;
         m_initialScale = newInitialScale;
     }
 }
 
-void DEFViewerWidget::mousePressEvent(QMouseEvent* t_event)
+void ViewerWidget::mousePressEvent(QMouseEvent* t_event)
 {
     switch (t_event->button()) {
 
@@ -244,7 +255,7 @@ void DEFViewerWidget::mousePressEvent(QMouseEvent* t_event)
     update();
 }
 
-void DEFViewerWidget::mouseMoveEvent(QMouseEvent* t_event)
+void ViewerWidget::mouseMoveEvent(QMouseEvent* t_event)
 {
     switch (m_mode) {
     case Mode::DRAGING: {
@@ -257,7 +268,7 @@ void DEFViewerWidget::mouseMoveEvent(QMouseEvent* t_event)
     }
 }
 
-void DEFViewerWidget::mouseReleaseEvent(QMouseEvent* t_event)
+void ViewerWidget::mouseReleaseEvent(QMouseEvent* t_event)
 {
     switch (m_mode) {
     case Mode::DRAGING: {
@@ -272,7 +283,7 @@ void DEFViewerWidget::mouseReleaseEvent(QMouseEvent* t_event)
     }
 }
 
-void DEFViewerWidget::wheelEvent(QWheelEvent* t_event)
+void ViewerWidget::wheelEvent(QWheelEvent* t_event)
 {
     if (m_mode == Mode::DEFAULT && QGuiApplication::queryKeyboardModifiers().testFlag(Qt::ControlModifier)) {
         m_scroll += 0.1 * (t_event->angleDelta().y() > 0 ? 1 : -1);
