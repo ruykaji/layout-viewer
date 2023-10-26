@@ -1,9 +1,11 @@
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <torch/torch.h>
 
-#include "encoder.hpp"
+#include "encoder/encoder.hpp"
+#include "pdk/convertor.hpp"
 
 int main(int argc, char const* argv[])
 {
@@ -23,13 +25,6 @@ int main(int argc, char const* argv[])
     std::cout << "Total Nets - " << data->totalNets << "\n";
     std::cout << "Total pins to connect - " << data->pins.size() << "\n";
     std::cout << std::flush;
-
-    torch::Device cuda_device(torch::kCUDA, 0);
-    torch::Tensor tensor = torch::rand({ 9, 256, 256 });
-    
-    tensor.to(cuda_device);
-
-    std::cout << "Used memory for tensor: " << (tensor.numel() * tensor.itemsize() * (data->numCellX * data->numCellY)) << std::endl;
 
     return 0;
 }

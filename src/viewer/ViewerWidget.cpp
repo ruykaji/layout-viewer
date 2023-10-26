@@ -3,7 +3,7 @@
 #include <QPalette>
 #include <random>
 
-#include "ViewerWidget.hpp"
+#include "viewer/ViewerWidget.hpp"
 
 std::vector<RGB> generateRandomUniqueColors(int n)
 {

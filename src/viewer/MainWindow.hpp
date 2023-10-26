@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <QMenu>
 
-#include "ViewerWidget.hpp"
+#include "viewer/ViewerWidget.hpp"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT

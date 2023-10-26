@@ -25,7 +25,7 @@ struct Pin : public Rectangle {
     Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const MetalLayer& t_layer, const int32_t& t_netIndex = 0)
         : name(t_name)
         , netIndex(t_netIndex)
-        , Rectangle(t_xl, t_yl, t_xh, t_yh, RectangleType::PIN, t_layer) {};
+        , Rectangle(t_xl, t_yl, t_xh, t_yh, t_layer, RectangleType::PIN) {};
 };
 
 struct Net {

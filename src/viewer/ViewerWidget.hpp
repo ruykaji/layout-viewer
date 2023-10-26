@@ -8,7 +8,7 @@
 #include <QWheelEvent>
 #include <QWidget>
 
-#include "encoder.hpp"
+#include "encoder/encoder.hpp"
 
 struct RGB {
     int r;

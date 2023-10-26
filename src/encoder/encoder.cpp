@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "encoder.hpp"
+#include "encoder/encoder.hpp"
 
 // General functions
 // ======================================================================================
@@ -163,7 +163,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                 int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
-                t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->type, t_target->layer));
+                t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
             }
         }
         break;
@@ -178,7 +178,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                 int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
-                t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->type, t_target->layer));
+                t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
             }
         }
         break;
@@ -386,7 +386,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
                 data->cellOffsetY + j * data->cellStepY,
                 data->cellOffsetX + (i + 1) * data->cellStepX,
                 data->cellOffsetY + (j + 1) * data->cellStepY,
-                RectangleType::NONE, MetalLayer::NONE);
+                MetalLayer::NONE);
 
             data->cells[j][i] = std::make_shared<WorkingCell>(cell);
         }
@@ -624,7 +624,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                         wirePath->getViaRect(&dx1, &dy1, &dx2, &dy2);
 
-                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, RectangleType::SIGNAL, convertNameToML(layerName));
+                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, convertNameToML(layerName), RectangleType::SIGNAL);
                         isViaRect = true;
                         break;
                     }
@@ -640,15 +640,15 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                         RectangleType rType = strcmp(t_net->use(), "SIGNAL") == 0 ? RectangleType::SIGNAL : RectangleType::NONE;
 
                         if (start.x != end.x) {
-                            routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, rType, convertNameToML(layerName));
+                            routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, convertNameToML(layerName), rType);
                         } else {
-                            routRect = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, rType, convertNameToML(layerName));
+                            routRect = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, convertNameToML(layerName), rType);
                         }
                     } else if (isViaRect) {
                         routRect = std::make_shared<Rectangle>(rect);
                     }
                 } else {
-                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, RectangleType::SIGNAL, viaRuleToML(viaName));
+                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, viaRuleToML(viaName), RectangleType::SIGNAL);
                 }
 
                 if (routRect) {

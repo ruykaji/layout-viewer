@@ -1,7 +1,7 @@
 #include <QFileDialog>
 #include <QMenuBar>
 
-#include "MainWindow.hpp"
+#include "viewer/MainWindow.hpp"
 
 MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
     : QMainWindow(t_parent, t_flags)
