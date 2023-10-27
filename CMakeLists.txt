@@ -29,7 +29,7 @@ file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/
 file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
 file(GLOB PDK ${CMAKE_SOURCE_DIR}/src/pdk/*.cpp ${CMAKE_SOURCE_DIR}/src/pdk/*.hpp)
 
-set(DESKTOP ${GLOBAL} ${ENCODER} ${VIEWER})
+set(DESKTOP ${GLOBAL} ${ENCODER} ${VIEWER} ${PDK})
 add_executable(desktop desktop.cpp ${DESKTOP})
 target_link_libraries(desktop PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets ${TORCH_LIBRARIES})
 

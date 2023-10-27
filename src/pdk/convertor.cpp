@@ -3,7 +3,7 @@
 #include "pdk/convertor.hpp"
 
 #define WRITE_TO_BINARY(file, var) file.write(reinterpret_cast<const char*>(&var), sizeof(var))
-
+#define READ_FROM_BINARY(file, var) file.read(reinterpret_cast<char*>(&var), sizeof(var))
 // General functions
 // ======================================================================================
 
@@ -31,10 +31,22 @@ inline static MetalLayer convertNameToML(const char* t_name)
     return MetalLayer::NONE;
 }
 
+inline static std::filesystem::path getExtensionAfterFirstDot(const std::filesystem::path& t_path)
+{
+    std::string filename = t_path.filename().string();
+    std::size_t pos = filename.find('.');
+
+    if (pos != std::string::npos) {
+        return filename.substr(pos);
+    }
+
+    return "";
+}
+
 // Class methods
 // ======================================================================================
 
-void Convertor::serialize(const std::string& t_directory)
+void Convertor::serialize(const std::string& t_directory, const std::string& t_libPath)
 {
     // Parse all lef files in directory
     // ======================================================================================
@@ -54,29 +66,23 @@ void Convertor::serialize(const std::string& t_directory)
     lefrSetPinCbk(&pinCallback);
     lefrSetObstructionCbk(&obstructionCallback);
 
-    PDK pdk {};
+    Data* data = new Data();
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator(t_directory)) {
-        if (std::filesystem::is_regular_file(entry) && entry.path().extension() == ".lef") {
+        if (std::filesystem::is_regular_file(entry) && getExtensionAfterFirstDot(entry.path()) == ".lef") {
             auto file = fopen(entry.path().c_str(), "r");
 
             if (file == nullptr) {
                 throw std::runtime_error("Error: Can't open a file: " + entry.path().string());
             }
 
-            PDK::Macro* macro = new PDK::Macro();
-
-            int readStatus = lefrRead(file, entry.path().c_str(), macro);
+            int readStatus = lefrRead(file, entry.path().c_str(), data);
 
             if (readStatus != 0) {
                 throw std::runtime_error("Error: Can't read a file: " + entry.path().string());
             }
 
             fclose(file);
-
-            pdk.macros[macro->name] = *macro;
-
-            delete macro;
         }
     }
 
@@ -85,12 +91,12 @@ void Convertor::serialize(const std::string& t_directory)
     // Write to binary
     // ======================================================================================
 
-    std::ofstream outFile("pdk.bin", std::ios::binary);
+    std::ofstream outFile(t_libPath, std::ios::binary);
 
-    size_t mapSize = pdk.macros.size();
+    size_t mapSize = data->pdk.macros.size();
     outFile.write(reinterpret_cast<const char*>(&mapSize), sizeof(mapSize));
 
-    for (auto& [first, second] : pdk.macros) {
+    for (auto& [first, second] : data->pdk.macros) {
         // Write map objest's key
         size_t keySize = first.size();
         WRITE_TO_BINARY(outFile, keySize);
@@ -145,19 +151,21 @@ void Convertor::serialize(const std::string& t_directory)
     }
 
     outFile.close();
+
+    delete data;
 };
 
-void Convertor::deserialize(const std::string& t_fileName, PDK& t_pdk)
+void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
 {
-    std::ifstream inFile(t_fileName, std::ios::binary);
+    std::ifstream inFile(t_libPath, std::ios::binary);
 
     size_t mapSize;
-    inFile.read(reinterpret_cast<char*>(&mapSize), sizeof(mapSize));
+    READ_FROM_BINARY(inFile, mapSize);
 
     for (size_t i = 0; i < mapSize; ++i) {
         // Read key
         size_t keyStringSize;
-        inFile.read(reinterpret_cast<char*>(&keyStringSize), sizeof(keyStringSize));
+        READ_FROM_BINARY(inFile, keyStringSize);
         std::string key(keyStringSize, '\0');
         inFile.read(&key[0], keyStringSize);
 
@@ -165,48 +173,48 @@ void Convertor::deserialize(const std::string& t_fileName, PDK& t_pdk)
         PDK::Macro macro {};
 
         size_t nameStringSize;
-        inFile.read(reinterpret_cast<char*>(&nameStringSize), sizeof(nameStringSize));
+        READ_FROM_BINARY(inFile, nameStringSize);
         std::string name(nameStringSize, '\0');
         inFile.read(&name[0], nameStringSize);
 
         macro.name = name;
 
         PointF size {};
-        inFile.read(reinterpret_cast<char*>(&size), sizeof(size));
+        READ_FROM_BINARY(inFile, size);
 
         macro.size = size;
 
         size_t pinVectorSize {};
-        inFile.read(reinterpret_cast<char*>(&pinVectorSize), sizeof(pinVectorSize));
+        READ_FROM_BINARY(inFile, pinVectorSize);
 
         for (std::size_t i = 0; i < pinVectorSize; ++i) {
             PDK::Macro::Pin pin {};
 
             size_t pinNameSize {};
-            inFile.read(reinterpret_cast<char*>(&pinNameSize), sizeof(pinNameSize));
+            READ_FROM_BINARY(inFile, pinNameSize);
             std::string pinName(pinNameSize, '\0');
             inFile.read(&pinName[0], pinNameSize);
 
             pin.name = pinName;
 
             size_t pinUseSize {};
-            inFile.read(reinterpret_cast<char*>(&pinUseSize), sizeof(pinUseSize));
+            READ_FROM_BINARY(inFile, pinUseSize);
             std::string pinUse(pinUseSize, '\0');
             inFile.read(&pinUse[0], pinUseSize);
 
             pin.use = pinUse;
 
             size_t portVectorSize {};
-            inFile.read(reinterpret_cast<char*>(&portVectorSize), sizeof(portVectorSize));
+            READ_FROM_BINARY(inFile, portVectorSize);
 
             for (std::size_t j = 0; j < portVectorSize; ++j) {
                 RectangleF port {};
 
-                inFile.read(reinterpret_cast<char*>(&port.type), sizeof(port.type));
-                inFile.read(reinterpret_cast<char*>(&port.layer), sizeof(port.layer));
+                READ_FROM_BINARY(inFile, port.type);
+                READ_FROM_BINARY(inFile, port.layer);
 
                 for (std::size_t k = 0; k < 4; ++k) {
-                    inFile.read(reinterpret_cast<char*>(&port.vertex[k]), sizeof(port.vertex[k]));
+                    READ_FROM_BINARY(inFile, port.vertex[k]);
                 }
 
                 pin.ports.emplace_back(port);
@@ -216,16 +224,16 @@ void Convertor::deserialize(const std::string& t_fileName, PDK& t_pdk)
         }
 
         size_t obsVectorSize {};
-        inFile.read(reinterpret_cast<char*>(&obsVectorSize), sizeof(obsVectorSize));
+        READ_FROM_BINARY(inFile, obsVectorSize);
 
-        for (std::size_t i = 0; i < obsVectorSize; ++i) {
+        for (std::size_t j = 0; j < obsVectorSize; ++j) {
             RectangleF port {};
 
-            inFile.read(reinterpret_cast<char*>(&port.type), sizeof(port.type));
-            inFile.read(reinterpret_cast<char*>(&port.layer), sizeof(port.layer));
+            READ_FROM_BINARY(inFile, port.type);
+            READ_FROM_BINARY(inFile, port.layer);
 
             for (std::size_t k = 0; k < 4; ++k) {
-                inFile.read(reinterpret_cast<char*>(&port.vertex[k]), sizeof(port.vertex[k]));
+                READ_FROM_BINARY(inFile, port.vertex[k]);
             }
 
             macro.obstruction.geometry.emplace_back(port);
@@ -241,9 +249,11 @@ int Convertor::macroCallback(lefrCallbackType_e t_type, const char* t_string, vo
         return 2;
     }
 
-    PDK::Macro* macro = static_cast<PDK::Macro*>(t_userData);
+    Data* data = static_cast<Data*>(t_userData);
 
-    macro->name = std::string(t_string);
+    data->pdk.macros[t_string] = PDK::Macro();
+    data->pdk.macros[t_string].name = t_string;
+    data->lastMacro = t_string;
 
     return 0;
 };
@@ -254,9 +264,9 @@ int Convertor::macroSizeCallback(lefrCallbackType_e t_type, lefiNum t_numbers, v
         return 2;
     }
 
-    PDK::Macro* macro = static_cast<PDK::Macro*>(t_userData);
+    Data* data = static_cast<Data*>(t_userData);
 
-    macro->size = PointF(t_numbers.x, t_numbers.y);
+    data->pdk.macros[data->lastMacro].size = PointF(t_numbers.x, t_numbers.y);
 
     return 0;
 };
@@ -295,14 +305,14 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
         }
     }
 
-    PDK::Macro* macro = static_cast<PDK::Macro*>(t_userData);
+    Data* data = static_cast<Data*>(t_userData);
 
     if (t_pin->hasUse()) {
         pin.use = std::string(t_pin->use());
     }
 
     pin.name = std::string(t_pin->name());
-    macro->pins.emplace_back(pin);
+    data->pdk.macros[data->lastMacro].pins.emplace_back(pin);
 
     return 0;
 }
@@ -338,9 +348,9 @@ int Convertor::obstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t
         }
     }
 
-    PDK::Macro* macro = static_cast<PDK::Macro*>(t_userData);
+    Data* data = static_cast<Data*>(t_userData);
 
-    macro->obstruction = obs;
+    data->pdk.macros[data->lastMacro].obstruction = obs;
 
     return 0;
 }

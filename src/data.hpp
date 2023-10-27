@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "geometry.hpp"
+#include "pdk/pdk.hpp"
 
 struct Pin;
 struct Net;
@@ -71,8 +72,10 @@ struct Data {
     std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 
+    PDK pdk {};
+
     Data() = default;
-    ~Data() = default;
+    ~Data();
 };
 
 #endif

@@ -10,6 +10,10 @@
 #include "pdk/pdk.hpp"
 
 class Convertor {
+    struct Data {
+        PDK pdk {};
+        std::string lastMacro {};
+    };
 
 public:
     Convertor() = default;
@@ -18,8 +22,8 @@ public:
     COPY_CONSTRUCTOR_REMOVE(Convertor);
     ASSIGN_OPERATOR_REMOVE(Convertor);
 
-    void serialize(const std::string& t_directory);
-    void deserialize(const std::string& t_fileName, PDK& t_pdk);
+    void serialize(const std::string& t_directory, const std::string& t_libPath);
+    void deserialize(const std::string& t_libPath, PDK& t_pdk);
 
 private:
     static int macroCallback(lefrCallbackType_e t_type, const char* t_string, void* t_userData);

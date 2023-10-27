@@ -19,26 +19,16 @@ public:
     COPY_CONSTRUCTOR_REMOVE(Encoder);
     ASSIGN_OPERATOR_REMOVE(Encoder);
 
-    void readDef(const std::string_view t_fileName, const std::shared_ptr<Data> t_data);
+    void readDef(const std::string_view& t_fileName, const std::string& t_libPath, const std::shared_ptr<Data>& t_data);
 
 private:
-    // Lef callbacks
-    // ==================================================================================================================================================
-    static int lefPinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_userData);
-
-    static int lefObstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t_obstruction, void* t_userData);
-
     // Def callbacks
     // ==================================================================================================================================================
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 
-    static int defComponentStartCallback(defrCallbackType_e t_type, int t_number, void* t_userData);
-    
     static int defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData);
-
-    static int defComponentEndCallback(defrCallbackType_e t_type, void* t, void* t_userData);
-
+    
     static int defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);
 
     static int defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);

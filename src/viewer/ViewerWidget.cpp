@@ -5,6 +5,8 @@
 
 #include "viewer/ViewerWidget.hpp"
 
+#define SCALE 1
+
 std::vector<RGB> generateRandomUniqueColors(int n)
 {
     std::set<RGB> uniqueColors;
@@ -85,7 +87,7 @@ void ViewerWidget::selectBrushAndPen(QPainter* t_painter, const MetalLayer& t_la
 
 void ViewerWidget::render(QString& t_fileName)
 {
-    m_encoder.readDef(std::string_view(t_fileName.toStdString()), m_data);
+    m_encoder.readDef(std::string_view(t_fileName.toStdString()), "./skyWater130.bin", m_data);
     m_colors = generateRandomUniqueColors(m_data->totalNets);
 
     std::sort(m_data->geometries.begin(), m_data->geometries.end(), [](auto& t_left, auto& t_right) { return static_cast<int>(t_left->layer) < static_cast<int>(t_right->layer); });
@@ -98,12 +100,12 @@ void ViewerWidget::render(QString& t_fileName)
         m_min.second = std::min(y, m_min.second);
     }
 
-    auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * (1.0 / 100.0)), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * (1.0 / 100.0)));
+    auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * SCALE), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * SCALE));
 
     m_currentScale = m_currentScale / m_initialScale * newInitialScale;
     m_initialScale = newInitialScale;
 
-    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first) * (1.0 / 100.0)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second) * (1.0 / 100.0)) / 2.0);
+    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first) * SCALE) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second) * SCALE) / 2.0);
     m_axesPos = m_moveAxesIn;
 
     update();
@@ -141,14 +143,14 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
         // DieArea drawing
         //======================================================================
 
-        painter->setFont(QFont("Times", 1));
+        painter->setFont(QFont("Times", 32));
         painter->setPen(QPen(QColor(QColor(255, 255, 255, 255)), 1.0 / m_currentScale));
         painter->setBrush(QBrush(QColor(Qt::transparent)));
 
         QPolygon dieAreaPoly {};
 
         for (auto& [x, y] : m_data->dieArea) {
-            dieAreaPoly.append(QPoint(x, y) * (1.0 / 100.0));
+            dieAreaPoly.append(QPoint(x, y) * SCALE);
         }
 
         painter->drawPolygon(dieAreaPoly);
@@ -159,20 +161,20 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
                 QPolygon matrixPoly {};
 
                 for (auto& [x, y] : col->originalPlace.vertex) {
-                    matrixPoly.append(QPoint(x, y) * (1.0 / 100.0));
+                    matrixPoly.append(QPoint(x, y) * SCALE);
                 }
 
                 painter->drawPolygon(matrixPoly);
 
-                painter->setPen(QPen(QColor(QColor(255, 255, 255, 55)), 1.0 / m_currentScale));
+                // painter->setPen(QPen(QColor(QColor(255, 255, 255, 55)), 1.0 / m_currentScale));
 
-                for (std::size_t j = 0; j < (col->originalPlace.vertex[2].y - col->originalPlace.vertex[1].y) * (1.0 / 100.0); ++j) {
-                    painter->drawLine(QLine(col->originalPlace.vertex[0].x * (1.0 / 100.0), col->originalPlace.vertex[0].y * (1.0 / 100.0) + j, col->originalPlace.vertex[1].x * (1.0 / 100.0), col->originalPlace.vertex[0].y * (1.0 / 100.0) + j));
-                }
+                // for (std::size_t j = 0; j < (col->originalPlace.vertex[2].y - col->originalPlace.vertex[1].y) * SCALE; ++j) {
+                //     painter->drawLine(QLine(col->originalPlace.vertex[0].x * SCALE, col->originalPlace.vertex[0].y * SCALE + j, col->originalPlace.vertex[1].x * SCALE, col->originalPlace.vertex[0].y * SCALE + j));
+                // }
 
-                for (std::size_t i = 0; i < (col->originalPlace.vertex[1].x - col->originalPlace.vertex[0].x) * (1.0 / 100.0); ++i) {
-                    painter->drawLine(QLine(col->originalPlace.vertex[0].x * (1.0 / 100.0) + i, col->originalPlace.vertex[0].y * (1.0 / 100.0), col->originalPlace.vertex[0].x * (1.0 / 100.0) + i, col->originalPlace.vertex[2].y * (1.0 / 100.0)));
-                }
+                // for (std::size_t i = 0; i < (col->originalPlace.vertex[1].x - col->originalPlace.vertex[0].x) * SCALE; ++i) {
+                //     painter->drawLine(QLine(col->originalPlace.vertex[0].x * SCALE + i, col->originalPlace.vertex[0].y * SCALE, col->originalPlace.vertex[0].x * SCALE + i, col->originalPlace.vertex[2].y * SCALE));
+                // }
             }
         }
 
@@ -184,14 +186,14 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
 
                     QPolygon poly {};
 
-                    poly.append(QPoint(pin->vertex[0].x, pin->vertex[0].y) * (1.0 / 100.0));
-                    poly.append(QPoint(pin->vertex[1].x, pin->vertex[1].y) * (1.0 / 100.0));
-                    poly.append(QPoint(pin->vertex[2].x, pin->vertex[2].y) * (1.0 / 100.0));
-                    poly.append(QPoint(pin->vertex[3].x, pin->vertex[3].y) * (1.0 / 100.0));
+                    poly.append(QPoint(pin->vertex[0].x, pin->vertex[0].y) * SCALE);
+                    poly.append(QPoint(pin->vertex[1].x, pin->vertex[1].y) * SCALE);
+                    poly.append(QPoint(pin->vertex[2].x, pin->vertex[2].y) * SCALE);
+                    poly.append(QPoint(pin->vertex[3].x, pin->vertex[3].y) * SCALE);
 
                     painter->drawPolygon(poly);
                     painter->setPen(QPen(QColor(QColor(255, 255, 255)), 1.0 / m_currentScale));
-                    painter->drawText(QPoint(pin->vertex[0].x * (1.0 / 100.0), pin->vertex[0].y * (1.0 / 100.0)), QString::fromStdString(pin->name));
+                    painter->drawText(QPoint(pin->vertex[0].x * SCALE, pin->vertex[0].y * SCALE), QString::fromStdString(pin->name));
                 }
 
                 for (auto& route : col->routes) {
@@ -199,26 +201,26 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
 
                     QPolygon poly {};
 
-                    poly.append(QPoint(route->vertex[0].x, route->vertex[0].y) * (1.0 / 100.0));
-                    poly.append(QPoint(route->vertex[1].x, route->vertex[1].y) * (1.0 / 100.0));
-                    poly.append(QPoint(route->vertex[2].x, route->vertex[2].y) * (1.0 / 100.0));
-                    poly.append(QPoint(route->vertex[3].x, route->vertex[3].y) * (1.0 / 100.0));
+                    poly.append(QPoint(route->vertex[0].x, route->vertex[0].y) * SCALE);
+                    poly.append(QPoint(route->vertex[1].x, route->vertex[1].y) * SCALE);
+                    poly.append(QPoint(route->vertex[2].x, route->vertex[2].y) * SCALE);
+                    poly.append(QPoint(route->vertex[3].x, route->vertex[3].y) * SCALE);
 
                     painter->drawPolygon(poly);
                 }
 
-                for (auto& geom : col->geometries) {
-                    selectBrushAndPen(painter, geom->layer);
+                // for (auto& geom : col->geometries) {
+                //     selectBrushAndPen(painter, geom->layer);
 
-                    QPolygon poly {};
+                //     QPolygon poly {};
 
-                    poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y) * (1.0 / 100.0));
-                    poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y) * (1.0 / 100.0));
-                    poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y) * (1.0 / 100.0));
-                    poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y) * (1.0 / 100.0));
+                //     poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y) * SCALE);
+                //     poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y) * SCALE);
+                //     poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y) * SCALE);
+                //     poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y) * SCALE);
 
-                    painter->drawPolygon(poly);
-                }
+                //     painter->drawPolygon(poly);
+                // }
             }
         }
 
@@ -231,7 +233,7 @@ void ViewerWidget::resizeEvent(QResizeEvent* t_event)
     Q_UNUSED(t_event);
 
     if (m_data != nullptr) {
-        auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * (1.0 / 100.0)), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * (1.0 / 100.0)));
+        auto newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first) * SCALE), (height() * 0.8) / (std::abs(m_max.second - m_min.second) * SCALE));
 
         m_currentScale = m_currentScale / m_initialScale * newInitialScale;
         m_initialScale = newInitialScale;
