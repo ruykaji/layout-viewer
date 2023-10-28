@@ -53,8 +53,6 @@ struct WorkingCell {
 
 struct Data {
     int32_t cellSize {};
-    int32_t cellStepX {};
-    int32_t cellStepY {};
     int32_t numCellX {};
     int32_t numCellY {};
     int32_t cellOffsetX {};
@@ -62,13 +60,7 @@ struct Data {
     int32_t totalNets {};
 
     std::vector<Point> dieArea {};
-
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
-    std::vector<std::shared_ptr<Rectangle>> geometries {};
-
-    std::vector<std::shared_ptr<Rectangle>> component {};
-    std::string componentName {};
-
     std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 

@@ -105,13 +105,19 @@ inline static void setGeomOrientation(const int8_t t_orientation, double& t_x, d
 
 inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data* t_data)
 {
-    Point lt = Point((t_target->vertex[0].x - t_data->cellOffsetX) / t_data->cellStepX, (t_target->vertex[0].y - t_data->cellOffsetY) / t_data->cellStepY);
-    Point rt = Point((t_target->vertex[1].x - t_data->cellOffsetX) / t_data->cellStepX, (t_target->vertex[1].y - t_data->cellOffsetY) / t_data->cellStepY);
-    Point lb = Point((t_target->vertex[3].x - t_data->cellOffsetX) / t_data->cellStepX, (t_target->vertex[3].y - t_data->cellOffsetY) / t_data->cellStepY);
+    for (auto& point : t_target->vertex) {
+        point.x /= t_data->pdk.scale;
+        point.y /= t_data->pdk.scale;
+    }
+
+    Point lt = Point((t_target->vertex[0].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[0].y - t_data->cellOffsetY) / t_data->cellSize);
+    Point rt = Point((t_target->vertex[1].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[1].y - t_data->cellOffsetY) / t_data->cellSize);
+    Point lb = Point((t_target->vertex[3].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[3].y - t_data->cellOffsetY) / t_data->cellSize);
 
     switch (t_target->type) {
     case RectangleType::PIN: {
         std::shared_ptr<Pin> pin = std::static_pointer_cast<Pin>(t_target);
+
         int32_t largestArea {};
         Point pinCoords {};
 
@@ -143,12 +149,14 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                 int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
                 if (i == pinCoords.x && j == pinCoords.y) {
-                    std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, t_target->layer);
+                    if (t_data->pins.count(pin->name) == 0 || (t_data->pins.count(pin->name) != 0 && t_data->pins[pin->name]->parentCell == t_data->cells[j][i])) {
+                        std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, t_target->layer);
 
-                    pinCut->parentCell = t_data->cells[j][i];
+                        pinCut->parentCell = t_data->cells[j][i];
 
-                    t_data->pins[pin->name] = pinCut;
-                    t_data->cells[j][i]->pins.emplace_back(pinCut);
+                        t_data->pins[pin->name] = pinCut;
+                        t_data->cells[j][i]->pins.emplace_back(pinCut);
+                    }
                 }
             }
         }
@@ -164,12 +172,22 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                 int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
-                t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                if (ltX != rbX && ltY != rbY) {
+                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                } else {
+                    rbX = std::min(matrixRect.vertex[2].x, rbX + 1);
+                    rbY = std::min(matrixRect.vertex[2].y, rbY + 1);
+
+                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                }
             }
         }
         break;
     }
-    case RectangleType::NONE: {
+    case RectangleType::CLOCK:
+    case RectangleType::POWER:
+    case RectangleType::GROUND:
+    case RectangleType::DIEAREA: {
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
@@ -179,7 +197,14 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                 int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
                 int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
-                t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                if (ltX != rbX && ltY != rbY) {
+                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                } else {
+                    rbX = std::min(matrixRect.vertex[2].x, rbX + 1);
+                    rbY = std::min(matrixRect.vertex[2].y, rbY + 1);
+
+                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                }
             }
         }
         break;
@@ -224,9 +249,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
     //=================================================================
 
     defrSetDieAreaCbk(&defDieAreaCallback);
-    // defrSetComponentStartCbk(&defComponentStartCallback);
     defrSetComponentCbk(&defComponentCallback);
-    // defrSetComponentEndCbk(&defComponentEndCallback);
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
@@ -254,19 +277,21 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
         return 2;
     }
 
-    auto points = t_box->getPoint();
-    auto data = static_cast<Data*>(t_userData);
+    defiPoints points = t_box->getPoint();
+    Data* data = static_cast<Data*>(t_userData);
+
+    data->pdk.scale *= 1000.0;
 
     if (points.numPoints != 2) {
         for (std::size_t i = 0; i < points.numPoints; ++i) {
-            data->dieArea.emplace_back(Point(points.x[i], points.y[i]));
+            data->dieArea.emplace_back(Point(points.x[i] / data->pdk.scale, points.y[i] / data->pdk.scale));
         }
     } else {
-        data->dieArea.emplace_back(Point(points.x[0], points.y[0]));
-        data->dieArea.emplace_back(Point(points.x[1], points.y[0]));
-        data->dieArea.emplace_back(Point(points.x[1], points.y[1]));
-        data->dieArea.emplace_back(Point(points.x[0], points.y[1]));
-        data->dieArea.emplace_back(Point(points.x[0], points.y[0]));
+        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[0] / data->pdk.scale));
+        data->dieArea.emplace_back(Point(points.x[1] / data->pdk.scale, points.y[0] / data->pdk.scale));
+        data->dieArea.emplace_back(Point(points.x[1] / data->pdk.scale, points.y[1] / data->pdk.scale));
+        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[1] / data->pdk.scale));
+        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[0] / data->pdk.scale));
     }
 
     Point leftTop { INT32_MAX, INT32_MAX };
@@ -281,31 +306,26 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
     uint32_t width = rightBottom.x - leftTop.x;
     uint32_t height = rightBottom.y - leftTop.y;
-    uint32_t scaledWidth = width / 100;
-    uint32_t scaledHeight = height / 100;
 
-    data->cellSize = 256;
-    data->numCellX = scaledWidth / data->cellSize;
-    data->numCellY = scaledHeight / data->cellSize;
-    data->cellStepX = (width + 1000) / data->numCellX;
-    data->cellStepY = (height + 1000) / data->numCellY;
-    data->cellOffsetX = leftTop.x - 500;
-    data->cellOffsetY = leftTop.y - 500;
+    data->cellSize = 478;
+    data->numCellX = (width + 100) / data->cellSize + 1;
+    data->numCellY = (height + 100) / data->cellSize + 1;
+    data->cellOffsetX = leftTop.x - 50;
+    data->cellOffsetY = leftTop.y - 50;
     data->cells = std::vector<std::vector<std::shared_ptr<WorkingCell>>>(data->numCellY, std::vector<std::shared_ptr<WorkingCell>>(data->numCellX, nullptr));
 
     for (std::size_t j = 0; j < data->numCellY; ++j) {
         for (std::size_t i = 0; i < data->numCellX; ++i) {
             WorkingCell cell {};
 
-            cell.originalPlace = Rectangle(
-                data->cellOffsetX + i * data->cellStepX,
-                data->cellOffsetY + j * data->cellStepY,
-                data->cellOffsetX + (i + 1) * data->cellStepX,
-                data->cellOffsetY + (j + 1) * data->cellStepY,
-                MetalLayer::NONE);
+            cell.originalPlace = Rectangle(data->cellOffsetX + i * data->cellSize, data->cellOffsetY + j * data->cellSize, data->cellOffsetX + (i + 1) * data->cellSize, data->cellOffsetY + (j + 1) * data->cellSize, MetalLayer::NONE);
 
             data->cells[j][i] = std::make_shared<WorkingCell>(cell);
         }
+    }
+
+    for (std::size_t i = 0; i < data->dieArea.size() - 1; ++i) {
+        addToWorkingCells(std::make_shared<Rectangle>(data->dieArea[i].x * data->pdk.scale, data->dieArea[i].y * data->pdk.scale, data->dieArea[i + 1].x * data->pdk.scale, data->dieArea[i + 1].y * data->pdk.scale, MetalLayer::NONE, RectangleType::DIEAREA), data);
     }
 
     return 0;
@@ -351,7 +371,8 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
     }
 
     for (auto& pin : macro.pins) {
-        bool isSignal = pin.use == "SIGNAL" && pin.name.find("clk", 0) == std::string::npos;
+        // This way for now
+        bool isSignal = pin.use == "SIGNAL" && pin.name.find("clk", 0) == std::string::npos && std::string(t_component->id()).find("clk", 0) == std::string::npos;
 
         for (auto& port : pin.ports) {
             for (auto& vertex : port.vertex) {
@@ -363,15 +384,12 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
 
             if (isSignal) {
                 addToWorkingCells(std::make_shared<Pin>(t_component->id() + pin.name, rect.vertex[0].x, rect.vertex[0].y, rect.vertex[2].x, rect.vertex[2].y, rect.layer), data);
-            } else {
-                addToWorkingCells(std::make_shared<Rectangle>(rect), data);
             }
-
-            // data->geometries.emplace_back(std::make_shared<Rectangle>(rect));
+            // else {
+            //     addToWorkingCells(std::make_shared<Rectangle>(rect), data);
+            // }
         }
     }
-
-    data->component.clear();
 
     return 0;
 };
@@ -382,9 +400,19 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
         return 2;
     }
 
+    RectangleType rType {};
+
+    if (t_net->hasUse()) {
+        if (strcmp(t_net->use(), "SIGNAL") == 0) {
+            rType = RectangleType::SIGNAL;
+        } else if (strcmp(t_net->use(), "CLOCK") == 0) {
+            rType = RectangleType::CLOCK;
+        }
+    }
+
     Data* data = static_cast<Data*>(t_userData);
 
-    if (strcmp(t_net->use(), "SIGNAL") == 0) {
+    if (rType == RectangleType::SIGNAL) {
         ++data->totalNets;
 
         std::vector<std::string> pinsNames(t_net->numConnections(), "");
@@ -487,24 +515,19 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                 if (viaName == nullptr) {
                     if (isStartSet && isEndSet) {
-                        RectangleType rType = strcmp(t_net->use(), "SIGNAL") == 0 ? RectangleType::SIGNAL : RectangleType::NONE;
-
                         if (start.x != end.x) {
-                            routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd + 1, end.y + 1, convertNameToML(layerName), rType);
+                            routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd, end.y, convertNameToML(layerName), rType);
                         } else {
-                            routRect = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x + 1, end.y + extEnd + 1, convertNameToML(layerName), rType);
+                            routRect = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x, end.y + extEnd, convertNameToML(layerName), rType);
                         }
                     } else if (isViaRect) {
                         routRect = std::make_shared<Rectangle>(rect);
                     }
                 } else {
-                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x + 1, start.y + 1, viaRuleToML(viaName), RectangleType::SIGNAL);
+                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x, start.y, viaRuleToML(viaName), rType);
                 }
 
-                if (routRect) {
-                    // data->geometries.emplace_back(routRect);
-                    addToWorkingCells(routRect, data);
-                }
+                addToWorkingCells(routRect, data);
             }
         }
     }
@@ -516,6 +539,16 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
 {
     if (t_type != defrSNetCbkType) {
         return 2;
+    }
+
+    RectangleType rType {};
+
+    if (t_net->hasUse()) {
+        if (strcmp(t_net->use(), "POWER") == 0) {
+            rType = RectangleType::POWER;
+        } else if (strcmp(t_net->use(), "GROUND") == 0) {
+            rType = RectangleType::GROUND;
+        }
     }
 
     Data* data = static_cast<Data*>(t_userData);
@@ -562,34 +595,31 @@ int Encoder::defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, vo
                 std::shared_ptr<Rectangle> rect {};
 
                 if (start.x != end.x) {
-                    rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, convertNameToML(layerName));
+                    rect = std::make_shared<Rectangle>(start.x, start.y - width / 2.0, end.x, end.y + width / 2.0, convertNameToML(layerName), rType);
                 } else {
-                    rect = std::make_shared<Rectangle>(start.x - width / 2.0, start.y, end.x + width / 2.0, end.y, convertNameToML(layerName));
+                    rect = std::make_shared<Rectangle>(start.x - width / 2.0, start.y, end.x + width / 2.0, end.y, convertNameToML(layerName), rType);
                 }
-
-                // data->geometries.emplace_back(rect);
 
                 addToWorkingCells(rect, data);
-            } else {
-                auto it = data->vias.find(viaName);
-
-                if (it != data->vias.end()) {
-                    for (auto instance : it->second) {
-                        for (auto& vertex : instance.vertex) {
-                            vertex.x += start.x;
-                            vertex.y += start.y;
-                        }
-
-                        std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(instance);
-
-                        // data->geometries.emplace_back(rect);
-
-                        addToWorkingCells(rect, data);
-                    }
-                } else {
-                    throw std::runtime_error("Via used before it's declaration!");
-                }
             }
+            // else {
+            //     auto it = data->vias.find(viaName);
+
+            //     if (it != data->vias.end()) {
+            //         for (auto instance : it->second) {
+            //             for (auto& vertex : instance.vertex) {
+            //                 vertex.x += start.x;
+            //                 vertex.y += start.y;
+            //             }
+
+            //             std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(instance);
+
+            //             addToWorkingCells(rect, data);
+            //         }
+            //     } else {
+            //         throw std::runtime_error("Via used before it's declaration!");
+            //     }
+            // }
         }
     }
 
@@ -603,7 +633,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
     }
 
     Data* data = static_cast<Data*>(t_userData);
-    bool isSignal = strcmp(t_pin->use(), "SIGNAL") == 0 && strcmp(t_pin->pinName(), "clk") != 0;
+    bool isSignal = strcmp(t_pin->use(), "SIGNAL") == 0 && std::string(t_pin->pinName()).find("clk", 0) == std::string::npos;
 
     for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
         defiPinPort* pinPort = t_pin->pinPort(i);
@@ -627,16 +657,13 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
             if (isSignal) {
                 std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, layerName);
 
-                // data->geometries.emplace_back(pinRect);
-
                 addToWorkingCells(pinRect, data);
-            } else {
-                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, layerName);
-
-                // data->geometries.emplace_back(rect);
-
-                addToWorkingCells(rect, data);
             }
+            // else {
+            //     std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, layerName);
+
+            //     addToWorkingCells(rect, data);
+            // }
         }
     }
 

@@ -29,7 +29,11 @@ enum class MetalLayer {
 
 enum class RectangleType {
     NONE = 0,
+    DIEAREA,
     SIGNAL,
+    CLOCK,
+    POWER,
+    GROUND,
     PIN
 };
 
@@ -45,7 +49,7 @@ struct Point {
     Point(const int32_t& t_x, const int32_t& t_y)
         : x(t_x)
         , y(t_y) {};
-    Point(const PointF&  t_point);
+    Point(const PointF& t_point);
 };
 
 struct PointF {
