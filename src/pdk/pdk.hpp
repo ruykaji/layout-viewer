@@ -34,6 +34,7 @@ struct PDK {
         ~Macro() = default;
     };
 
+    double scale { INT32_MAX };
     std::unordered_map<std::string, Macro> macros {};
 
     PDK() = default;

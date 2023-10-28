@@ -93,8 +93,10 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
 
     std::ofstream outFile(t_libPath, std::ios::binary);
 
+    WRITE_TO_BINARY(outFile, data->pdk.scale);
+
     size_t mapSize = data->pdk.macros.size();
-    outFile.write(reinterpret_cast<const char*>(&mapSize), sizeof(mapSize));
+    WRITE_TO_BINARY(outFile, mapSize);
 
     for (auto& [first, second] : data->pdk.macros) {
         // Write map objest's key
@@ -158,6 +160,8 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
 void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
 {
     std::ifstream inFile(t_libPath, std::ios::binary);
+
+    READ_FROM_BINARY(inFile, t_pdk.scale);
 
     size_t mapSize;
     READ_FROM_BINARY(inFile, mapSize);
@@ -277,7 +281,9 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
         return 2;
     }
 
+    Data* data = static_cast<Data*>(t_userData);
     PDK::Macro::Pin pin {};
+    double pinMaxScale {};
     const char* layer {};
 
     for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
@@ -296,6 +302,8 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
                 double xRight = portRect->xh;
                 double yBottom = portRect->yh;
 
+                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 2.0, std::abs(yBottom - yTop)) / 2.0);
+
                 pin.ports.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, convertNameToML(layer)));
                 break;
             }
@@ -305,8 +313,6 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
         }
     }
 
-    Data* data = static_cast<Data*>(t_userData);
-
     if (t_pin->hasUse()) {
         pin.use = std::string(t_pin->use());
     }
@@ -314,6 +320,9 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
     pin.name = std::string(t_pin->name());
     data->pdk.macros[data->lastMacro].pins.emplace_back(pin);
 
+    if (pinMaxScale != 0) {
+        data->pdk.scale = std::min(data->pdk.scale, pinMaxScale);
+    }
     return 0;
 }
 
