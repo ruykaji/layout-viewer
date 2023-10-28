@@ -1,5 +1,6 @@
 #include <QFileDialog>
 #include <QMenuBar>
+#include <QVBoxLayout>
 
 #include "viewer/MainWindow.hpp"
 
@@ -7,10 +8,22 @@ MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
     : QMainWindow(t_parent, t_flags)
 {
     m_viewerWidget = new ViewerWidget();
+    m_controlPanelWidget = new ControlPanelWidget();
 
     connect(this, &MainWindow::render, m_viewerWidget, &ViewerWidget::render);
+    connect(m_controlPanelWidget, &ControlPanelWidget::setDisplayMode, m_viewerWidget, &ViewerWidget::setDisplayMode);
 
-    setCentralWidget(m_viewerWidget);
+    QVBoxLayout* vbox = new QVBoxLayout();
+
+    vbox->addWidget(m_controlPanelWidget);
+    vbox->addWidget(m_viewerWidget);
+    vbox->setContentsMargins(0, 0, 0, 0);
+
+    QWidget* central = new QWidget();
+
+    central->setLayout(vbox);
+
+    setCentralWidget(central);
 
     createActions();
     createMenus();

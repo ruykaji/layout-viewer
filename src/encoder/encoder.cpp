@@ -139,17 +139,17 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
             }
         }
 
-        for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
-            for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
+        if (t_data->pins.count(pin->name) == 0 || (t_data->pins.count(pin->name) != 0 && t_data->pins[pin->name]->parentCell == t_data->cells[pinCoords.y][pinCoords.x])) {
+            for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+                for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                    Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
 
-                int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
-                int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
-                int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
-                int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
+                    int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
+                    int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
+                    int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
+                    int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
 
-                if (i == pinCoords.x && j == pinCoords.y) {
-                    if (t_data->pins.count(pin->name) == 0 || (t_data->pins.count(pin->name) != 0 && t_data->pins[pin->name]->parentCell == t_data->cells[j][i])) {
+                    if (i == pinCoords.x && j == pinCoords.y) {
                         std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, t_target->layer);
 
                         pinCut->parentCell = t_data->cells[j][i];

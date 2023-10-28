@@ -3,22 +3,25 @@
 
 #include <QMouseEvent>
 #include <QPaintEvent>
+#include <QPainter>
 #include <QResizeEvent>
 #include <QString>
 #include <QWheelEvent>
 #include <QWidget>
+#include <set>
 
 #include "encoder/encoder.hpp"
 
-struct RGB {
-    int r;
-    int g;
-    int b;
+struct PaintBufferObject {
+    QPolygon poly {};
+    QColor penColor {};
+    QColor brushColor {};
+    MetalLayer layer {};
 
-    bool operator<(const RGB& other) const
-    {
-        return std::tie(r, g, b) < std::tie(other.r, other.g, other.b);
-    }
+    PaintBufferObject() = default;
+    ~PaintBufferObject() = default;
+
+    bool operator<(const PaintBufferObject& other) const;
 };
 
 class ViewerWidget : public QWidget {
@@ -29,14 +32,22 @@ class ViewerWidget : public QWidget {
         DRAGING,
     };
 
+    enum class DisplayMode {
+        SCALED,
+        UNSCALED,
+        TENSOR
+    };
+
     Mode m_mode {};
+    DisplayMode m_displayMode { DisplayMode::SCALED };
 
     std::shared_ptr<Data> m_data {};
-    std::vector<RGB> m_colors {};
+    std::multiset<PaintBufferObject> m_paintBuffer {};
     Encoder m_encoder {};
 
     std::pair<int32_t, int32_t> m_max { 0, 0 };
     std::pair<int32_t, int32_t> m_min { INT32_MAX, INT32_MAX };
+
     double m_initialScale { 1.0 };
     double m_currentScale { 1.0 };
     double m_prevCurrenScale { 1.0 };
@@ -51,7 +62,8 @@ public:
     explicit ViewerWidget(QWidget* t_parent = nullptr);
 
 private:
-    void selectBrushAndPen(QPainter* t_painter, const MetalLayer& t_layer);
+    void setup();
+    std::pair<QColor, QColor> selectBrushAndPen(const MetalLayer& t_layer);
 
 protected:
     void paintEvent(QPaintEvent* t_event);
@@ -63,6 +75,7 @@ protected:
 
 public slots:
     void render(QString& t_fileName);
+    void setDisplayMode(const int8_t& t_mode);
 };
 
 #endif
