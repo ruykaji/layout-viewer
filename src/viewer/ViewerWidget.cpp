@@ -151,10 +151,17 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
 
+        double left = -m_moveAxesIn.x() - 100.0;
+        double top = -m_moveAxesIn.y() - 100.0;
+        double right = left + width() / m_currentScale + 100.0;
+        double bottom = top + height() / m_currentScale + 100.0;
+
         for (auto& bufferObject : m_paintBuffer) {
-            painter->setPen(QPen(bufferObject.penColor, 1.0 / m_currentScale));
-            painter->setBrush(QBrush(bufferObject.brushColor));
-            painter->drawPolygon(bufferObject.poly);
+            if ((bufferObject.poly[0].x() >= left && bufferObject.poly[0].y() >= top) || (bufferObject.poly[2].x() <= right && bufferObject.poly[2].y() <= bottom)) {
+                painter->setPen(QPen(bufferObject.penColor, 1.0 / m_currentScale));
+                painter->setBrush(QBrush(bufferObject.brushColor));
+                painter->drawPolygon(bufferObject.poly);
+            }
         };
 
         painter->end();

@@ -5,7 +5,7 @@
 ControlPanelWidget::ControlPanelWidget(QWidget* t_parent)
     : QMenuBar(t_parent)
 {
-    setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed));
+    setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
 
     createActions();
     createMenu();

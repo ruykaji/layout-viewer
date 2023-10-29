@@ -23,9 +23,9 @@ private:
     void createMenus();
     void createActions();
 
-public slots:
+public Q_SLOTS:
     void open();
-signals:
+Q_SIGNALS:
     void render(QString& t_fileName);
 };
 

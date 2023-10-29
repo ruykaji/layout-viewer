@@ -266,6 +266,16 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
 
     fclose(file);
     defrClear();
+
+    for (auto& row : t_data->cells) {
+        for (auto& cell : row) {
+            cell->source = torch::zeros({ 9, 480, 480 });
+
+            for (auto& pin : cell->pins) {
+                cell->source.slice(1, pin->vertex[0].y, pin->vertex[2].y).slice(2, pin->vertex[0].x, pin->vertex[2].x).fill_(pin->netIndex);
+            }
+        }
+    }
 }
 
 // Data callbacks

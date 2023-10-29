@@ -29,9 +29,9 @@ file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/
 file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
 file(GLOB PDK ${CMAKE_SOURCE_DIR}/src/pdk/*.cpp ${CMAKE_SOURCE_DIR}/src/pdk/*.hpp)
 
-set(DESKTOP ${GLOBAL} ${ENCODER} ${VIEWER} ${PDK})
+set(DESKTOP ${GLOBAL} ${ENCODER} ${PDK} ${VIEWER})
 add_executable(desktop desktop.cpp ${DESKTOP})
-target_link_libraries(desktop PRIVATE ${DEF} ${LEF} Qt6::Core Qt6::Gui Qt6::Widgets ${TORCH_LIBRARIES})
+target_link_libraries(desktop PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} Qt6::Core Qt6::Gui Qt6::Widgets)
 
 set(CONSOLE ${GLOBAL} ${ENCODER} ${PDK})
 add_executable(console console.cpp ${CONSOLE})

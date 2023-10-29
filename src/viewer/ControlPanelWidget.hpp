@@ -19,8 +19,8 @@ private:
     void createMenu();
     void createActions();
 
-public slots:
-signals:
+public Q_SLOTS:
+Q_SIGNALS:
     void setDisplayMode(const int8_t& t_mode);
 };
 

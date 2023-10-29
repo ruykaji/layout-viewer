@@ -73,7 +73,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* t_event);
     void wheelEvent(QWheelEvent* t_event);
 
-public slots:
+public Q_SLOTS:
     void render(QString& t_fileName);
     void setDisplayMode(const int8_t& t_mode);
 };

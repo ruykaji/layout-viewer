@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "torch_include.hpp"
 #include "geometry.hpp"
 #include "pdk/pdk.hpp"
 
@@ -46,6 +47,8 @@ struct WorkingCell {
     std::vector<std::shared_ptr<Rectangle>> routes {};
     std::vector<std::shared_ptr<Pin>> pins {};
     std::set<Net> nets {};
+
+    torch::Tensor source {};
 
     WorkingCell() = default;
     ~WorkingCell() = default;

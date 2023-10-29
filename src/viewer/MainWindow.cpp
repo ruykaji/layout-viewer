@@ -17,6 +17,7 @@ MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
 
     vbox->addWidget(m_controlPanelWidget);
     vbox->addWidget(m_viewerWidget);
+    vbox->setSpacing(0);
     vbox->setContentsMargins(0, 0, 0, 0);
 
     QWidget* central = new QWidget();
@@ -29,8 +30,8 @@ MainWindow::MainWindow(QWidget* t_parent, Qt::WindowFlags t_flags)
     createMenus();
 
     setWindowTitle("Viewer");
-    setMinimumSize(480, 480);
-    resize(480, 480);
+    setMinimumSize(1280, 1080);
+    resize(1280, 1080);
 }
 
 void MainWindow::createMenus()
