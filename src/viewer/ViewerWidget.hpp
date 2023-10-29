@@ -1,6 +1,7 @@
 #ifndef __DEF_VIEWER_WIDGET_H__
 #define __DEF_VIEWER_WIDGET_H__
 
+#include <QImage>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -18,8 +19,23 @@ struct PaintBufferObject {
     QColor brushColor {};
     MetalLayer layer {};
 
+    // For tensor display mode
+    bool isTensorMode { false };
+    Point position {};
+    QImage tensor {};
+
     PaintBufferObject() = default;
     ~PaintBufferObject() = default;
+
+    PaintBufferObject(const QPolygon& t_poly, const QColor& t_penColor, const QColor& t_brushColor, const MetalLayer& t_layer)
+        : poly(t_poly)
+        , penColor(t_penColor)
+        , brushColor(t_brushColor)
+        , layer(t_layer) {};
+    PaintBufferObject(const Point& t_position, const QImage& t_image)
+        : isTensorMode(true)
+        , position(t_position)
+        , tensor(t_image) {};
 
     bool operator<(const PaintBufferObject& other) const;
 };
@@ -64,6 +80,7 @@ public:
 private:
     void setup();
     std::pair<QColor, QColor> selectBrushAndPen(const MetalLayer& t_layer);
+    QImage torchMatrixToQImage(const torch::Tensor& t_matrix, const QColor& t_fillColor);
 
 protected:
     void paintEvent(QPaintEvent* t_event);

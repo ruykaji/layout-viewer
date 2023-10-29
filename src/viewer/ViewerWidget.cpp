@@ -38,20 +38,12 @@ void ViewerWidget::setup()
             m_min.second = std::min(y * scale, m_min.second);
         }
 
-        double newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first)), (height() * 0.8) / (std::abs(m_max.second - m_min.second)));
-
-        m_currentScale = m_currentScale / m_initialScale * newInitialScale;
-        m_initialScale = newInitialScale;
-
-        m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second)) / 2.0);
-        m_axesPos = m_moveAxesIn;
-
         // Setup paint buffer
         // ======================================================================================
 
         m_paintBuffer.clear();
 
-        int32_t shiftStep = m_displayMode == DisplayMode::SCALED ? 100 : 0;
+        int32_t shiftStep = m_displayMode == DisplayMode::SCALED ? 25 : 0;
         int32_t shiftX {};
         int32_t shiftY {};
 
@@ -100,7 +92,55 @@ void ViewerWidget::setup()
             shiftX = 0;
             shiftY += shiftStep;
         }
+    } else {
+        m_max = { 0, 0 };
+        m_min = { INT32_MAX, INT32_MAX };
+
+        for (auto& [x, y] : m_data->dieArea) {
+            m_max.first = std::max(x, m_max.first);
+            m_max.second = std::max(y, m_max.second);
+
+            m_min.first = std::min(x, m_min.first);
+            m_min.second = std::min(y, m_min.second);
+        }
+
+        // Setup paint buffer
+        // ======================================================================================
+
+        m_paintBuffer.clear();
+
+        int32_t shiftStep = 25;
+        int32_t shiftX {};
+        int32_t shiftY {};
+
+        for (int32_t j = 0; j < m_data->numCellY; ++j) {
+            for (int32_t i = 0; i < m_data->numCellX; ++i) {
+                QPolygon poly(QRect(i * (m_data->cellSize + 2) + shiftX, j * (m_data->cellSize + 2) + shiftY, m_data->cellSize + 2, m_data->cellSize + 2));
+
+                m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
+
+                std::pair<QColor, QColor> penBrushColor {};
+
+                for (int8_t k = 0; k < m_data->cells[j][i]->source.size(0); ++k) {
+                    penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
+                    m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[k], penBrushColor.first) });
+                }
+
+                shiftX += shiftStep;
+            }
+
+            shiftX = 0;
+            shiftY += shiftStep;
+        }
     }
+
+    double newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first)), (height() * 0.8) / (std::abs(m_max.second - m_min.second)));
+
+    m_currentScale = m_currentScale / m_initialScale * newInitialScale;
+    m_initialScale = newInitialScale;
+
+    m_moveAxesIn = QPointF((width() / m_currentScale - (m_max.first + m_min.first)) / 2.0, (height() / m_currentScale - (m_max.second + m_min.second)) / 2.0);
+    m_axesPos = m_moveAxesIn;
 }
 
 std::pair<QColor, QColor> ViewerWidget::selectBrushAndPen(const MetalLayer& t_layer)
@@ -140,6 +180,29 @@ std::pair<QColor, QColor> ViewerWidget::selectBrushAndPen(const MetalLayer& t_la
     }
 };
 
+QImage ViewerWidget::torchMatrixToQImage(const torch::Tensor& t_matrix, const QColor& t_fillColor)
+{
+    int32_t height = t_matrix.size(0);
+    int32_t width = t_matrix.size(1);
+    QImage image(width, height, QImage::Format_RGBA64);
+
+    for (int32_t y = 0; y < height; ++y) {
+        for (int32_t x = 0; x < width; ++x) {
+            if (t_matrix[y][x].item<float>() != 0.0) {
+                if (t_matrix[y][x].item<float>() > 0) {
+                    image.setPixelColor(x, y, t_fillColor);
+                } else {
+                    image.setPixelColor(x, y, QColor(255, 255, 255));
+                }
+            } else {
+                image.setPixelColor(x, y, QColor(0, 0, 0, 0));
+            }
+        }
+    }
+
+    return image;
+}
+
 void ViewerWidget::paintEvent(QPaintEvent* t_event)
 {
     Q_UNUSED(t_event);
@@ -151,16 +214,13 @@ void ViewerWidget::paintEvent(QPaintEvent* t_event)
         painter->translate(m_moveAxesIn * m_currentScale);
         painter->scale(m_currentScale, m_currentScale);
 
-        double left = -m_moveAxesIn.x() - 100.0;
-        double top = -m_moveAxesIn.y() - 100.0;
-        double right = left + width() / m_currentScale + 100.0;
-        double bottom = top + height() / m_currentScale + 100.0;
-
         for (auto& bufferObject : m_paintBuffer) {
-            if ((bufferObject.poly[0].x() >= left && bufferObject.poly[0].y() >= top) || (bufferObject.poly[2].x() <= right && bufferObject.poly[2].y() <= bottom)) {
+            if (!bufferObject.isTensorMode) {
                 painter->setPen(QPen(bufferObject.penColor, 1.0 / m_currentScale));
                 painter->setBrush(QBrush(bufferObject.brushColor));
                 painter->drawPolygon(bufferObject.poly);
+            } else {
+                painter->drawImage(QPoint(bufferObject.position.x, bufferObject.position.y), bufferObject.tensor);
             }
         };
 

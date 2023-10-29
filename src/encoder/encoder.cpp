@@ -267,12 +267,43 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
     fclose(file);
     defrClear();
 
-    for (auto& row : t_data->cells) {
-        for (auto& cell : row) {
-            cell->source = torch::zeros({ 9, 480, 480 });
+    for (int32_t j = 0; j < t_data->numCellY; ++j) {
+        for (int32_t i = 0; i < t_data->numCellX; ++i) {
+            Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
+            t_data->cells[j][i]->source = torch::zeros({ 8, t_data->cellSize + 2, t_data->cellSize + 2 });
+            t_data->cells[j][i]->source.slice(1, 0, t_data->cellSize + 2).slice(2, 0, 1) = -1;
+            t_data->cells[j][i]->source.slice(1, 0, 1).slice(2, 0, t_data->cellSize + 2) = -1;
 
-            for (auto& pin : cell->pins) {
-                cell->source.slice(1, pin->vertex[0].y, pin->vertex[2].y).slice(2, pin->vertex[0].x, pin->vertex[2].x).fill_(pin->netIndex);
+            if (i == t_data->numCellX - 1) {
+                t_data->cells[j][i]->source.slice(1, 0, t_data->cellSize + 2).slice(2, t_data->cellSize + 1, t_data->cellSize + 2) = -1;
+            }
+
+            if (j == t_data->numCellY - 1) {
+                t_data->cells[j][i]->source.slice(1, t_data->cellSize + 1, t_data->cellSize + 2).slice(2, 0, t_data->cellSize + 2) = -1;
+            }
+
+            for (const auto& pin : t_data->cells[j][i]->pins) {
+                int8_t layerIndex = static_cast<int8_t>(pin->layer);
+
+                if (layerIndex != 0) {
+                    t_data->cells[j][i]->source[layerIndex].slice(0, pin->vertex[0].y - moveBy.y, pin->vertex[2].y - moveBy.y).slice(1, pin->vertex[0].x - moveBy.x, pin->vertex[2].x - moveBy.x) = pin->netIndex;
+                }
+
+                t_data->cells[j][i]->source[0].slice(0, pin->vertex[0].y - moveBy.y, pin->vertex[2].y - moveBy.y).slice(1, pin->vertex[0].x - moveBy.x, pin->vertex[2].x - moveBy.x) = pin->netIndex;
+            }
+
+            for (const auto& geom : t_data->cells[j][i]->geometries) {
+                uint8_t layerIndex {};
+
+                if (geom->type != RectangleType::DIEAREA) {
+                    int8_t layerIndex = static_cast<int8_t>(geom->layer);
+
+                    if (layerIndex <= 6) {
+                        t_data->cells[j][i]->source[layerIndex].slice(0, geom->vertex[0].y - moveBy.y, geom->vertex[2].y - moveBy.y).slice(1, geom->vertex[0].x - moveBy.x, geom->vertex[2].x - moveBy.x) = 1.0;
+                    }
+                } else {
+                    t_data->cells[j][i]->source.slice(1, geom->vertex[0].y - moveBy.y, geom->vertex[2].y - moveBy.y).slice(2, geom->vertex[0].x - moveBy.x, geom->vertex[2].x - moveBy.x) = -1.0;
+                }
             }
         }
     }
@@ -441,6 +472,10 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
             for (const auto& pin : cell->pins) {
                 cellPinNames.insert(pin->name);
+
+                if (name == pin->name) {
+                    pin->netIndex = data->totalNets;
+                }
             }
 
             for (std::size_t i = 0; i < pinsNames.size(); ++i) {
@@ -450,7 +485,6 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
             }
 
             cell->nets.insert(net);
-            data->pins[name]->netIndex = data->totalNets;
         }
     }
 
