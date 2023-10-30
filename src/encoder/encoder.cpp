@@ -105,14 +105,22 @@ inline static void setGeomOrientation(const int8_t t_orientation, double& t_x, d
 
 inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data* t_data)
 {
+    static auto intersectionArea = [](const Rectangle& t_fl, const std::shared_ptr<Rectangle>& t_rl) {
+        return std::array<int32_t, 4> {
+            std::max(t_fl.vertex[0].x, t_rl->vertex[0].x),
+            std::max(t_fl.vertex[0].y, t_rl->vertex[0].y),
+            std::min(t_fl.vertex[2].x, t_rl->vertex[2].x),
+            std::min(t_fl.vertex[2].y, t_rl->vertex[2].y),
+        };
+    };
+
     for (auto& point : t_target->vertex) {
-        point.x /= t_data->pdk.scale;
-        point.y /= t_data->pdk.scale;
+        point = point / t_data->pdk.scale;
     }
 
-    Point lt = Point((t_target->vertex[0].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[0].y - t_data->cellOffsetY) / t_data->cellSize);
-    Point rt = Point((t_target->vertex[1].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[1].y - t_data->cellOffsetY) / t_data->cellSize);
-    Point lb = Point((t_target->vertex[3].x - t_data->cellOffsetX) / t_data->cellSize, (t_target->vertex[3].y - t_data->cellOffsetY) / t_data->cellSize);
+    Point lt = (t_target->vertex[0] - Point(t_data->cellOffsetX, t_data->cellOffsetY)) / t_data->cellSize;
+    Point rt = (t_target->vertex[1] - Point(t_data->cellOffsetX, t_data->cellOffsetY)) / t_data->cellSize;
+    Point lb = (t_target->vertex[3] - Point(t_data->cellOffsetX, t_data->cellOffsetY)) / t_data->cellSize;
 
     switch (t_target->type) {
     case RectangleType::PIN: {
@@ -124,12 +132,8 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-
-                int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
-                int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
-                int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
-                int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
-                int32_t area = (rbX - ltX) * (rbY - ltY);
+                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+                int32_t area = (inter[0] - inter[2]) * (inter[1] - inter[3]);
 
                 if (area > largestArea) {
                     largestArea = area;
@@ -143,19 +147,17 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
             for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
                 for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                     Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-
-                    int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
-                    int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
-                    int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
-                    int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
+                    std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
 
                     if (i == pinCoords.x && j == pinCoords.y) {
-                        std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, ltX, ltY, rbX, rbY, t_target->layer);
+                        std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, inter[0], inter[1], inter[2], inter[3], t_target->layer);
 
                         pinCut->parentCell = t_data->cells[j][i];
 
                         t_data->pins[pin->name] = pinCut;
                         t_data->cells[j][i]->pins.emplace_back(pinCut);
+
+                        return;
                     }
                 }
             }
@@ -166,19 +168,15 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
+                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
 
-                int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
-                int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
-                int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
-                int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
-
-                if (ltX != rbX && ltY != rbY) {
-                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                if (inter[0] != inter[2] && inter[1] != inter[3]) {
+                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
                 } else {
-                    rbX = std::min(matrixRect.vertex[2].x, rbX + 1);
-                    rbY = std::min(matrixRect.vertex[2].y, rbY + 1);
+                    inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
+                    inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
 
-                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
                 }
             }
         }
@@ -191,19 +189,15 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
+                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
 
-                int32_t ltX = std::max(matrixRect.vertex[0].x, t_target->vertex[0].x);
-                int32_t rbX = std::min(matrixRect.vertex[2].x, t_target->vertex[2].x);
-                int32_t ltY = std::max(matrixRect.vertex[0].y, t_target->vertex[0].y);
-                int32_t rbY = std::min(matrixRect.vertex[2].y, t_target->vertex[2].y);
-
-                if (ltX != rbX && ltY != rbY) {
-                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                if (inter[0] != inter[2] && inter[1] != inter[3]) {
+                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
                 } else {
-                    rbX = std::min(matrixRect.vertex[2].x, rbX + 1);
-                    rbY = std::min(matrixRect.vertex[2].y, rbY + 1);
+                    inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
+                    inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
 
-                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(ltX, ltY, rbX, rbY, t_target->layer, t_target->type));
+                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
                 }
             }
         }
@@ -253,7 +247,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
-    defrSetViaCbk(&defViaCallback);
+    // defrSetViaCbk(&defViaCallback);
 
     // Read file
     //=================================================================
@@ -271,6 +265,38 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
             t_data->cells[j][i]->source = torch::zeros({ 8, t_data->cellSize + 2, t_data->cellSize + 2 });
+
+            for (const auto& pin : t_data->cells[j][i]->pins) {
+                uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
+                int32_t x1 = pin->vertex[0].x - moveBy.x;
+                int32_t y1 = pin->vertex[0].y - moveBy.y;
+                int32_t x2 = pin->vertex[2].x - moveBy.x;
+                int32_t y2 = pin->vertex[2].y - moveBy.y;
+
+                if (layerIndex != 0) {
+                    t_data->cells[j][i]->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
+                }
+
+                t_data->cells[j][i]->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
+            }
+
+            for (const auto& geom : t_data->cells[j][i]->geometries) {
+                int32_t x1 = geom->vertex[0].x - moveBy.x;
+                int32_t y1 = geom->vertex[0].y - moveBy.y;
+                int32_t x2 = geom->vertex[2].x - moveBy.x;
+                int32_t y2 = geom->vertex[2].y - moveBy.y;
+
+                if (geom->type != RectangleType::DIEAREA) {
+                    uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+
+                    if (layerIndex <= 6) {
+                        t_data->cells[j][i]->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = 1.0;
+                    }
+                } else {
+                    t_data->cells[j][i]->source.slice(1, y1, y2).slice(2, x1, x2) = -1.0;
+                }
+            }
+
             t_data->cells[j][i]->source.slice(1, 0, t_data->cellSize + 2).slice(2, 0, 1) = -1;
             t_data->cells[j][i]->source.slice(1, 0, 1).slice(2, 0, t_data->cellSize + 2) = -1;
 
@@ -280,30 +306,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
 
             if (j == t_data->numCellY - 1) {
                 t_data->cells[j][i]->source.slice(1, t_data->cellSize + 1, t_data->cellSize + 2).slice(2, 0, t_data->cellSize + 2) = -1;
-            }
-
-            for (const auto& pin : t_data->cells[j][i]->pins) {
-                int8_t layerIndex = static_cast<int8_t>(pin->layer);
-
-                if (layerIndex != 0) {
-                    t_data->cells[j][i]->source[layerIndex].slice(0, pin->vertex[0].y - moveBy.y, pin->vertex[2].y - moveBy.y).slice(1, pin->vertex[0].x - moveBy.x, pin->vertex[2].x - moveBy.x) = pin->netIndex;
-                }
-
-                t_data->cells[j][i]->source[0].slice(0, pin->vertex[0].y - moveBy.y, pin->vertex[2].y - moveBy.y).slice(1, pin->vertex[0].x - moveBy.x, pin->vertex[2].x - moveBy.x) = pin->netIndex;
-            }
-
-            for (const auto& geom : t_data->cells[j][i]->geometries) {
-                uint8_t layerIndex {};
-
-                if (geom->type != RectangleType::DIEAREA) {
-                    int8_t layerIndex = static_cast<int8_t>(geom->layer);
-
-                    if (layerIndex <= 6) {
-                        t_data->cells[j][i]->source[layerIndex].slice(0, geom->vertex[0].y - moveBy.y, geom->vertex[2].y - moveBy.y).slice(1, geom->vertex[0].x - moveBy.x, geom->vertex[2].x - moveBy.x) = 1.0;
-                    }
-                } else {
-                    t_data->cells[j][i]->source.slice(1, geom->vertex[0].y - moveBy.y, geom->vertex[2].y - moveBy.y).slice(2, geom->vertex[0].x - moveBy.x, geom->vertex[2].x - moveBy.x) = -1.0;
-                }
             }
         }
     }
@@ -321,18 +323,18 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     defiPoints points = t_box->getPoint();
     Data* data = static_cast<Data*>(t_userData);
 
-    data->pdk.scale *= 1000.0;
+    data->pdk.scale = static_cast<int32_t>(data->pdk.scale * 1000.0);
 
     if (points.numPoints != 2) {
         for (std::size_t i = 0; i < points.numPoints; ++i) {
-            data->dieArea.emplace_back(Point(points.x[i] / data->pdk.scale, points.y[i] / data->pdk.scale));
+            data->dieArea.emplace_back(Point(points.x[i], points.y[i]) / data->pdk.scale);
         }
     } else {
-        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[0] / data->pdk.scale));
-        data->dieArea.emplace_back(Point(points.x[1] / data->pdk.scale, points.y[0] / data->pdk.scale));
-        data->dieArea.emplace_back(Point(points.x[1] / data->pdk.scale, points.y[1] / data->pdk.scale));
-        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[1] / data->pdk.scale));
-        data->dieArea.emplace_back(Point(points.x[0] / data->pdk.scale, points.y[0] / data->pdk.scale));
+        data->dieArea.emplace_back(Point(points.x[0], points.y[0]) / data->pdk.scale);
+        data->dieArea.emplace_back(Point(points.x[1], points.y[0]) / data->pdk.scale);
+        data->dieArea.emplace_back(Point(points.x[1], points.y[1]) / data->pdk.scale);
+        data->dieArea.emplace_back(Point(points.x[0], points.y[1]) / data->pdk.scale);
+        data->dieArea.emplace_back(Point(points.x[0], points.y[0]) / data->pdk.scale);
     }
 
     Point leftTop { INT32_MAX, INT32_MAX };
@@ -345,12 +347,12 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
         rightBottom.y = std::max(point.y, rightBottom.y);
     }
 
-    uint32_t width = rightBottom.x - leftTop.x;
-    uint32_t height = rightBottom.y - leftTop.y;
+    int32_t width = rightBottom.x - leftTop.x + 1;
+    int32_t height = rightBottom.y - leftTop.y + 1;
 
     data->cellSize = 478;
-    data->numCellX = (width + 100) / data->cellSize + 1;
-    data->numCellY = (height + 100) / data->cellSize + 1;
+    data->numCellX = std::ceil((width + 50.0) / data->cellSize);
+    data->numCellY = std::ceil((height + 50.0) / data->cellSize);
     data->cellOffsetX = leftTop.x - 50;
     data->cellOffsetY = leftTop.y - 50;
     data->cells = std::vector<std::vector<std::shared_ptr<WorkingCell>>>(data->numCellY, std::vector<std::shared_ptr<WorkingCell>>(data->numCellX, nullptr));
@@ -358,15 +360,24 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     for (std::size_t j = 0; j < data->numCellY; ++j) {
         for (std::size_t i = 0; i < data->numCellX; ++i) {
             WorkingCell cell {};
+            int32_t left = data->cellOffsetX + i * data->cellSize;
+            int32_t top = data->cellOffsetY + j * data->cellSize;
+            int32_t right = data->cellOffsetX + (i + 1) * data->cellSize;
+            int32_t bottom = data->cellOffsetY + (j + 1) * data->cellSize;
 
-            cell.originalPlace = Rectangle(data->cellOffsetX + i * data->cellSize, data->cellOffsetY + j * data->cellSize, data->cellOffsetX + (i + 1) * data->cellSize, data->cellOffsetY + (j + 1) * data->cellSize, MetalLayer::NONE);
+            cell.originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
 
             data->cells[j][i] = std::make_shared<WorkingCell>(cell);
         }
     }
 
     for (std::size_t i = 0; i < data->dieArea.size() - 1; ++i) {
-        addToWorkingCells(std::make_shared<Rectangle>(data->dieArea[i].x * data->pdk.scale, data->dieArea[i].y * data->pdk.scale, data->dieArea[i + 1].x * data->pdk.scale, data->dieArea[i + 1].y * data->pdk.scale, MetalLayer::NONE, RectangleType::DIEAREA), data);
+        int32_t left = data->dieArea[i].x * data->pdk.scale;
+        int32_t top = data->dieArea[i].y * data->pdk.scale;
+        int32_t right = data->dieArea[i + 1].x * data->pdk.scale;
+        int32_t bottom = data->dieArea[i + 1].y * data->pdk.scale;
+
+        addToWorkingCells(std::make_shared<Rectangle>(left, top, right, bottom, MetalLayer::NONE, RectangleType::DIEAREA), data);
     }
 
     return 0;
@@ -464,7 +475,6 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
         Net net;
         net.index = data->totalNets;
-        net.pins = std::vector<int8_t>(pinsNames.size(), 0);
 
         for (const auto& name : pinsNames) {
             std::shared_ptr<WorkingCell> cell = data->pins[name]->parentCell;
@@ -477,6 +487,8 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                     pin->netIndex = data->totalNets;
                 }
             }
+
+            net.pins = std::vector<int8_t>(pinsNames.size(), 0);
 
             for (std::size_t i = 0; i < pinsNames.size(); ++i) {
                 if (cellPinNames.find(pinsNames[i]) != cellPinNames.end()) {

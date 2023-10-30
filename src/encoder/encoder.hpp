@@ -9,15 +9,14 @@
 #include <string_view>
 
 #include "data.hpp"
-#include "macro.hpp"
 
 class Encoder {
 public:
     Encoder() = default;
     ~Encoder() = default;
 
-    COPY_CONSTRUCTOR_REMOVE(Encoder);
-    ASSIGN_OPERATOR_REMOVE(Encoder);
+    Encoder(const Encoder&) = delete;
+    Encoder& operator=(const Encoder&) = delete;
 
     void readDef(const std::string_view& t_fileName, const std::string& t_libPath, const std::shared_ptr<Data>& t_data);
 
@@ -28,7 +27,7 @@ private:
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 
     static int defComponentCallback(defrCallbackType_e t_type, defiComponent* t_component, void* t_userData);
-    
+
     static int defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);
 
     static int defSpecialNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_userData);

@@ -6,7 +6,6 @@
 #include <lefrReader.hpp>
 #include <string_view>
 
-#include "macro.hpp"
 #include "pdk/pdk.hpp"
 
 class Convertor {
@@ -19,8 +18,8 @@ public:
     Convertor() = default;
     ~Convertor() = default;
 
-    COPY_CONSTRUCTOR_REMOVE(Convertor);
-    ASSIGN_OPERATOR_REMOVE(Convertor);
+    Convertor(const Convertor&) = delete;
+    Convertor& operator=(const Convertor&) = delete;
 
     void serialize(const std::string& t_directory, const std::string& t_libPath);
     void deserialize(const std::string& t_libPath, PDK& t_pdk);
