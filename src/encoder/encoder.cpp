@@ -1,5 +1,4 @@
 #include <cmath>
-#include <execution>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -264,7 +263,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
-            t_data->cells[j][i]->source = torch::zeros({ 8, t_data->cellSize + 2, t_data->cellSize + 2 });
 
             for (const auto& pin : t_data->cells[j][i]->pins) {
                 uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
@@ -365,6 +363,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
             int32_t right = data->cellOffsetX + (i + 1) * data->cellSize;
             int32_t bottom = data->cellOffsetY + (j + 1) * data->cellSize;
 
+            cell.source = torch::zeros({ 8, data->cellSize + 2, data->cellSize + 2 });
             cell.originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
 
             data->cells[j][i] = std::make_shared<WorkingCell>(cell);

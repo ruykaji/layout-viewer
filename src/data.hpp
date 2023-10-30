@@ -8,9 +8,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "torch_include.hpp"
 #include "geometry.hpp"
 #include "pdk/pdk.hpp"
+#include "torch_include.hpp"
 
 struct Pin;
 struct Net;
@@ -24,7 +24,7 @@ struct Pin : public Rectangle {
     Pin() = default;
     ~Pin() = default;
 
-    Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const MetalLayer& t_layer, const int32_t& t_netIndex = 0)
+    explicit Pin(const std::string& t_name, const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const MetalLayer& t_layer, const int32_t& t_netIndex = 0)
         : name(t_name)
         , netIndex(t_netIndex)
         , Rectangle(t_xl, t_yl, t_xh, t_yh, t_layer, RectangleType::PIN) {};
