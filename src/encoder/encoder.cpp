@@ -8,6 +8,15 @@
 #include "encoder/encoder.hpp"
 #include "pdk/convertor.hpp"
 
+ThreadPool Encoder::s_threadPool = ThreadPool();
+
+Encoder::Encoder(const std::string& t_libPath)
+{
+    Convertor convertor {};
+
+    convertor.deserialize(t_libPath, m_pdk);
+}
+
 // General functions
 // ======================================================================================
 
@@ -168,15 +177,17 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
                 std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+                std::shared_ptr<Rectangle> rect {};
 
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
-                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 } else {
                     inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
                     inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
-
-                    t_data->cells[j][i]->routes.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 }
+
+                t_data->cells[j][i]->routes.emplace_back(rect);
             }
         }
         break;
@@ -189,15 +200,17 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
                 std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+                std::shared_ptr<Rectangle> rect {};
 
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
-                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 } else {
                     inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
                     inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
-
-                    t_data->cells[j][i]->geometries.emplace_back(std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type));
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 }
+
+                t_data->cells[j][i]->geometries.emplace_back(rect);
             }
         }
         break;
@@ -210,11 +223,9 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
 // Class methods
 // ======================================================================================
 
-void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_libPath, const std::shared_ptr<Data>& t_data)
+void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data)
 {
-    // Load PDK
-    Convertor convertor {};
-    convertor.deserialize(t_libPath, t_data->pdk);
+    t_data->pdk = m_pdk;
 
     // Init session
     //=================================================================
@@ -262,49 +273,42 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::string& t_l
 
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
+            std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
 
-            for (const auto& pin : t_data->cells[j][i]->pins) {
-                uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
-                int32_t x1 = pin->vertex[0].x - moveBy.x;
-                int32_t y1 = pin->vertex[0].y - moveBy.y;
-                int32_t x2 = pin->vertex[2].x - moveBy.x;
-                int32_t y2 = pin->vertex[2].y - moveBy.y;
+            s_threadPool.enqueue([](std::shared_ptr<WorkingCell> cell, Point moveBy) {
+                for (const auto& pin : cell->pins) {
+                    uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
+                    int32_t x1 = pin->vertex[0].x - moveBy.x;
+                    int32_t y1 = pin->vertex[0].y - moveBy.y;
+                    int32_t x2 = pin->vertex[2].x - moveBy.x;
+                    int32_t y2 = pin->vertex[2].y - moveBy.y;
 
-                if (layerIndex != 0) {
-                    t_data->cells[j][i]->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
-                }
-
-                t_data->cells[j][i]->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
-            }
-
-            for (const auto& geom : t_data->cells[j][i]->geometries) {
-                int32_t x1 = geom->vertex[0].x - moveBy.x;
-                int32_t y1 = geom->vertex[0].y - moveBy.y;
-                int32_t x2 = geom->vertex[2].x - moveBy.x;
-                int32_t y2 = geom->vertex[2].y - moveBy.y;
-
-                if (geom->type != RectangleType::DIEAREA) {
-                    uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
-
-                    if (layerIndex <= 6) {
-                        t_data->cells[j][i]->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = 1.0;
+                    if (layerIndex != 0) {
+                        cell->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
                     }
-                } else {
-                    t_data->cells[j][i]->source.slice(1, y1, y2).slice(2, x1, x2) = -1.0;
+
+                    cell->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
                 }
-            }
 
-            t_data->cells[j][i]->source.slice(1, 0, t_data->cellSize + 2).slice(2, 0, 1) = -1;
-            t_data->cells[j][i]->source.slice(1, 0, 1).slice(2, 0, t_data->cellSize + 2) = -1;
+                for (const auto& geom : cell->geometries) {
+                    int32_t x1 = geom->vertex[0].x - moveBy.x;
+                    int32_t y1 = geom->vertex[0].y - moveBy.y;
+                    int32_t x2 = geom->vertex[2].x - moveBy.x;
+                    int32_t y2 = geom->vertex[2].y - moveBy.y;
 
-            if (i == t_data->numCellX - 1) {
-                t_data->cells[j][i]->source.slice(1, 0, t_data->cellSize + 2).slice(2, t_data->cellSize + 1, t_data->cellSize + 2) = -1;
-            }
+                    if (geom->type != RectangleType::DIEAREA) {
+                        uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-            if (j == t_data->numCellY - 1) {
-                t_data->cells[j][i]->source.slice(1, t_data->cellSize + 1, t_data->cellSize + 2).slice(2, 0, t_data->cellSize + 2) = -1;
-            }
+                        if (layerIndex <= 6) {
+                            cell->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = 1.0;
+                        }
+                    } else {
+                        cell->source.slice(1, y1, y2).slice(2, x1, x2) = -1.0;
+                    }
+                }
+            },
+                cell, moveBy);
         }
     }
 }
@@ -357,16 +361,27 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
     for (std::size_t j = 0; j < data->numCellY; ++j) {
         for (std::size_t i = 0; i < data->numCellX; ++i) {
-            WorkingCell cell {};
             int32_t left = data->cellOffsetX + i * data->cellSize;
             int32_t top = data->cellOffsetY + j * data->cellSize;
             int32_t right = data->cellOffsetX + (i + 1) * data->cellSize;
             int32_t bottom = data->cellOffsetY + (j + 1) * data->cellSize;
 
-            cell.source = torch::zeros({ 8, data->cellSize + 2, data->cellSize + 2 });
-            cell.originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
+            std::shared_ptr<WorkingCell> cell = std::make_shared<WorkingCell>();
 
-            data->cells[j][i] = std::make_shared<WorkingCell>(cell);
+            cell->originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
+            cell->source = torch::zeros({ 8, data->cellSize + 2, data->cellSize + 2 });
+            cell->source.slice(1, 0, data->cellSize + 2).slice(2, 0, 1) = -1.0;
+            cell->source.slice(1, 0, 1).slice(2, 0, data->cellSize + 2) = -1.0;
+
+            if (i == data->numCellX - 1) {
+                cell->source.slice(1, 0, data->cellSize + 2).slice(2, data->cellSize + 1, data->cellSize + 2) = -1.0;
+            }
+
+            if (j == data->numCellY - 1) {
+                cell->source.slice(1, data->cellSize + 1, data->cellSize + 2).slice(2, 0, data->cellSize + 2) = -1.0;
+            }
+
+            data->cells[j][i] = cell;
         }
     }
 
@@ -389,18 +404,15 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
     }
 
     Data* data = static_cast<Data*>(t_userData);
-    PDK::Macro macro = data->pdk.macros.at(t_component->name());
-
-    // Component orientation and placement
-    // =====================================================================
-
-    PointF leftBottom = { INT32_MAX, INT32_MAX };
-    PointF newLeftBottom { INT32_MAX, INT32_MAX };
     Point placed {};
 
     if (t_component->isFixed() || t_component->isPlaced()) {
         placed = Point(t_component->placementX(), t_component->placementY());
     }
+
+    PDK::Macro macro = data->pdk.macros.at(t_component->name());
+    PointF leftBottom = { INT32_MAX, INT32_MAX };
+    PointF newLeftBottom { INT32_MAX, INT32_MAX };
 
     for (auto& pin : macro.pins) {
         for (auto& port : pin.ports) {
@@ -422,7 +434,6 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
     }
 
     for (auto& pin : macro.pins) {
-        // This way for now
         bool isSignal = pin.use == "SIGNAL" && pin.name.find("clk", 0) == std::string::npos && std::string(t_component->id()).find("clk", 0) == std::string::npos;
 
         for (auto& port : pin.ports) {
@@ -725,40 +736,40 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
     return 0;
 };
 
-int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData)
-{
-    if (t_type != defrViaCbkType) {
-        return 2;
-    }
+// int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData)
+// {
+//     if (t_type != defrViaCbkType) {
+//         return 2;
+//     }
 
-    char *viaRuleName {}, *botLayer {}, *cutLayer {}, *topLayer {};
-    int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {}, numRow {}, numCol {};
+//     char *viaRuleName {}, *botLayer {}, *cutLayer {}, *topLayer {};
+//     int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {}, numRow {}, numCol {};
 
-    t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
-    t_via->rowCol(&numRow, &numCol);
+//     t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
+//     t_via->rowCol(&numRow, &numCol);
 
-    numRow = std::max(1, numRow);
-    numCol = std::max(1, numCol);
+//     numRow = std::max(1, numRow);
+//     numCol = std::max(1, numCol);
 
-    MetalLayer layer = viaRuleToML(viaRuleName);
-    std::vector<Rectangle> via {};
+//     MetalLayer layer = viaRuleToML(viaRuleName);
+//     std::vector<Rectangle> via {};
 
-    via.reserve(numRow * numCol);
+//     via.reserve(numRow * numCol);
 
-    for (int32_t i = 0; i < numRow; ++i) {
-        for (int32_t j = 0; j < numCol; ++j) {
-            int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
-            int32_t yTop = yCutSpacing * i + ySize * i - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
-            int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
-            int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
+//     for (int32_t i = 0; i < numRow; ++i) {
+//         for (int32_t j = 0; j < numCol; ++j) {
+//             int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
+//             int32_t yTop = yCutSpacing * i + ySize * i - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
+//             int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
+//             int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
 
-            via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, layer));
-        }
-    }
+//             via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, layer));
+//         }
+//     }
 
-    Data* data = static_cast<Data*>(t_userData);
+//     Data* data = static_cast<Data*>(t_userData);
 
-    data->vias[t_via->name()] = via;
+//     data->vias[t_via->name()] = via;
 
-    return 0;
-};
+//     return 0;
+// };

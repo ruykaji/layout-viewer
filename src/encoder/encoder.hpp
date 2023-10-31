@@ -9,16 +9,23 @@
 #include <string_view>
 
 #include "data.hpp"
+#include "thread_pool.hpp"
 
 class Encoder {
+    static ThreadPool s_threadPool;
+
+    PDK m_pdk;
+
 public:
     Encoder() = default;
     ~Encoder() = default;
 
+    Encoder(const std::string& t_libPath);
+
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
 
-    void readDef(const std::string_view& t_fileName, const std::string& t_libPath, const std::shared_ptr<Data>& t_data);
+    void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data);
 
 private:
     // Def callbacks
@@ -34,7 +41,7 @@ private:
 
     static int defPinCallback(defrCallbackType_e t_type, defiPin* t_pinProp, void* t_userData);
 
-    static int defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData);
+    // static int defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData);
 };
 
 #endif
