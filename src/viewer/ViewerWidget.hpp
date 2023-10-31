@@ -59,7 +59,7 @@ class ViewerWidget : public QWidget {
 
     std::shared_ptr<Data> m_data {};
     std::multiset<PaintBufferObject> m_paintBuffer {};
-    Encoder m_encoder {};
+    std::unique_ptr<Encoder> m_encoder {};
 
     std::pair<int32_t, int32_t> m_max { 0, 0 };
     std::pair<int32_t, int32_t> m_min { INT32_MAX, INT32_MAX };

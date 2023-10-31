@@ -12,6 +12,7 @@ bool PaintBufferObject::operator<(const PaintBufferObject& other) const
 ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
+    m_encoder = std::make_unique<Encoder>("./skyWater130.bin");
     m_data = std::make_shared<Data>();
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -302,7 +303,7 @@ void ViewerWidget::wheelEvent(QWheelEvent* t_event)
 
 void ViewerWidget::render(QString& t_fileName)
 {
-    m_encoder.readDef(std::string_view(t_fileName.toStdString()), "./skyWater130.bin", m_data);
+    m_encoder->readDef(std::string_view(t_fileName.toStdString()),  m_data);
 
     setup();
     update();

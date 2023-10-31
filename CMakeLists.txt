@@ -29,10 +29,12 @@ file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/
 file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
 file(GLOB PDK ${CMAKE_SOURCE_DIR}/src/pdk/*.cpp ${CMAKE_SOURCE_DIR}/src/pdk/*.hpp)
 
+# Desktop Version
 set(DESKTOP ${GLOBAL} ${ENCODER} ${PDK} ${VIEWER})
 add_executable(desktop desktop.cpp ${DESKTOP})
 target_link_libraries(desktop PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} Qt6::Core Qt6::Gui Qt6::Widgets)
 
+# Console Version
 set(CONSOLE ${GLOBAL} ${ENCODER} ${PDK})
 add_executable(console console.cpp ${CONSOLE})
 target_link_libraries(console PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES})

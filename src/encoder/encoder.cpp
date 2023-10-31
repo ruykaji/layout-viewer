@@ -276,7 +276,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
             std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
 
-            s_threadPool.enqueue([](std::shared_ptr<WorkingCell> cell, Point moveBy) {
+            s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
                 for (const auto& pin : cell->pins) {
                     uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
                     int32_t x1 = pin->vertex[0].x - moveBy.x;
@@ -290,7 +290,10 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
 
                     cell->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
                 }
+            },
+                cell, moveBy);
 
+            s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
                 for (const auto& geom : cell->geometries) {
                     int32_t x1 = geom->vertex[0].x - moveBy.x;
                     int32_t y1 = geom->vertex[0].y - moveBy.y;
@@ -311,6 +314,8 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 cell, moveBy);
         }
     }
+
+    s_threadPool.wait();
 }
 
 // Data callbacks
