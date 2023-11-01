@@ -64,14 +64,14 @@ void ViewerWidget::setup()
                 for (auto& pin : col->pins) {
                     QPolygon poly {};
 
-                    poly.append(QPoint(pin->vertex[0].x * scale + shiftX, pin->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(pin->vertex[1].x * scale + shiftX, pin->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(pin->vertex[2].x * scale + shiftX, pin->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(pin->vertex[3].x * scale + shiftX, pin->vertex[3].y * scale + shiftY));
+                    poly.append(QPoint(pin.second->vertex[0].x * scale + shiftX, pin.second->vertex[0].y * scale + shiftY));
+                    poly.append(QPoint(pin.second->vertex[1].x * scale + shiftX, pin.second->vertex[1].y * scale + shiftY));
+                    poly.append(QPoint(pin.second->vertex[2].x * scale + shiftX, pin.second->vertex[2].y * scale + shiftY));
+                    poly.append(QPoint(pin.second->vertex[3].x * scale + shiftX, pin.second->vertex[3].y * scale + shiftY));
 
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin->layer);
+                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin.second->layer);
 
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin->layer });
+                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin.second->layer });
                 }
 
                 for (auto& geom : col->geometries) {

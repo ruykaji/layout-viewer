@@ -278,17 +278,17 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
 
             s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
                 for (const auto& pin : cell->pins) {
-                    uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
-                    int32_t x1 = pin->vertex[0].x - moveBy.x;
-                    int32_t y1 = pin->vertex[0].y - moveBy.y;
-                    int32_t x2 = pin->vertex[2].x - moveBy.x;
-                    int32_t y2 = pin->vertex[2].y - moveBy.y;
+                    uint8_t layerIndex = static_cast<uint8_t>(pin.second->layer);
+                    int32_t x1 = pin.second->vertex[0].x - moveBy.x;
+                    int32_t y1 = pin.second->vertex[0].y - moveBy.y;
+                    int32_t x2 = pin.second->vertex[2].x - moveBy.x;
+                    int32_t y2 = pin.second->vertex[2].y - moveBy.y;
 
                     if (layerIndex != 0) {
-                        cell->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
+                        cell->source[layerIndex].slice(0, y1, y2).slice(1, x1, x2) = pin.second->netIndex;
                     }
 
-                    cell->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin->netIndex;
+                    cell->source[0].slice(0, y1, y2).slice(1, x1, x2) = pin.second->netIndex;
                 }
             },
                 cell, moveBy);
