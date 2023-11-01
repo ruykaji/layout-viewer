@@ -163,7 +163,7 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
                         pinCut->parentCell = t_data->cells[j][i];
 
                         t_data->pins[pin->name] = pinCut;
-                        t_data->cells[j][i]->pins.emplace_back(pinCut);
+                        t_data->cells[j][i]->pins.insert(std::pair(pin->name, pinCut));
 
                         return;
                     }
@@ -172,26 +172,26 @@ inline static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target,
         }
         break;
     }
-    case RectangleType::SIGNAL: {
-        for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
-            for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
-                std::shared_ptr<Rectangle> rect {};
+    // case RectangleType::SIGNAL: {
+    //     for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+    //         for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+    //             Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
+    //             std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+    //             std::shared_ptr<Rectangle> rect {};
 
-                if (inter[0] != inter[2] && inter[1] != inter[3]) {
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
-                } else {
-                    inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
-                    inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
-                }
+    //             if (inter[0] != inter[2] && inter[1] != inter[3]) {
+    //                 rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
+    //             } else {
+    //                 inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
+    //                 inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
+    //                 rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
+    //             }
 
-                t_data->cells[j][i]->routes.emplace_back(rect);
-            }
-        }
-        break;
-    }
+    //             t_data->cells[j][i]->routes.emplace_back(rect);
+    //         }
+    //     }
+    //     break;
+    // }
     case RectangleType::CLOCK:
     case RectangleType::POWER:
     case RectangleType::GROUND:
@@ -488,30 +488,28 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
             pinsNames[i] = std::string(t_net->instance(i)) + t_net->pin(i);
         }
 
-        Net net;
-        net.index = data->totalNets;
+        Net net { data->totalNets, std::vector<int8_t>(pinsNames.size(), 0) };
 
         for (const auto& name : pinsNames) {
             std::shared_ptr<WorkingCell> cell = data->pins[name]->parentCell;
-            std::unordered_set<std::string> cellPinNames {};
 
-            for (const auto& pin : cell->pins) {
-                cellPinNames.insert(pin->name);
+            if(cell->nets.count(net.index) == 0){
+                for (std::size_t i = 0; i < pinsNames.size(); ++i) {
+                    auto range = cell->pins.equal_range(pinsNames[i]);
 
-                if (name == pin->name) {
-                    pin->netIndex = data->totalNets;
+                    if (range.first != range.second) {
+                        net.pins[i] = 1;
+
+                        for (auto& it = range.first; it != range.second; ++it) {
+                            it->second->netIndex = data->totalNets;
+                        }
+                    }else{
+                        net.pins[i] = 0;
+                    }
                 }
+
+                cell->nets[net.index] = net;
             }
-
-            net.pins = std::vector<int8_t>(pinsNames.size(), 0);
-
-            for (std::size_t i = 0; i < pinsNames.size(); ++i) {
-                if (cellPinNames.find(pinsNames[i]) != cellPinNames.end()) {
-                    net.pins[i] = 1;
-                }
-            }
-
-            cell->nets.insert(net);
         }
     }
 

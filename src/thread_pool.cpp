@@ -1,6 +1,6 @@
 #include "thread_pool.hpp"
 
-ThreadPool::ThreadPool()
+ThreadPool::ThreadPool() noexcept
 {
     uint32_t available = std::thread::hardware_concurrency();
     uint32_t numThreads = available > 8 ? 8 : available;
@@ -39,7 +39,7 @@ ThreadPool::ThreadPool()
     }
 }
 
-ThreadPool::~ThreadPool()
+ThreadPool::~ThreadPool() noexcept
 {
     wait();
 

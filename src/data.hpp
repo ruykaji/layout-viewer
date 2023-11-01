@@ -3,7 +3,6 @@
 
 #include <array>
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,9 +43,9 @@ struct WorkingCell {
     Rectangle originalPlace {};
 
     std::vector<std::shared_ptr<Rectangle>> geometries {};
-    std::vector<std::shared_ptr<Rectangle>> routes {};
-    std::vector<std::shared_ptr<Pin>> pins {};
-    std::set<Net> nets {};
+    // std::vector<std::shared_ptr<Rectangle>> routes {};
+    std::unordered_multimap<std::string, std::shared_ptr<Pin>> pins {};
+    std::unordered_map<int32_t, Net> nets {};
 
     torch::Tensor source {};
 
