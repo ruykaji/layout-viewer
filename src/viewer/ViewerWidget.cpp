@@ -77,19 +77,6 @@ void ViewerWidget::setup()
                     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin.second->layer });
                 }
 
-                for (auto& rout : col->routes) {
-                    QPolygon poly {};
-
-                    poly.append(QPoint(rout->vertex[0].x * scale + shiftX, rout->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[1].x * scale + shiftX, rout->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[2].x * scale + shiftX, rout->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[3].x * scale + shiftX, rout->vertex[3].y * scale + shiftY));
-
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(rout->layer);
-
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, rout->layer });
-                }
-
                 for (auto& geom : col->geometries) {
                     QPolygon poly {};
 

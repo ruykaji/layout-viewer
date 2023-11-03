@@ -178,21 +178,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 cell, moveBy);
 
             s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
-                for (const auto& rout : cell->routes) {
-                    auto vertexes = rout->vertex;
-
-                    for (auto& vertex : vertexes) {
-                        vertex -= moveBy;
-                    }
-
-                    uint8_t layerIndex = static_cast<uint8_t>(rout->layer);
-
-                    cell->source[layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-                }
-            },
-                cell, moveBy);
-
-            s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
                 for (const auto& geom : cell->geometries) {
                     auto vertexes = geom->vertex;
 
@@ -275,26 +260,6 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
                         return;
                     }
                 }
-            }
-        }
-        break;
-    }
-    case RectangleType::SIGNAL: {
-        for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
-            for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
-                std::shared_ptr<Rectangle> rect {};
-
-                if (inter[0] != inter[2] && inter[1] != inter[3]) {
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
-                } else {
-                    inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
-                    inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
-                }
-
-                t_data->cells[j][i]->routes.emplace_back(rect);
             }
         }
         break;
