@@ -9,18 +9,17 @@
 #include <string_view>
 
 #include "data.hpp"
+#include "pdk/pdk.hpp"
 #include "thread_pool.hpp"
 
 class Encoder {
     static ThreadPool s_threadPool;
 
-    PDK m_pdk;
-
 public:
+    static PDK s_pdk;
+    
     Encoder() = default;
     ~Encoder() = default;
-
-    Encoder(const std::string& t_libPath);
 
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
@@ -28,8 +27,10 @@ public:
     void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data);
 
 private:
+    static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data* t_data);
+
     // Def callbacks
-    // ==================================================================================================================================================
+    // ======================================================================================
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 

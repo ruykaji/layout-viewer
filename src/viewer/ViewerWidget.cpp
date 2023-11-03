@@ -2,6 +2,7 @@
 #include <QPalette>
 #include <random>
 
+#include "pdk/convertor.hpp"
 #include "viewer/ViewerWidget.hpp"
 
 bool PaintBufferObject::operator<(const PaintBufferObject& other) const
@@ -12,7 +13,9 @@ bool PaintBufferObject::operator<(const PaintBufferObject& other) const
 ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
-    m_encoder = std::make_unique<Encoder>("./skyWater130.bin");
+    Convertor::deserialize("./skyWater130.bin", Encoder::s_pdk);
+
+    m_encoder = std::make_unique<Encoder>();
     m_data = std::make_shared<Data>();
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -29,7 +32,7 @@ void ViewerWidget::setup()
         m_max = { 0, 0 };
         m_min = { INT32_MAX, INT32_MAX };
 
-        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : m_data->pdk.scale;
+        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : Encoder::s_pdk.scale;
 
         for (auto& [x, y] : m_data->dieArea) {
             m_max.first = std::max(x * scale, m_max.first);
@@ -72,6 +75,19 @@ void ViewerWidget::setup()
                     std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin.second->layer);
 
                     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin.second->layer });
+                }
+
+                for (auto& rout : col->routes) {
+                    QPolygon poly {};
+
+                    poly.append(QPoint(rout->vertex[0].x * scale + shiftX, rout->vertex[0].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[1].x * scale + shiftX, rout->vertex[1].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[2].x * scale + shiftX, rout->vertex[2].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[3].x * scale + shiftX, rout->vertex[3].y * scale + shiftY));
+
+                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(rout->layer);
+
+                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, rout->layer });
                 }
 
                 for (auto& geom : col->geometries) {
@@ -303,7 +319,7 @@ void ViewerWidget::wheelEvent(QWheelEvent* t_event)
 
 void ViewerWidget::render(QString& t_fileName)
 {
-    m_encoder->readDef(std::string_view(t_fileName.toStdString()),  m_data);
+    m_encoder->readDef(std::string_view(t_fileName.toStdString()), m_data);
 
     setup();
     update();

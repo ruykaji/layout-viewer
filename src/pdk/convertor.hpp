@@ -21,8 +21,8 @@ public:
     Convertor(const Convertor&) = delete;
     Convertor& operator=(const Convertor&) = delete;
 
-    void serialize(const std::string& t_directory, const std::string& t_libPath);
-    void deserialize(const std::string& t_libPath, PDK& t_pdk);
+    static void serialize(const std::string& t_directory, const std::string& t_libPath);
+    static void deserialize(const std::string& t_libPath, PDK& t_pdk);
 
 private:
     static int macroCallback(lefrCallbackType_e t_type, const char* t_string, void* t_userData);

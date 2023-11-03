@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "geometry.hpp"
-#include "pdk/pdk.hpp"
 #include "torch_include.hpp"
 
 struct Pin;
@@ -43,7 +42,7 @@ struct WorkingCell {
     Rectangle originalPlace {};
 
     std::vector<std::shared_ptr<Rectangle>> geometries {};
-    // std::vector<std::shared_ptr<Rectangle>> routes {};
+    std::vector<std::shared_ptr<Rectangle>> routes {};
     std::unordered_multimap<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<int32_t, Net> nets {};
 
@@ -65,8 +64,6 @@ struct Data {
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
     std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<std::string, std::vector<Rectangle>> vias {};
-
-    PDK pdk {};
 
     Data() = default;
     ~Data();
