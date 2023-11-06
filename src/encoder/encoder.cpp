@@ -159,6 +159,28 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - 1, j * t_data->cellSize + t_data->cellOffsetY - 1);
 
             s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
+                std::size_t totalSize = 0;
+
+                for (auto& [_, net] : cell->nets) {
+                    totalSize += net.pins.size();
+                    std::sort(net.pins.begin(), net.pins.end());
+                }
+
+                cell->cellInformation = torch::zeros({ 1, static_cast<int32_t>(totalSize), 1 });
+
+                std::size_t start = 0;
+
+                for (const auto& [_, net] : cell->nets) {
+                    for (std::size_t j = 0; j < net.pins.size(); ++j) {
+                        cell->cellInformation[0][start + j][0] = net.pins[j] * net.index;
+                    }
+
+                    start += net.pins.size();
+                }
+            },
+                cell, moveBy);
+
+            s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
                 for (const auto& pin : cell->pins) {
                     auto vertexes = pin.second->vertex;
 
@@ -169,10 +191,10 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     uint8_t layerIndex = static_cast<uint8_t>(pin.second->layer);
 
                     if (layerIndex != 0) {
-                        cell->source[layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = pin.second->netIndex;
+                        cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = pin.second->netIndex;
                     }
 
-                    cell->source[0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = pin.second->netIndex;
+                    cell->source[0][0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = pin.second->netIndex;
                 }
             },
                 cell, moveBy);
@@ -188,12 +210,37 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     if (geom->type != RectangleType::DIEAREA) {
                         uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                        if (layerIndex <= 6) {
-                            cell->source[layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                        if (layerIndex < 12) {
+                            cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
                         }
                     } else {
-                        cell->source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
+                        cell->source[0].slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
                     }
+                }
+            },
+                cell, moveBy);
+
+            s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
+                for (const auto& rout : cell->routes) {
+                    auto vertexes = rout->vertex;
+
+                    for (auto& vertex : vertexes) {
+                        vertex -= moveBy;
+                    }
+
+                    uint8_t layerIndex = static_cast<uint8_t>(rout->layer) - 1;
+
+                    cell->target[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                }
+
+                for (const auto& mask : cell->maskedRoutes) {
+                    auto vertexes = mask->vertex;
+
+                    for (auto& vertex : vertexes) {
+                        vertex -= moveBy;
+                    }
+
+                    cell->source[0][11].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = mask->netIndex;
                 }
             },
                 cell, moveBy);
@@ -226,40 +273,74 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
     case RectangleType::PIN: {
         std::shared_ptr<Pin> pin = std::static_pointer_cast<Pin>(t_target);
 
-        int32_t largestArea {};
-        Point pinCoords {};
+        // int32_t largestArea {};
+        // Point pinCoords {};
+
+        // for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+        //     for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+        //         Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
+        //         std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+        //         int32_t area = (inter[0] - inter[2]) * (inter[1] - inter[3]);
+
+        //         if (area > largestArea) {
+        //             largestArea = area;
+        //             pinCoords.x = i;
+        //             pinCoords.y = j;
+        //         }
+        //     }
+        // }
+
+        // if (t_data->pins.count(pin->name) == 0 || (t_data->pins.count(pin->name) != 0 && t_data->pins[pin->name]->parentCell == t_data->cells[pinCoords.y][pinCoords.x])) {
+        for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
+            for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
+                Rectangle cellRect = t_data->cells[j][i]->originalPlace;
+                std::array<int32_t, 4> inter = intersectionArea(cellRect, t_target);
+
+                // if (i == pinCoords.x && j == pinCoords.y) {
+                std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, inter[0], inter[1], inter[2], inter[3], pin->layer);
+
+                pinCut->parentCell = t_data->cells[j][i];
+
+                t_data->correspondingToPinCells[pin->name].insert(t_data->cells[j][i]);
+                t_data->cells[j][i]->pins.insert(std::pair(pin->name, pinCut));
+
+                // return;
+                // }
+            }
+        }
+        // }
+        break;
+    }
+    case RectangleType::SIGNAL: {
+        std::shared_ptr<Route> rout = std::static_pointer_cast<Route>(t_target);
 
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
-                int32_t area = (inter[0] - inter[2]) * (inter[1] - inter[3]);
+                Rectangle cellRect = t_data->cells[j][i]->originalPlace;
+                std::array<int32_t, 4> inter = intersectionArea(cellRect, t_target);
+                std::shared_ptr<Route> routCut {};
 
-                if (area > largestArea) {
-                    largestArea = area;
-                    pinCoords.x = i;
-                    pinCoords.y = j;
-                }
-            }
-        }
+                if (i != lt.x || j != lt.y && (static_cast<int8_t>(rout->layer) % 2 == 0)) {
+                    std::shared_ptr<Route> maskedRoutCut {};
 
-        if (t_data->pins.count(pin->name) == 0 || (t_data->pins.count(pin->name) != 0 && t_data->pins[pin->name]->parentCell == t_data->cells[pinCoords.y][pinCoords.x])) {
-            for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
-                for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                    Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-                    std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
-
-                    if (i == pinCoords.x && j == pinCoords.y) {
-                        std::shared_ptr<Pin> pinCut = std::make_shared<Pin>(pin->name, inter[0], inter[1], inter[2], inter[3], t_target->layer);
-
-                        pinCut->parentCell = t_data->cells[j][i];
-
-                        t_data->pins[pin->name] = pinCut;
-                        t_data->cells[j][i]->pins.insert(std::pair(pin->name, pinCut));
-
-                        return;
+                    if (inter[0] == inter[2]) {
+                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], inter[0] + 1, inter[1] + 10, rout->layer, rout->netIndex);
+                    } else {
+                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], inter[0] + 10, inter[1] + 1, rout->layer, rout->netIndex);
                     }
+
+                    t_data->cells[j][i]->maskedRoutes.emplace_back(maskedRoutCut);
                 }
+
+                if (inter[0] != inter[2] && inter[1] != inter[3]) {
+                    routCut = std::make_shared<Route>(inter[0], inter[1], inter[2], inter[3], rout->layer);
+                } else {
+                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 1);
+                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 1);
+                    routCut = std::make_shared<Route>(inter[0], inter[1], inter[2], inter[3], rout->layer);
+                }
+
+                t_data->cells[j][i]->routes.emplace_back(routCut);
             }
         }
         break;
@@ -270,15 +351,15 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
     case RectangleType::DIEAREA: {
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
-                Rectangle matrixRect = t_data->cells[j][i]->originalPlace;
-                std::array<int32_t, 4> inter = intersectionArea(matrixRect, t_target);
+                Rectangle cellRect = t_data->cells[j][i]->originalPlace;
+                std::array<int32_t, 4> inter = intersectionArea(cellRect, t_target);
                 std::shared_ptr<Rectangle> rect {};
 
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 } else {
-                    inter[2] = std::min(matrixRect.vertex[2].x, inter[2] + 1);
-                    inter[3] = std::min(matrixRect.vertex[2].y, inter[3] + 1);
+                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 1);
+                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 1);
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 }
 
@@ -348,16 +429,17 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
             std::shared_ptr<WorkingCell> cell = std::make_shared<WorkingCell>();
 
             cell->originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
-            cell->source = torch::zeros({ 8, data->cellSize + 2, data->cellSize + 2 });
-            cell->source.slice(1, 0, data->cellSize + 2).slice(2, 0, 1) = -1.0;
-            cell->source.slice(1, 0, 1).slice(2, 0, data->cellSize + 2) = -1.0;
+            cell->source = torch::zeros({ 1, 12, data->cellSize + 2, data->cellSize + 2 });
+            cell->target = torch::zeros({ 1, 10, data->cellSize + 2, data->cellSize + 2 });
+            cell->source[0].slice(1, 0, data->cellSize + 2).slice(2, 0, 1) = -1.0;
+            cell->source[0].slice(1, 0, 1).slice(2, 0, data->cellSize + 2) = -1.0;
 
             if (i == data->numCellX - 1) {
-                cell->source.slice(1, 0, data->cellSize + 2).slice(2, data->cellSize + 1, data->cellSize + 2) = -1.0;
+                cell->source[0].slice(1, 0, data->cellSize + 2).slice(2, data->cellSize + 1, data->cellSize + 2) = -1.0;
             }
 
             if (j == data->numCellY - 1) {
-                cell->source.slice(1, data->cellSize + 1, data->cellSize + 2).slice(2, 0, data->cellSize + 2) = -1.0;
+                cell->source[0].slice(1, data->cellSize + 1, data->cellSize + 2).slice(2, 0, data->cellSize + 2) = -1.0;
             }
 
             data->cells[j][i] = cell;
@@ -441,49 +523,16 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
         return 2;
     }
 
+    Data* data = static_cast<Data*>(t_userData);
+    std::vector<std::shared_ptr<Route>> route {};
     RectangleType rType {};
 
     if (t_net->hasUse()) {
         if (strcmp(t_net->use(), "SIGNAL") == 0) {
             rType = RectangleType::SIGNAL;
+            ++data->totalNets;
         } else if (strcmp(t_net->use(), "CLOCK") == 0) {
             rType = RectangleType::CLOCK;
-        }
-    }
-
-    Data* data = static_cast<Data*>(t_userData);
-
-    if (rType == RectangleType::SIGNAL) {
-        ++data->totalNets;
-
-        std::vector<std::string> pinsNames(t_net->numConnections(), "");
-
-        for (std::size_t i = 0; i < t_net->numConnections(); ++i) {
-            pinsNames[i] = std::string(t_net->instance(i)) + t_net->pin(i);
-        }
-
-        Net net { data->totalNets, std::vector<int8_t>(pinsNames.size(), 0) };
-
-        for (const auto& name : pinsNames) {
-            std::shared_ptr<WorkingCell> cell = data->pins[name]->parentCell;
-
-            if (cell->nets.count(net.index) == 0) {
-                for (std::size_t i = 0; i < pinsNames.size(); ++i) {
-                    auto range = cell->pins.equal_range(pinsNames[i]);
-
-                    if (range.first != range.second) {
-                        net.pins[i] = 1;
-
-                        for (auto& it = range.first; it != range.second; ++it) {
-                            it->second->netIndex = data->totalNets;
-                        }
-                    } else {
-                        net.pins[i] = 0;
-                    }
-                }
-
-                cell->nets[net.index] = net;
-            }
         }
     }
 
@@ -545,7 +594,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
                         wirePath->getViaRect(&dx1, &dy1, &dx2, &dy2);
 
-                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, convertNameToML(layerName), RectangleType::SIGNAL);
+                        rect = Rectangle(dx1 + start.x, dy1 + start.y, dx2 + start.x, dy2 + start.y, convertNameToML(layerName), rType);
                         isViaRect = true;
                         break;
                     }
@@ -554,24 +603,100 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                     }
                 }
 
-                std::shared_ptr<Rectangle> routRect {};
+                Rectangle routRect {};
 
                 if (viaName == nullptr) {
                     if (isStartSet && isEndSet) {
                         if (start.x != end.x) {
-                            routRect = std::make_shared<Rectangle>(start.x - extStart, start.y, end.x + extEnd, end.y, convertNameToML(layerName), rType);
+                            routRect = Rectangle(start.x, start.y, end.x, end.y, convertNameToML(layerName), rType);
                         } else {
-                            routRect = std::make_shared<Rectangle>(start.x, start.y - extStart, end.x, end.y + extEnd, convertNameToML(layerName), rType);
+                            routRect = Rectangle(start.x, start.y, end.x, end.y, convertNameToML(layerName), rType);
                         }
                     } else if (isViaRect) {
-                        routRect = std::make_shared<Rectangle>(rect);
+                        routRect = rect;
                     }
                 } else {
-                    routRect = std::make_shared<Rectangle>(start.x, start.y, start.x, start.y, viaRuleToML(viaName), rType);
+                    routRect = Rectangle(start.x, start.y, start.x, start.y, viaRuleToML(viaName), rType);
                 }
 
-                addToWorkingCells(routRect, data);
+                if (rType == RectangleType::SIGNAL) {
+                    std::shared_ptr<Route> __routRect = std::make_shared<Route>(routRect.vertex[0].x, routRect.vertex[0].y, routRect.vertex[2].x, routRect.vertex[2].y, routRect.layer, data->totalNets);
+
+                    route.emplace_back(__routRect);
+                    addToWorkingCells(__routRect, data);
+                } else {
+                    addToWorkingCells(std::make_shared<Rectangle>(routRect), data);
+                }
             }
+        }
+    }
+
+    if (rType == RectangleType::SIGNAL) {
+        std::vector<std::string> pinsNames(t_net->numConnections(), "");
+
+        for (std::size_t i = 0; i < t_net->numConnections(); ++i) {
+            pinsNames[i] = std::string(t_net->instance(i)) + t_net->pin(i);
+
+            std::shared_ptr<WorkingCell> cellThatStays {};
+
+            // Fining cell that contain via connection to pin
+            for (const auto& cell : data->correspondingToPinCells[pinsNames[i]]) {
+                auto range = cell->pins.equal_range(pinsNames[i]);
+
+                for (auto& it = range.first; it != range.second; ++it) {
+                    for (const auto& part : route) {
+                        if (static_cast<int8_t>(part->layer) - 1 == static_cast<int8_t>(it->second->layer) || static_cast<int8_t>(part->layer) == static_cast<int8_t>(it->second->layer)) {
+                            if (!(part->vertex[2].x < it->second->vertex[0].x && it->second->vertex[0].x < part->vertex[2].x) || !(part->vertex[2].y < it->second->vertex[0].y && it->second->vertex[0].y < part->vertex[2].y)) {
+                                cellThatStays = cell;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (cellThatStays) {
+                        break;
+                    }
+                }
+
+                if (cellThatStays) {
+                    break;
+                }
+            }
+
+            if (cellThatStays) {
+                for (const auto& cell : data->correspondingToPinCells[pinsNames[i]]) {
+                    if (cell != cellThatStays) {
+                        cell->pins.erase(pinsNames[i]);
+                    }
+                }
+
+                data->correspondingToPinCells[pinsNames[i]].clear();
+                data->correspondingToPinCells[pinsNames[i]].insert(cellThatStays);
+            }
+        }
+
+        Net net { data->totalNets, std::vector<int8_t>(pinsNames.size(), 0) };
+
+        for (const auto& name : pinsNames) {
+            std::shared_ptr<WorkingCell> cell = *data->correspondingToPinCells.at(name).begin();
+
+            // if (cell->nets.count(net.index) == 0) {
+            //     for (std::size_t i = 0; i < pinsNames.size(); ++i) {
+            //         auto range = cell->pins.equal_range(pinsNames[i]);
+
+            //         if (range.first != range.second) {
+            //             net.pins[i] = 1;
+
+            //             for (auto& it = range.first; it != range.second; ++it) {
+            //                 it->second->netIndex = data->totalNets;
+            //             }
+            //         } else {
+            //             net.pins[i] = 0;
+            //         }
+            //     }
+
+            //     cell->nets[net.index] = net;
+            // }
         }
     }
 
@@ -701,12 +826,11 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
                 std::shared_ptr<Pin> pinRect = std::make_shared<Pin>("PIN" + std::string(t_pin->pinName()), xl, yl, xh, yh, layerName);
 
                 addToWorkingCells(pinRect, data);
-            }
-            // else {
-            //     std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, layerName);
+            } else {
+                std::shared_ptr<Rectangle> rect = std::make_shared<Rectangle>(xl, yl, xh, yh, layerName, RectangleType::CLOCK);
 
-            //     addToWorkingCells(rect, data);
-            // }
+                addToWorkingCells(rect, data);
+            }
         }
     }
 

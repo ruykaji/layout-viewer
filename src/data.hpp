@@ -11,6 +11,7 @@
 #include "torch_include.hpp"
 
 struct Pin;
+struct Rout;
 struct Net;
 struct WorkingCell;
 
@@ -28,6 +29,17 @@ struct Pin : public Rectangle {
         , Rectangle(t_xl, t_yl, t_xh, t_yh, t_layer, RectangleType::PIN) {};
 };
 
+struct Route : public Rectangle {
+    int32_t netIndex {};
+
+    Route() = default;
+    ~Route() = default;
+
+    explicit Route(const int32_t& t_xl, const int32_t& t_yl, const int32_t& t_xh, const int32_t& t_yh, const MetalLayer& t_layer, const int32_t& t_netIndex = 0)
+        : netIndex(t_netIndex)
+        , Rectangle(t_xl, t_yl, t_xh, t_yh, t_layer, RectangleType::SIGNAL) {};
+};
+
 struct Net {
     int32_t index {};
     std::vector<int8_t> pins {};
@@ -42,10 +54,15 @@ struct WorkingCell {
     Rectangle originalPlace {};
 
     std::vector<std::shared_ptr<Rectangle>> geometries {};
+    std::vector<std::shared_ptr<Route>> routes {};
+    std::vector<std::shared_ptr<Route>> maskedRoutes {};
     std::unordered_multimap<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<int32_t, Net> nets {};
 
     torch::Tensor source {};
+    torch::Tensor cellInformation {};
+
+    torch::Tensor target {};
 
     WorkingCell() = default;
     ~WorkingCell() = default;
@@ -61,8 +78,8 @@ struct Data {
 
     std::vector<Point> dieArea {};
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
-    std::unordered_map<std::string, std::shared_ptr<Pin>> pins {};
-    std::unordered_map<std::string, std::vector<Rectangle>> vias {};
+    std::unordered_map<std::string, std::unordered_set<std::shared_ptr<WorkingCell>>> correspondingToPinCells {};
+    // std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 
     Data() = default;
     ~Data();

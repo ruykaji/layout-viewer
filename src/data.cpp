@@ -7,7 +7,7 @@ bool Net::operator<(const Net& t_net) const
 
 Data::~Data()
 {
-    pins.clear();
+    correspondingToPinCells.clear();
 
     for (auto& row : cells) {
         for (auto& col : row) {

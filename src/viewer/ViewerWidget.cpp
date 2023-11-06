@@ -77,6 +77,32 @@ void ViewerWidget::setup()
                     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin.second->layer });
                 }
 
+                for (auto& rout : col->routes) {
+                    QPolygon poly {};
+
+                    poly.append(QPoint(rout->vertex[0].x * scale + shiftX, rout->vertex[0].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[1].x * scale + shiftX, rout->vertex[1].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[2].x * scale + shiftX, rout->vertex[2].y * scale + shiftY));
+                    poly.append(QPoint(rout->vertex[3].x * scale + shiftX, rout->vertex[3].y * scale + shiftY));
+
+                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(rout->layer);
+
+                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, rout->layer });
+                }
+
+                for (auto& mask : col->maskedRoutes) {
+                    QPolygon poly {};
+
+                    poly.append(QPoint(mask->vertex[0].x * scale + shiftX, mask->vertex[0].y * scale + shiftY));
+                    poly.append(QPoint(mask->vertex[1].x * scale + shiftX, mask->vertex[1].y * scale + shiftY));
+                    poly.append(QPoint(mask->vertex[2].x * scale + shiftX, mask->vertex[2].y * scale + shiftY));
+                    poly.append(QPoint(mask->vertex[3].x * scale + shiftX, mask->vertex[3].y * scale + shiftY));
+
+                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(MetalLayer::NONE);
+
+                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, MetalLayer::NONE });
+                }
+
                 for (auto& geom : col->geometries) {
                     QPolygon poly {};
 
@@ -127,7 +153,7 @@ void ViewerWidget::setup()
 
                 for (int8_t k = 0; k < m_data->cells[j][i]->source.size(0); ++k) {
                     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
-                    m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[k], penBrushColor.first) });
+                    m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[0][k], penBrushColor.first) });
                 }
 
                 shiftX += shiftStep;
