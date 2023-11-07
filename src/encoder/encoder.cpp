@@ -151,6 +151,8 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     }
 
     fclose(file);
+
+    defrUnsetCallbacks();
     defrClear();
 
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
@@ -166,13 +168,14 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     std::sort(net.pins.begin(), net.pins.end());
                 }
 
-                cell->cellInformation = torch::zeros({ 1, static_cast<int32_t>(totalSize), 1 });
+                totalSize = totalSize == 0 ? 1 : totalSize;
+                cell->cellInformation = torch::zeros({ 1, 1, static_cast<int32_t>(totalSize), 1 });
 
                 std::size_t start = 0;
 
-                for (const auto& [_, net] : cell->nets) {
-                    for (std::size_t j = 0; j < net.pins.size(); ++j) {
-                        cell->cellInformation[0][start + j][0] = net.pins[j] * net.index;
+                for (const auto& [index, net] : cell->nets) {
+                    for (std::size_t k = 0; k < net.pins.size(); ++k) {
+                        cell->cellInformation[0][0][start + k][0] = net.pins[k] * index;
                     }
 
                     start += net.pins.size();
@@ -210,9 +213,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     if (geom->type != RectangleType::DIEAREA) {
                         uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                        if (layerIndex < 12) {
-                            cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-                        }
+                        cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
                     } else {
                         cell->source[0].slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
                     }
@@ -240,7 +241,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                         vertex -= moveBy;
                     }
 
-                    cell->source[0][11].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = mask->netIndex;
+                    cell->source[0][10].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = mask->netIndex;
                 }
             },
                 cell, moveBy);
@@ -385,8 +386,6 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     defiPoints points = t_box->getPoint();
     Data* data = static_cast<Data*>(t_userData);
 
-    s_pdk.scale = static_cast<int32_t>(s_pdk.scale * 1000.0);
-
     if (points.numPoints != 2) {
         for (std::size_t i = 0; i < points.numPoints; ++i) {
             data->dieArea.emplace_back(Point(points.x[i], points.y[i]) / s_pdk.scale);
@@ -429,7 +428,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
             std::shared_ptr<WorkingCell> cell = std::make_shared<WorkingCell>();
 
             cell->originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
-            cell->source = torch::zeros({ 1, 12, data->cellSize + 2, data->cellSize + 2 });
+            cell->source = torch::zeros({ 1, 11, data->cellSize + 2, data->cellSize + 2 });
             cell->target = torch::zeros({ 1, 10, data->cellSize + 2, data->cellSize + 2 });
             cell->source[0].slice(1, 0, data->cellSize + 2).slice(2, 0, 1) = -1.0;
             cell->source[0].slice(1, 0, 1).slice(2, 0, data->cellSize + 2) = -1.0;
@@ -680,23 +679,23 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
         for (const auto& name : pinsNames) {
             std::shared_ptr<WorkingCell> cell = *data->correspondingToPinCells.at(name).begin();
 
-            // if (cell->nets.count(net.index) == 0) {
-            //     for (std::size_t i = 0; i < pinsNames.size(); ++i) {
-            //         auto range = cell->pins.equal_range(pinsNames[i]);
+            if (cell->nets.count(net.index) == 0) {
+                for (std::size_t i = 0; i < pinsNames.size(); ++i) {
+                    auto range = cell->pins.equal_range(pinsNames[i]);
 
-            //         if (range.first != range.second) {
-            //             net.pins[i] = 1;
+                    if (range.first != range.second) {
+                        net.pins[i] = 1;
 
-            //             for (auto& it = range.first; it != range.second; ++it) {
-            //                 it->second->netIndex = data->totalNets;
-            //             }
-            //         } else {
-            //             net.pins[i] = 0;
-            //         }
-            //     }
+                        for (auto& it = range.first; it != range.second; ++it) {
+                            it->second->netIndex = data->totalNets;
+                        }
+                    } else {
+                        net.pins[i] = 0;
+                    }
+                }
 
-            //     cell->nets[net.index] = net;
-            // }
+                cell->nets[net.index] = net;
+            }
         }
     }
 
