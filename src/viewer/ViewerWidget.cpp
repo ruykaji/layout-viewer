@@ -14,6 +14,7 @@ ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
     Convertor::deserialize("./skyWater130.bin", Encoder::s_pdk);
+    Encoder::s_pdk.scale = static_cast<int32_t>(Encoder::s_pdk.scale * 1000.0);
 
     m_encoder = std::make_unique<Encoder>();
     m_data = std::make_shared<Data>();
@@ -151,11 +152,16 @@ void ViewerWidget::setup()
 
                 std::pair<QColor, QColor> penBrushColor {};
 
-                for (int8_t k = 0; k < m_data->cells[j][i]->source.size(0); ++k) {
+                for (int8_t k = 0; k < m_data->cells[j][i]->source.size(1); ++k) {
                     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
                     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[0][k], penBrushColor.first) });
                 }
 
+                // for (int8_t k = 0; k < m_data->cells[j][i]->target.size(1); ++k) {
+                //     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
+                //     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->target[0][k], penBrushColor.first) });
+                // }
+                
                 shiftX += shiftStep;
             }
 
