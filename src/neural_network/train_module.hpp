@@ -63,11 +63,12 @@ public:
         return dice_loss;
     }
 
-    void train(TopologyDataset& t_trainDataset, TopologyDataset& t_validDataset, std::size_t t_epochs)
+    void train(TopologyDataset& t_trainDataset, std::size_t t_epochs)
     {
         clearDirectory("./cells");
 
-        torch::optim::AdamW optimizer(m_model->parameters(), torch::optim::AdamWOptions(1e-3).weight_decay(0.1));
+        torch::optim::AdamW optimizer(m_model->parameters(), torch::optim::AdamWOptions(1e-3).weight_decay(0.01));
+        torch::optim::StepLR lr_scheduer(optimizer, 2, 0.85);
 
         m_model->to(m_device);
 
@@ -75,134 +76,105 @@ public:
             m_model->train();
 
             double trainLoss = 0.0;
-            double totalCells = 0.0;
+            double progress = 0.0;
 
-            for (std::size_t i = 0; i < t_trainDataset.size(); ++i) {
-                auto cells = t_trainDataset.get(i)->cells;
+            for (int32_t i = 0; i < t_trainDataset.size(); ++i) {
+                optimizer.zero_grad();
 
-                std::size_t numY = cells.size();
-                std::size_t numX = cells[0].size();
-                int32_t startX = 0;
-                int32_t startY = 0;
-                int32_t progress = 0;
+                std::pair<at::Tensor, at::Tensor> pair = t_trainDataset.get(i);
 
-                std::cout << "\nTopology: " << i + 1 << " Num cells: " << numX << " " << numY << std::endl;
+                torch::Tensor data = pair.first.to(m_device);
+                torch::Tensor output = m_model->forward(data);
+                torch::Tensor target = pair.second.to(m_device);
 
-                while (startY != numY) {
-                    int32_t x = startX;
-                    int32_t y = startY;
+                torch::Tensor loss = dice_loss(torch::softmax(output, 1), target) * 0.5 + torch::nn::functional::cross_entropy(output, target) * 0.5;
 
-                    while (x >= 0 && y < numY) {
-                        optimizer.zero_grad();
+                loss.backward();
+                optimizer.step();
 
-                        torch::Tensor data = cells[y][x]->source.to(m_device);
-                        torch::Tensor nets = cells[y][x]->cellInformation.to(m_device);
+                trainLoss += loss.item<double>();
 
-                        torch::Tensor output = m_model->forward(data, nets);
-                        torch::Tensor target = cells[y][x]->target.to(m_device);
+                if (i % static_cast<int32_t>(0.1 * t_trainDataset.size()) == 0) {
+                    auto img1 = tensorToImage(data[0]);
+                    auto img2 = tensorToImage(target[0]);
+                    auto img3 = tensorToImage((torch::softmax(output, 1)[0] > 0.95).toType(torch::kFloat32));
 
-                        torch::Tensor loss = dice_loss(torch::sigmoid(output), target) + torch::nn::functional::cross_entropy(output, target);
+                    cv::Mat stackedImage;
 
-                        loss.backward();
-                        optimizer.step();
-
-                        trainLoss += loss.item<double>();
-
-                        if((i + 1) % 10 == 0){
-                            auto img1 = tensorToImage(data.squeeze(0));
-                            auto img2 = tensorToImage(target.squeeze(0));
-                            auto img3 = tensorToImage(torch::sigmoid(output).squeeze(0));
-
-                            cv::Mat stackedImage;
-
-                            cv::hconcat(img1, img2, stackedImage);
-                            cv::hconcat(stackedImage, img3, stackedImage);
-
-                            std::stringstream ss;
-
-                            ss << "./cells/cell_" << (x + 1) << "_" << (y + 1) << ".png";
-
-                            cv::imwrite(ss.str(), stackedImage);
-                        }
-
-                        ++y;
-                        --x;
-                        ++progress;
-                    }
-
-                    if (startX < numX - 1) {
-                        ++startX;
-                    } else {
-                        ++startY;
-                    }
-
-                    showProgressBar(progress, numY * numX);
+                    cv::hconcat(img1, img2, stackedImage);
+                    cv::hconcat(stackedImage, img3, stackedImage);
+                    cv::imwrite("./cells/cell.png", stackedImage);
                 }
 
-                totalCells += progress;
+                showProgressBar(++progress, t_trainDataset.size());
             }
 
+            lr_scheduer.step();
+
             std::cout << "\nEpoch: " << epoch
-                      << " | Training Loss: " << trainLoss / totalCells << std::endl;
+                      << " | Training Loss: " << trainLoss / t_trainDataset.size()
+                      << '\n'
+                      << std::endl;
         }
     }
 
-    void valid(TopologyDataset& t_validDataset, std::size_t t_epochs)
-    {
-        for (size_t epoch = 0; epoch != t_epochs; ++epoch) {
-            m_model->eval();
+    // void valid(TopologyDataset& t_validDataset, std::size_t t_epochs)
+    // {
+    //     for (size_t epoch = 0; epoch != t_epochs; ++epoch) {
+    //         m_model->eval();
 
-            double validLoss = 0.0;
-            double totalCells = 0.0;
+    //         double validLoss = 0.0;
+    //         double totalCells = 0.0;
 
-            for (std::size_t i = 0; i < t_validDataset.size(); ++i) {
-                auto cells = t_validDataset.get(i)->cells;
+    //         for (std::size_t i = 0; i < t_validDataset.size(); ++i) {
+    //             auto cells = t_validDataset.get(i)->cells;
 
-                std::size_t numY = cells.size();
-                std::size_t numX = cells[0].size();
-                int32_t startX = 0;
-                int32_t startY = 0;
-                int32_t progress = 0;
+    //             std::size_t numY = cells.size();
+    //             std::size_t numX = cells[0].size();
+    //             int32_t startX = 0;
+    //             int32_t startY = 0;
+    //             int32_t progress = 0;
 
-                std::cout << "\nTopology: " << i + 1 << " Num cells: " << numX << " " << numY << std::endl;
+    //             std::cout << "\nTopology: " << i + 1 << " Num cells: " << numX << " " << numY << std::endl;
 
-                while (startY != numY) {
-                    int32_t x = startX;
-                    int32_t y = startY;
+    //             while (startY != numY) {
+    //                 int32_t x = startX;
+    //                 int32_t y = startY;
 
-                    while (x >= 0 && y < numY) {
-                        torch::Tensor data = cells[y][x]->source.to(m_device).requires_grad_(true);
-                        torch::Tensor nets = cells[y][x]->cellInformation.to(m_device).requires_grad_(true);
+    //                 while (x >= 0 && y < numY) {
+    //                     torch::Tensor data = cells[y][x]->source.to(m_device).requires_grad_(true);
+    //                     torch::Tensor nets = cells[y][x]->cellInformation.to(m_device).requires_grad_(true);
 
-                        torch::Tensor output = torch::sigmoid(m_model->forward(data, nets));
-                        torch::Tensor target = cells[y][x]->target.to(m_device);
+    //                     torch::Tensor output = torch::sigmoid(m_model->forward(data, nets));
+    //                     torch::Tensor target = cells[y][x]->target.to(m_device);
 
-                        ++y;
-                        --x;
-                        ++progress;
-                    }
+    //                     ++y;
+    //                     --x;
+    //                     ++progress;
+    //                 }
 
-                    if (startX < numX - 1) {
-                        ++startX;
-                    } else {
-                        ++startY;
-                    }
+    //                 if (startX < numX - 1) {
+    //                     ++startX;
+    //                 } else {
+    //                     ++startY;
+    //                 }
 
-                    showProgressBar(progress, numY * numX);
-                }
+    //                 showProgressBar(progress, numY * numX);
+    //             }
 
-                totalCells += progress;
-            }
+    //             totalCells += progress;
+    //         }
 
-            std::cout << "\nEpoch: " << epoch
-                      << " | Valid Loss: " << validLoss / totalCells << std::endl;
-        }
-    }
+    //         std::cout << "\nEpoch: " << epoch
+    //                   << " | Valid Loss: " << validLoss / totalCells << std::endl;
+    //     }
+    // }
 
     cv::Mat tensorToImage(const torch::Tensor& t_tensor)
     {
-        auto tensor = t_tensor.detach().to(torch::kCPU);
-        tensor = (torch::sum(tensor, 0) > 0).toType(torch::kFloat32);
+        auto tensor = t_tensor.detach().to(torch::kCPU).clone();
+        
+        tensor = (torch::sum(tensor, 0) > 0).toType(torch::kFloat32) * 255;
 
         cv::Mat image(tensor.size(0), tensor.size(1), CV_32FC1, tensor.data_ptr<float>());
         cv::normalize(image, image, 0, 255, cv::NORM_MINMAX);

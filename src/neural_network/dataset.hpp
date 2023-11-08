@@ -1,29 +1,34 @@
 #ifndef __DATASET_H__
 #define __DATASET_H__
 
+#include <algorithm>
+#include <numeric>
+#include <random>
+
 #include "data.hpp"
 
 class TopologyDataset {
-    std::vector<std::shared_ptr<Data>> m_data;
+    std::vector<std::shared_ptr<Data>> m_data {};
+
+    std::vector<std::shared_ptr<WorkingCell>> m_cells {};
+    std::vector<std::vector<std::size_t>> m_batches {};
+    std::size_t m_batchSize {};
+    std::size_t m_iter {};
 
 public:
-    TopologyDataset() = default;
     ~TopologyDataset() = default;
 
-    void add(const std::shared_ptr<Data>& t_data)
-    {
-        m_data.emplace_back(t_data);
-    }
+    TopologyDataset(const std::size_t& t_batchSize)
+        : m_batchSize(t_batchSize) {};
 
-    std::shared_ptr<Data> get(const std::size_t& t_index)
-    {
-        return m_data.at(t_index);
-    }
+    void add(const std::shared_ptr<Data>& t_data) noexcept;
 
-    std::size_t size() const noexcept
-    {
-        return m_data.size();
-    }
+    std::pair<torch::Tensor, torch::Tensor> get(const std::size_t& t_index) noexcept;
+
+    std::size_t size() const noexcept;
+
+private:
+    void makeBatches() noexcept;
 };
 
 #endif
