@@ -28,7 +28,7 @@ include_directories(
 file(GLOB GLOBAL ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.hpp)
 file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/encoder/*.hpp)
 file(GLOB PDK ${CMAKE_SOURCE_DIR}/src/pdk/*.cpp ${CMAKE_SOURCE_DIR}/src/pdk/*.hpp)
-file(GLOB NEURAL_NETWORK ${CMAKE_SOURCE_DIR}/src/neural_network/*.cpp ${CMAKE_SOURCE_DIR}/src/neural_network/*.hpp)
+file(GLOB_RECURSE NEURAL_NETWORK ${CMAKE_SOURCE_DIR}/src/neural_network/*.cpp ${CMAKE_SOURCE_DIR}/src/neural_network/*.hpp)
 file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
 
 # Desktop Version

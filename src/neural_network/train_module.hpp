@@ -10,7 +10,7 @@
 
 inline static void showProgressBar(int progress, int total)
 {
-    const int bar_width = 70; // Width of the progress bar in characters
+    const int bar_width = 100; // Width of the progress bar in characters
 
     float progress_percent = (float)progress / total;
     int pos = (int)(bar_width * progress_percent);
@@ -24,7 +24,7 @@ inline static void showProgressBar(int progress, int total)
         else
             std::cout << " ";
     }
-    std::cout << "] " << int(progress_percent * 100.0) << " %\r";
+    std::cout << "] " << progress + 1 << "/" << total + 1 << " %\r";
     std::cout.flush();
 }
 
@@ -67,13 +67,13 @@ public:
     {
         clearDirectory("./cells");
 
-        torch::optim::AdamW optimizer(m_model->parameters(), torch::optim::AdamWOptions(1e-3).weight_decay(0.01));
-        torch::optim::StepLR lr_scheduer(optimizer, 2, 0.85);
+        torch::optim::Adam optimizer(m_model->parameters(), torch::optim::AdamOptions(1e-3).weight_decay(0.1));
+        torch::optim::StepLR lr_scheduer(optimizer, 2, 0.95);
 
         m_model->to(m_device);
+        m_model->train();
 
         for (size_t epoch = 0; epoch != t_epochs; ++epoch) {
-            m_model->train();
 
             double trainLoss = 0.0;
             double progress = 0.0;
@@ -87,23 +87,23 @@ public:
                 torch::Tensor output = m_model->forward(data);
                 torch::Tensor target = pair.second.to(m_device);
 
-                torch::Tensor loss = dice_loss(torch::softmax(output, 1), target) * 0.5 + torch::nn::functional::cross_entropy(output, target) * 0.5;
+                torch::Tensor loss = torch::nn::functional::cross_entropy(output, target);
 
                 loss.backward();
                 optimizer.step();
 
                 trainLoss += loss.item<double>();
 
-                if (i % static_cast<int32_t>(0.1 * t_trainDataset.size()) == 0) {
-                    auto img1 = tensorToImage(data[0]);
-                    auto img2 = tensorToImage(target[0]);
-                    auto img3 = tensorToImage((torch::softmax(output, 1)[0] > 0.95).toType(torch::kFloat32));
+                if (i % 10 == 0) {
+                    for (std::size_t i = 0; i < 10; ++i) {
+                        auto img1 = tensorToImage(target[0][i]);
+                        auto img2 = tensorToImage((output[0][i] > 0.95).toType(torch::kFloat32));
 
-                    cv::Mat stackedImage;
+                        cv::Mat stackedImage;
 
-                    cv::hconcat(img1, img2, stackedImage);
-                    cv::hconcat(stackedImage, img3, stackedImage);
-                    cv::imwrite("./cells/cell.png", stackedImage);
+                        cv::hconcat(img1, img2, stackedImage);
+                        cv::imwrite("./cells/cell_" + std::to_string(i) + ".png", stackedImage);
+                    }
                 }
 
                 showProgressBar(++progress, t_trainDataset.size());
@@ -173,8 +173,6 @@ public:
     cv::Mat tensorToImage(const torch::Tensor& t_tensor)
     {
         auto tensor = t_tensor.detach().to(torch::kCPU).clone();
-        
-        tensor = (torch::sum(tensor, 0) > 0).toType(torch::kFloat32) * 255;
 
         cv::Mat image(tensor.size(0), tensor.size(1), CV_32FC1, tensor.data_ptr<float>());
         cv::normalize(image, image, 0, 255, cv::NORM_MINMAX);

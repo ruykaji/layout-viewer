@@ -336,8 +336,8 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
                     routCut = std::make_shared<Route>(inter[0], inter[1], inter[2], inter[3], rout->layer);
                 } else {
-                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 1);
-                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 1);
+                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 2);
+                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 2);
                     routCut = std::make_shared<Route>(inter[0], inter[1], inter[2], inter[3], rout->layer);
                 }
 
@@ -359,8 +359,8 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 } else {
-                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 1);
-                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 1);
+                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 2);
+                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 2);
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 }
 
