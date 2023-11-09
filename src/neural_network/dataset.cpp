@@ -11,7 +11,7 @@ void TopologyDataset::add(const std::shared_ptr<Data>& t_data) noexcept
 
 std::pair<torch::Tensor, torch::Tensor> TopologyDataset::get(const std::size_t& t_index) noexcept
 {
-    if (m_iter == m_batches.size() - 1 || m_iter == 0) {
+    if (m_iter == m_batches.size() || m_iter == 0) {
         makeBatches();
         m_iter = 0;
     }
@@ -47,11 +47,17 @@ void TopologyDataset::makeBatches() noexcept
     std::shuffle(indexes.begin(), indexes.end(), std::default_random_engine(std::chrono::system_clock::now().time_since_epoch().count()));
 
     auto it = indexes.begin();
+    std::size_t _size = size();
+    std::size_t cellsSize = m_cells.size();
 
-    while (it != indexes.end()) {
-        std::vector<std::size_t> part(it, it + m_batchSize);
-
-        m_batches.emplace_back(part);
-        it += m_batchSize;
+    for (std::size_t i = 0; i < size(); ++i) {
+        if (i == _size - 1 && cellsSize % m_batchSize != 0) {
+            std::vector<std::size_t> part(it, it + (cellsSize % m_batchSize));
+            m_batches.emplace_back(part);
+        } else {
+            std::vector<std::size_t> part(it, it + m_batchSize);
+            m_batches.emplace_back(part);
+            it +=m_batchSize;
+        }
     }
 }
