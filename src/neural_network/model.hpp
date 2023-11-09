@@ -2,7 +2,7 @@
 #define __MODEL_H__
 
 #include "data.hpp"
-#include "encoders.hpp"
+#include "encoders/efficientnetb3.hpp"
 
 // GNN model
 // ======================================================================================
@@ -42,19 +42,65 @@ TORCH_MODULE(GNN);
 // UNet model
 // ======================================================================================
 
+struct AttentionBlockImpl : torch::nn::Module {
+    torch::nn::Sequential W_g { nullptr };
+    torch::nn::Sequential W_x { nullptr };
+    torch::nn::Sequential psi { nullptr };
+    torch::nn::ReLU6 relu { nullptr };
+
+    AttentionBlockImpl(int64_t F_g, int64_t F_l, int64_t F_int)
+    {
+        W_g = torch::nn::Sequential(
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(F_g, F_int, 1).stride(1).padding(0).bias(true)),
+            torch::nn::BatchNorm2d(F_int));
+
+        W_x = torch::nn::Sequential(
+            torch::nn::Conv2d(torch::nn::Conv2dOptions(F_l, F_int, 1).stride(1).padding(0).bias(true)),
+            torch::nn::BatchNorm2d(F_int));
+
+        psi = torch::nn::Sequential(torch::nn::Conv2d(torch::nn::Conv2dOptions(F_int, 1, 1).stride(1).padding(0).bias(true)),
+            torch::nn::BatchNorm2d(1),
+            torch::nn::Sigmoid());
+
+        relu = torch::nn::ReLU6(torch::nn::ReLU6Options(true));
+
+        register_module("W_g", W_g);
+        register_module("W_x", W_x);
+        register_module("psi", psi);
+    };
+
+    torch::Tensor forward(torch::Tensor g, torch::Tensor x)
+    {
+        auto g1 = W_g->forward(g);
+        auto x1 = W_x->forward(x);
+
+        return x * psi->forward(relu->forward(g1 + x1));
+    }
+};
+
+TORCH_MODULE(AttentionBlock);
+
 struct DecoderBlockImpl : torch::nn::Module {
+    AttentionBlock attention { nullptr };
     torch::nn::Sequential conv1 { nullptr };
     torch::nn::Sequential conv2 { nullptr };
 
     DecoderBlockImpl(int in_channels, int skip_channels, int out_channels)
     {
+        if (skip_channels > 0) {
+            attention = AttentionBlock(in_channels, skip_channels, out_channels);
+            register_module("attention", attention);
+        }
+
         conv1 = torch::nn::Sequential(
             torch::nn::Conv2d(torch::nn::Conv2dOptions(in_channels + skip_channels, out_channels, 3).padding(1).bias(false)),
-            torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)));
+            torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)),
+            torch::nn::BatchNorm2d(out_channels));
 
         conv2 = torch::nn::Sequential(
             torch::nn::Conv2d(torch::nn::Conv2dOptions(out_channels, out_channels, 3).padding(1).bias(false)),
-            torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)));
+            torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true)),
+            torch::nn::BatchNorm2d(out_channels));
 
         register_module("conv1", conv1);
         register_module("conv2", conv2);
@@ -62,11 +108,10 @@ struct DecoderBlockImpl : torch::nn::Module {
 
     torch::Tensor forward(torch::Tensor x, torch::Tensor skip = torch::Tensor())
     {
-        auto options = torch::nn::functional::InterpolateFuncOptions().scale_factor(std::vector<double>({ 2.0, 2.0 })).mode(torch::kBilinear).align_corners(true);
-
-        x = torch::nn::functional::interpolate(x, options);
+        x = torch::nn::functional::interpolate(x, torch::nn::functional::InterpolateFuncOptions().scale_factor(std::vector<double>({ 2.0, 2.0 })).mode(torch::kBilinear).align_corners(true));
 
         if (skip.defined()) {
+            skip = attention->forward(x, skip);
             x = torch::cat({ x, skip }, 1);
         }
 
@@ -100,17 +145,16 @@ struct SegmentationHeadImpl : torch::nn::Module {
 TORCH_MODULE(SegmentationHead);
 
 struct UNetImpl : torch::nn::Module {
-    // GNN gnn;
-    ResNet50Backbone encoder { nullptr };
+    EfficientNetB3 encoder { nullptr };
     SegmentationHead segmentationHead { nullptr };
 
     std::vector<DecoderBlock> decoderBlocks {};
 
     UNetImpl()
     {
-        encoder = ResNet50Backbone("./resnet50_model.pt");
+        encoder = EfficientNetB3();
 
-        std::vector<int32_t> encoderChannels = { 64, 256, 512, 1024, 2048 };
+        std::vector<int32_t> encoderChannels = { 40, 32, 48, 136, 384 };
         std::vector<int32_t> decoderChannels = { 256, 128, 64, 32, 16 };
 
         std::reverse(encoderChannels.begin(), encoderChannels.end());
@@ -141,8 +185,6 @@ struct UNetImpl : torch::nn::Module {
 
     torch::Tensor forward(torch::Tensor x)
     {
-        // auto gx = torch::cat({ x, gnn->forward(t_nets) }, 1);
-
         std::vector<at::Tensor> encoderFeatures = encoder->forward(x);
         std::reverse(encoderFeatures.begin(), encoderFeatures.end());
 
