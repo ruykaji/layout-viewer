@@ -39,7 +39,8 @@ enum class RectangleType {
     CLOCK,
     POWER,
     GROUND,
-    PIN
+    PIN,
+    TRACK
 };
 
 struct Point {

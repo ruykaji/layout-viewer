@@ -42,7 +42,7 @@ private:
 
     static int defPinCallback(defrCallbackType_e t_type, defiPin* t_pinProp, void* t_userData);
 
-    // static int defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData);
+    static int defTrackCallback(defrCallbackType_e t_type, defiTrack* t_track, void* t_userData);
 };
 
 #endif

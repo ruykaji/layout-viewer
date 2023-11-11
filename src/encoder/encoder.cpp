@@ -139,7 +139,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
-    // defrSetViaCbk(&defViaCallback);
+    defrSetTrackCbk(&defTrackCallback);
 
     // Read file
     //=================================================================
@@ -152,7 +152,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
 
     fclose(file);
 
-    defrUnsetCallbacks();
     defrClear();
 
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
@@ -206,16 +205,27 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 for (const auto& geom : cell->geometries) {
                     auto vertexes = geom->vertex;
 
-                    for (auto& vertex : vertexes) {
-                        vertex -= moveBy;
-                    }
+                    uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                    if (geom->type != RectangleType::DIEAREA) {
-                        uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+                    if (layerIndex % 2 == 0) {
+                        for (auto& vertex : vertexes) {
+                            vertex -= moveBy;
+                        }
 
-                        cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-                    } else {
-                        cell->source[0].slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
+                        switch (geom->type) {
+                        case RectangleType::DIEAREA: {
+                            cell->source[0].slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
+                            break;
+                        }
+                        case RectangleType::TRACK: {
+                            cell->source[0][layerIndex - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                            break;
+                        }
+                        default: {
+                            cell->source[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                            break;
+                        }
+                        }
                     }
                 }
             },
@@ -225,13 +235,15 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 for (const auto& rout : cell->routes) {
                     auto vertexes = rout->vertex;
 
-                    for (auto& vertex : vertexes) {
-                        vertex -= moveBy;
+                    uint8_t layerIndex = static_cast<uint8_t>(rout->layer);
+
+                    if (layerIndex % 2 == 0) {
+                        for (auto& vertex : vertexes) {
+                            vertex -= moveBy;
+                        }
+
+                        cell->target[0][layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
                     }
-
-                    uint8_t layerIndex = static_cast<uint8_t>(rout->layer) - 1;
-
-                    cell->target[0][layerIndex].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
                 }
 
                 for (const auto& mask : cell->maskedRoutes) {
@@ -346,6 +358,7 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data
         }
         break;
     }
+    case RectangleType::TRACK:
     case RectangleType::CLOCK:
     case RectangleType::POWER:
     case RectangleType::GROUND:
@@ -429,7 +442,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
             cell->originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
             cell->source = torch::zeros({ 1, 11, data->cellSize + 2, data->cellSize + 2 });
-            cell->target = torch::zeros({ 1, 10, data->cellSize + 2, data->cellSize + 2 });
+            cell->target = torch::zeros({ 1, 5, data->cellSize + 2, data->cellSize + 2 });
             cell->source[0].slice(1, 0, data->cellSize + 2).slice(2, 0, 1) = -1.0;
             cell->source[0].slice(1, 0, 1).slice(2, 0, data->cellSize + 2) = -1.0;
 
@@ -836,40 +849,31 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
     return 0;
 };
 
-// int Encoder::defViaCallback(defrCallbackType_e t_type, defiVia* t_via, void* t_userData)
-// {
-//     if (t_type != defrViaCbkType) {
-//         return 2;
-//     }
+int Encoder::defTrackCallback(defrCallbackType_e t_type, defiTrack* t_track, void* t_userData)
+{
+    if (t_type != defrTrackCbkType) {
+        return 2;
+    }
 
-//     char *viaRuleName {}, *botLayer {}, *cutLayer {}, *topLayer {};
-//     int32_t xSize {}, ySize {}, xCutSpacing {}, yCutSpacing {}, xBotEnc {}, yBotEnc {}, xTopEnc {}, yTopEnc {}, numRow {}, numCol {};
+    MetalLayer layer = convertNameToML(t_track->layer(0));
 
-//     t_via->viaRule(&viaRuleName, &xSize, &ySize, &botLayer, &cutLayer, &topLayer, &xCutSpacing, &yCutSpacing, &xBotEnc, &yBotEnc, &xTopEnc, &yTopEnc);
-//     t_via->rowCol(&numRow, &numCol);
+    if (layer != MetalLayer::L1) {
+        double offset = t_track->x();
+        double number = t_track->xNum();
+        double step = t_track->xStep();
 
-//     numRow = std::max(1, numRow);
-//     numCol = std::max(1, numCol);
+        Data* data = static_cast<Data*>(t_userData);
 
-//     MetalLayer layer = viaRuleToML(viaRuleName);
-//     std::vector<Rectangle> via {};
+        if (strcmp(t_track->macro(), "X") == 0) {
+            for (double x = offset; x < number * step; x += step) {
+                addToWorkingCells(std::make_shared<Rectangle>(x, 0, x, data->dieArea[2].y * s_pdk.scale, layer, RectangleType::TRACK), data);
+            }
+        } else if (strcmp(t_track->macro(), "Y") == 0) {
+            for (double y = offset; y < number * step; y += step) {
+                addToWorkingCells(std::make_shared<Rectangle>(0, y, data->dieArea[2].x * s_pdk.scale, y, layer, RectangleType::TRACK), data);
+            }
+        }
+    }
 
-//     via.reserve(numRow * numCol);
-
-//     for (int32_t i = 0; i < numRow; ++i) {
-//         for (int32_t j = 0; j < numCol; ++j) {
-//             int32_t xLeft = xCutSpacing * j + xSize * j - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
-//             int32_t yTop = yCutSpacing * i + ySize * i - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
-//             int32_t xRight = xCutSpacing * j + xSize * (j + 1) - (xSize * numCol + xCutSpacing * (numCol - 1)) / 2;
-//             int32_t yBottom = yCutSpacing * i + ySize * (i + 1) - (ySize * numRow + yCutSpacing * (numRow - 1)) / 2;
-
-//             via.emplace_back(Rectangle(xLeft, yTop, xRight, yBottom, layer));
-//         }
-//     }
-
-//     Data* data = static_cast<Data*>(t_userData);
-
-//     data->vias[t_via->name()] = via;
-
-//     return 0;
-// };
+    return 0;
+};

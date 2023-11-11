@@ -161,7 +161,7 @@ void ViewerWidget::setup()
                 //     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
                 //     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->target[0][k], penBrushColor.first) });
                 // }
-                
+
                 shiftX += shiftStep;
             }
 

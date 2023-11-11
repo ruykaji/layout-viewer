@@ -8,14 +8,14 @@
 #include "dataset.hpp"
 #include "model.hpp"
 
-inline static void showProgressBar(int progress, int total)
+inline static void showProgressBar(int progress, int total, double epochLoss)
 {
     const int bar_width = 100; // Width of the progress bar in characters
 
     float progress_percent = (float)progress / total;
     int pos = (int)(bar_width * progress_percent);
 
-    std::cout << "[";
+    std::cout << progress + 1 << "/" << total + 1 << " [";
     for (int i = 0; i < bar_width; ++i) {
         if (i < pos)
             std::cout << "=";
@@ -24,7 +24,8 @@ inline static void showProgressBar(int progress, int total)
         else
             std::cout << " ";
     }
-    std::cout << "] " << progress + 1 << "/" << total + 1 << " %\r";
+    std::cout << "] "
+              << " Epoch loss: " << epochLoss << "\r";
     std::cout.flush();
 }
 
@@ -43,31 +44,42 @@ inline static void clearDirectory(const std::string& path)
     }
 }
 
+class DiceBCELossImpl : public torch::nn::Module {
+public:
+    DiceBCELossImpl() { }
+
+    torch::Tensor forward(torch::Tensor inputs, torch::Tensor targets, float smooth = 1.0)
+    {
+        inputs = torch::sigmoid(inputs);
+
+        inputs = inputs.view({ -1 });
+        targets = targets.view({ -1 });
+
+        torch::Tensor intersection = (inputs * targets).sum();
+        torch::Tensor dice_loss = 1.0 - (2.0 * intersection + smooth) / (inputs.sum() + targets.sum() + smooth);
+        torch::Tensor BCE = torch::nn::functional::binary_cross_entropy(inputs, targets, torch::nn::functional::BinaryCrossEntropyFuncOptions().reduction(torch::kMean));
+        torch::Tensor Dice_BCE = BCE + dice_loss;
+
+        return Dice_BCE;
+    }
+};
+
+TORCH_MODULE(DiceBCELoss);
+
 class TrainModule {
-    UNet m_model;
+    DiceBCELoss m_DiceBCEloss;
+    UNet3D m_model;
     torch::Device m_device;
 
 public:
     explicit TrainModule(int8_t t_device = 0)
         : m_device(torch::Device(t_device ? torch::kCPU : torch::kCUDA)) {};
 
-    torch::Tensor dice_loss(const torch::Tensor& input, const torch::Tensor& target)
-    {
-        auto input_flat = input.view(-1);
-        auto target_flat = target.view(-1);
-
-        auto intersection = (input_flat * target_flat).sum();
-        auto dice_score = (2.0 * intersection + 1.0) / (input_flat.sum() + target_flat.sum() + 1.0);
-        auto dice_loss = 1.0 - dice_score;
-
-        return dice_loss;
-    }
-
     void train(TopologyDataset& t_trainDataset, std::size_t t_epochs)
     {
         clearDirectory("./cells");
 
-        torch::optim::Adam optimizer(m_model->parameters(), torch::optim::AdamOptions(1e-3).weight_decay(0.1));
+        torch::optim::AdamW optimizer(m_model->parameters(), torch::optim::AdamWOptions(1e-3).weight_decay(0.1));
         torch::optim::StepLR lr_scheduer(optimizer, 2, 0.95);
 
         m_model->to(m_device);
@@ -84,20 +96,21 @@ public:
                 std::pair<at::Tensor, at::Tensor> pair = t_trainDataset.get(i);
 
                 torch::Tensor data = pair.first.to(m_device);
-                torch::Tensor output = m_model->forward(data);
                 torch::Tensor target = pair.second.to(m_device);
+                torch::Tensor output = m_model->forward(data);
 
-                torch::Tensor loss = torch::nn::functional::cross_entropy(output, target);
+                torch::Tensor loss = m_DiceBCEloss->forward(output, target);
 
                 loss.backward();
+
                 optimizer.step();
 
                 trainLoss += loss.item<double>();
 
-                if (i % 10 == 0) {
-                    for (std::size_t i = 0; i < 10; ++i) {
-                        auto img1 = tensorToImage(target[0][i]);
-                        auto img2 = tensorToImage((output[0][i] > 0.95).toType(torch::kFloat32));
+                if (i % 25 == 0) {
+                    for (std::size_t i = 0; i < target.size(2); ++i) {
+                        auto img1 = tensorToImage(target[0][0][i].cpu());
+                        auto img2 = tensorToImage((torch::sigmoid(output[0][0][i]) > 0.95).detach().cpu().toType(torch::kFloat32));
 
                         cv::Mat stackedImage;
 
@@ -106,7 +119,7 @@ public:
                     }
                 }
 
-                showProgressBar(++progress, t_trainDataset.size());
+                showProgressBar(++progress, t_trainDataset.size(), (trainLoss / (i + 1)));
             }
 
             lr_scheduer.step();
@@ -172,9 +185,7 @@ public:
 
     cv::Mat tensorToImage(const torch::Tensor& t_tensor)
     {
-        auto tensor = t_tensor.detach().to(torch::kCPU).clone();
-
-        cv::Mat image(tensor.size(0), tensor.size(1), CV_32FC1, tensor.data_ptr<float>());
+        cv::Mat image(t_tensor.size(0), t_tensor.size(1), CV_32FC1, t_tensor.data_ptr<float>());
         cv::normalize(image, image, 0, 255, cv::NORM_MINMAX);
 
         image.convertTo(image, CV_8U);

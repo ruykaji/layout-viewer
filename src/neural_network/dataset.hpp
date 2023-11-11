@@ -8,18 +8,15 @@
 #include "data.hpp"
 
 class TopologyDataset {
-    std::vector<std::shared_ptr<Data>> m_data {};
-
-    std::vector<std::shared_ptr<WorkingCell>> m_cells {};
     std::vector<std::vector<std::size_t>> m_batches {};
+    std::size_t m_totalCells {};
     std::size_t m_batchSize {};
     std::size_t m_iter {};
 
 public:
     ~TopologyDataset() = default;
 
-    TopologyDataset(const std::size_t& t_batchSize)
-        : m_batchSize(t_batchSize) {};
+    TopologyDataset(const std::size_t& t_batchSize);
 
     void add(const std::shared_ptr<Data>& t_data) noexcept;
 
