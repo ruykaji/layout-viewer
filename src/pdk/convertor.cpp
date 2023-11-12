@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <fstream>
+#include <vector>
 
 #include "pdk/convertor.hpp"
 
@@ -6,30 +8,6 @@
 #define READ_FROM_BINARY(file, var) file.read(reinterpret_cast<char*>(&var), sizeof(var))
 // General functions
 // ======================================================================================
-
-inline static MetalLayer convertNameToML(const char* t_name)
-{
-    static const std::unordered_map<std::string, MetalLayer> nameToMLMap = {
-        { "li1", MetalLayer::L1 },
-        { "met1", MetalLayer::M1 },
-        { "met2", MetalLayer::M2 },
-        { "met3", MetalLayer::M3 },
-        { "met4", MetalLayer::M4 },
-        { "met5", MetalLayer::M5 },
-        { "met6", MetalLayer::M6 },
-        { "met7", MetalLayer::M7 },
-        { "met8", MetalLayer::M8 },
-        { "met9", MetalLayer::M9 }
-    };
-
-    auto it = nameToMLMap.find(t_name);
-
-    if (it != nameToMLMap.end()) {
-        return it->second;
-    }
-
-    return MetalLayer::NONE;
-}
 
 inline static std::filesystem::path getExtensionAfterFirstDot(const std::filesystem::path& t_path)
 {
@@ -61,29 +39,40 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
         throw std::runtime_error("Error: cant't initialize lef parser!");
     }
 
+    lefrSetLayerCbk(&layerCallback);
     lefrSetMacroBeginCbk(&macroCallback);
     lefrSetMacroSizeCbk(&macroSizeCallback);
     lefrSetPinCbk(&pinCallback);
     lefrSetObstructionCbk(&obstructionCallback);
 
-    Data* data = new Data();
+    std::vector<std::string> files {};
 
     for (const auto& entry : std::filesystem::recursive_directory_iterator(t_directory)) {
-        if (std::filesystem::is_regular_file(entry) && getExtensionAfterFirstDot(entry.path()) == ".lef") {
-            auto file = fopen(entry.path().c_str(), "r");
-
-            if (file == nullptr) {
-                throw std::runtime_error("Error: Can't open a file: " + entry.path().string());
+        if (std::filesystem::is_regular_file(entry)) {
+            if (getExtensionAfterFirstDot(entry.path()) == ".lef") {
+                files.emplace_back(entry.path().string());
+            } else if (getExtensionAfterFirstDot(entry.path()) == ".tlef") {
+                files.insert(files.begin(), entry.path().string());
             }
-
-            int readStatus = lefrRead(file, entry.path().c_str(), data);
-
-            if (readStatus != 0) {
-                throw std::runtime_error("Error: Can't read a file: " + entry.path().string());
-            }
-
-            fclose(file);
         }
+    }
+
+    Data* data = new Data();
+
+    for (auto& fileName : files) {
+        auto file = fopen(fileName.c_str(), "r");
+
+        if (file == nullptr) {
+            throw std::runtime_error("Error: Can't open a file: " + fileName);
+        }
+
+        int readStatus = lefrRead(file, fileName.c_str(), data);
+
+        if (readStatus != 0) {
+            throw std::runtime_error("Error: Can't read a file: " + fileName);
+        }
+
+        fclose(file);
     }
 
     lefrClear();
@@ -95,37 +84,53 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
 
     WRITE_TO_BINARY(outFile, data->pdk.scale);
 
-    size_t mapSize = data->pdk.macros.size();
+    std::size_t layerMapSize = data->pdk.layers.size();
+    WRITE_TO_BINARY(outFile, layerMapSize);
+
+    for (auto& [first, second] : data->pdk.layers) {
+        std::size_t keySize = first.size();
+        WRITE_TO_BINARY(outFile, keySize);
+        outFile.write(first.c_str(), keySize);
+
+        std::size_t typeSize = first.size();
+        WRITE_TO_BINARY(outFile, typeSize);
+        outFile.write(first.c_str(), typeSize);
+
+        WRITE_TO_BINARY(outFile, second.width);
+        WRITE_TO_BINARY(outFile, second.metal);
+    }
+
+    std::size_t mapSize = data->pdk.macros.size();
     WRITE_TO_BINARY(outFile, mapSize);
 
     for (auto& [first, second] : data->pdk.macros) {
         // Write map objest's key
-        size_t keySize = first.size();
+        std::size_t keySize = first.size();
         WRITE_TO_BINARY(outFile, keySize);
         outFile.write(first.c_str(), keySize);
 
         // Write macro
-        size_t macroNameSize = second.name.size();
+        std::size_t macroNameSize = second.name.size();
         WRITE_TO_BINARY(outFile, macroNameSize);
         outFile.write(second.name.c_str(), macroNameSize);
 
         WRITE_TO_BINARY(outFile, second.size);
 
         // Write macro's pins
-        size_t pinVectorSize = second.pins.size();
+        std::size_t pinVectorSize = second.pins.size();
         WRITE_TO_BINARY(outFile, pinVectorSize);
 
         for (auto& pin : second.pins) {
-            size_t pinName = pin.name.size();
+            std::size_t pinName = pin.name.size();
             WRITE_TO_BINARY(outFile, pinName);
             outFile.write(pin.name.c_str(), pinName);
 
-            size_t pinUseSize = pin.use.size();
+            std::size_t pinUseSize = pin.use.size();
             WRITE_TO_BINARY(outFile, pinUseSize);
             outFile.write(pin.use.c_str(), pinUseSize);
 
             // Write pin's ports
-            size_t portVectorSize = pin.ports.size();
+            std::size_t portVectorSize = pin.ports.size();
             WRITE_TO_BINARY(outFile, portVectorSize);
 
             for (auto& port : pin.ports) {
@@ -139,7 +144,7 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
         }
 
         // Write macro's obs
-        size_t obsVectorSize = second.obstruction.geometry.size();
+        std::size_t obsVectorSize = second.obstruction.geometry.size();
         WRITE_TO_BINARY(outFile, obsVectorSize);
 
         for (auto& rect : second.obstruction.geometry) {
@@ -163,12 +168,36 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
 
     READ_FROM_BINARY(inFile, t_pdk.scale);
 
-    size_t mapSize;
+    std::size_t layerMapSize;
+    READ_FROM_BINARY(inFile, layerMapSize);
+
+    for (std::size_t i = 0; i < layerMapSize; ++i) {
+        PDK::Layer layer {};
+
+        std::size_t keySize;
+        READ_FROM_BINARY(inFile, keySize);
+        std::string layerName(keySize, '\0');
+        inFile.read(&layerName[0], keySize);
+
+        std::size_t typeSize;
+        READ_FROM_BINARY(inFile, typeSize);
+        std::string typeName(typeSize, '\0');
+        inFile.read(&typeName[0], typeSize);
+
+        layer.type = typeName;
+
+        READ_FROM_BINARY(inFile, layer.width);
+        READ_FROM_BINARY(inFile, layer.metal);
+
+        t_pdk.layers[layerName] = layer;
+    }
+
+    std::size_t mapSize;
     READ_FROM_BINARY(inFile, mapSize);
 
-    for (size_t i = 0; i < mapSize; ++i) {
+    for (std::size_t i = 0; i < mapSize; ++i) {
         // Read key
-        size_t keyStringSize;
+        std::size_t keyStringSize;
         READ_FROM_BINARY(inFile, keyStringSize);
         std::string key(keyStringSize, '\0');
         inFile.read(&key[0], keyStringSize);
@@ -176,7 +205,7 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
         // Read macro
         PDK::Macro macro {};
 
-        size_t nameStringSize;
+        std::size_t nameStringSize;
         READ_FROM_BINARY(inFile, nameStringSize);
         std::string name(nameStringSize, '\0');
         inFile.read(&name[0], nameStringSize);
@@ -188,27 +217,27 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
 
         macro.size = size;
 
-        size_t pinVectorSize {};
+        std::size_t pinVectorSize {};
         READ_FROM_BINARY(inFile, pinVectorSize);
 
         for (std::size_t i = 0; i < pinVectorSize; ++i) {
             PDK::Macro::Pin pin {};
 
-            size_t pinNameSize {};
+            std::size_t pinNameSize {};
             READ_FROM_BINARY(inFile, pinNameSize);
             std::string pinName(pinNameSize, '\0');
             inFile.read(&pinName[0], pinNameSize);
 
             pin.name = pinName;
 
-            size_t pinUseSize {};
+            std::size_t pinUseSize {};
             READ_FROM_BINARY(inFile, pinUseSize);
             std::string pinUse(pinUseSize, '\0');
             inFile.read(&pinUse[0], pinUseSize);
 
             pin.use = pinUse;
 
-            size_t portVectorSize {};
+            std::size_t portVectorSize {};
             READ_FROM_BINARY(inFile, portVectorSize);
 
             for (std::size_t j = 0; j < portVectorSize; ++j) {
@@ -227,7 +256,7 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
             macro.pins.emplace_back(pin);
         }
 
-        size_t obsVectorSize {};
+        std::size_t obsVectorSize {};
         READ_FROM_BINARY(inFile, obsVectorSize);
 
         for (std::size_t j = 0; j < obsVectorSize; ++j) {
@@ -245,6 +274,33 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
 
         t_pdk.macros[key] = macro;
     }
+}
+
+int Convertor::layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void* t_userData)
+{
+    if (t_type != lefrLayerCbkType) {
+        return 2;
+    }
+
+    std::string type { t_layer->type() };
+
+    if (type == "ROUTING" || type == "CUT") {
+        std::string name { t_layer->name() };
+        Data* data = static_cast<Data*>(t_userData);
+
+        if (data->pdk.layers.count(name) == 0) {
+            PDK::Layer layer {};
+
+            layer.type = type;
+            layer.width = t_layer->width();
+            layer.metal = static_cast<MetalLayer>(data->pdk.layers.size());
+
+            data->pdk.layers[name] = layer;
+            data->pdk.scale = std::min(data->pdk.scale, layer.width / 4.0);
+        }
+    }
+
+    return 0;
 }
 
 int Convertor::macroCallback(lefrCallbackType_e t_type, const char* t_string, void* t_userData)
@@ -284,7 +340,7 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
     Data* data = static_cast<Data*>(t_userData);
     PDK::Macro::Pin pin {};
     double pinMaxScale {};
-    const char* layer {};
+    PDK::Layer layer {};
 
     for (std::size_t i = 0; i < t_pin->numPorts(); ++i) {
         lefiGeometries* portGeom = t_pin->port(i);
@@ -292,7 +348,7 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
         for (std::size_t j = 0; j < portGeom->numItems(); ++j) {
             switch (portGeom->itemType(j)) {
             case lefiGeomEnum::lefiGeomLayerE: {
-                layer = portGeom->getLayer(j);
+                layer = data->pdk.layers[portGeom->getLayer(j)];
                 break;
             }
             case lefiGeomEnum::lefiGeomRectE: {
@@ -302,9 +358,9 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
                 double xRight = portRect->xh;
                 double yBottom = portRect->yh;
 
-                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 2.0, std::abs(yBottom - yTop)) / 2.0);
+                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 4.0, std::abs(yBottom - yTop)) / 4.0);
 
-                pin.ports.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, convertNameToML(layer)));
+                pin.ports.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, layer.metal));
                 break;
             }
             default:
@@ -332,14 +388,16 @@ int Convertor::obstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t
         return 2;
     }
 
+    Data* data = static_cast<Data*>(t_userData);
+
     PDK::Macro::OBS obs {};
     lefiGeometries* osbrGeom = t_obstruction->geometries();
-    const char* layer {};
+    PDK::Layer layer {};
 
     for (std::size_t i = 0; i < osbrGeom->numItems(); ++i) {
         switch (osbrGeom->itemType(i)) {
         case lefiGeomEnum::lefiGeomLayerE: {
-            layer = osbrGeom->getLayer(i);
+            layer = data->pdk.layers[osbrGeom->getLayer(i)];
             break;
         }
         case lefiGeomEnum::lefiGeomRectE: {
@@ -349,15 +407,13 @@ int Convertor::obstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t
             double xRight = portRect->xh;
             double yBottom = portRect->yh;
 
-            obs.geometry.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, convertNameToML(layer)));
+            obs.geometry.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, layer.metal));
             break;
         }
         default:
             break;
         }
     }
-
-    Data* data = static_cast<Data*>(t_userData);
 
     data->pdk.macros[data->lastMacro].obstruction = obs;
 

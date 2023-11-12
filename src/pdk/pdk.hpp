@@ -8,6 +8,12 @@
 #include "geometry.hpp"
 
 struct PDK {
+    struct Layer {
+        std::string type { "ROUTING" };
+        double width {};
+        MetalLayer metal {};
+    };
+
     struct Macro {
         struct Pin {
             std::string name {};
@@ -35,6 +41,7 @@ struct PDK {
     };
 
     double scale { INT32_MAX };
+    std::unordered_map<std::string, Layer> layers {};
     std::unordered_map<std::string, Macro> macros {};
 
     PDK() = default;

@@ -25,6 +25,8 @@ public:
     static void deserialize(const std::string& t_libPath, PDK& t_pdk);
 
 private:
+    static int layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void* t_userData);
+
     static int macroCallback(lefrCallbackType_e t_type, const char* t_string, void* t_userData);
 
     static int macroSizeCallback(lefrCallbackType_e t_type, lefiNum t_numbers, void* t_userData);
