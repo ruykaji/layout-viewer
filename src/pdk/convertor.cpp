@@ -296,7 +296,7 @@ int Convertor::layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void
             layer.metal = static_cast<MetalLayer>(data->pdk.layers.size());
 
             data->pdk.layers[name] = layer;
-            data->pdk.scale = std::min(data->pdk.scale, layer.width / 4.0);
+            data->pdk.scale = std::min(data->pdk.scale, layer.width / 2.0);
         }
     }
 
@@ -358,7 +358,7 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
                 double xRight = portRect->xh;
                 double yBottom = portRect->yh;
 
-                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 4.0, std::abs(yBottom - yTop)) / 4.0);
+                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 2.0, std::abs(yBottom - yTop)) / 2.0);
 
                 pin.ports.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, layer.metal));
                 break;

@@ -54,11 +54,11 @@ struct WorkingCell {
     Rectangle originalPlace {};
 
     std::vector<std::shared_ptr<Rectangle>> geometries {};
-    std::vector<std::shared_ptr<Rectangle>> tracks {};
     std::vector<std::shared_ptr<Route>> routes {};
     std::vector<std::shared_ptr<Route>> maskedRoutes {};
     std::unordered_multimap<std::string, std::shared_ptr<Pin>> pins {};
     std::unordered_map<int32_t, Net> nets {};
+    std::unordered_map<int32_t, int32_t> localNetsHash {};
 
     torch::Tensor source {};
     torch::Tensor cellInformation {};
