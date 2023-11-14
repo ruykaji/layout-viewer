@@ -152,7 +152,34 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
             std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
             Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - t_config.getBorderRoutesSize(), j * t_data->cellSize + t_data->cellOffsetY - t_config.getBorderRoutesSize());
 
-            torch::Tensor source = torch::zeros({ 3, t_config.getCellSize(), t_config.getCellSize() });
+            torch::Tensor metalLayers = torch::zeros({ 5, t_config.getCellSize(), t_config.getCellSize() });
+
+            for (const auto& geom : cell->geometries) {
+                auto vertexes = geom->vertex;
+
+                uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+
+                if (layerIndex % 2 == 0) {
+                    for (auto& vertex : vertexes) {
+                        vertex -= moveBy;
+                    }
+
+                    switch (geom->type) {
+                    case RectangleType::DIEAREA: {
+                        metalLayers.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
+                        break;
+                    }
+                    case RectangleType::TRACK: {
+                        metalLayers[2 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                        break;
+                    }
+                    default: {
+                        metalLayers[3 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                        break;
+                    }
+                    }
+                }
+            }
 
             // for (auto& route : cell->maskedRoutes) {
             //     if (cell->localNetsHash.count(route->netIndex) == 0) {
@@ -210,36 +237,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
             //         }
 
             //         cell->source[0][0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(pin.second->netIndex / cell->localNetsHash.size());
-            //     }
-            // },
-            //     cell, moveBy);
-
-            // s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
-            //     for (const auto& geom : cell->geometries) {
-            //         auto vertexes = geom->vertex;
-
-            //         uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
-
-            //         if (layerIndex % 2 == 0) {
-            //             for (auto& vertex : vertexes) {
-            //                 vertex -= moveBy;
-            //             }
-
-            //             switch (geom->type) {
-            //             case RectangleType::DIEAREA: {
-            //                 cell->source[0].slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
-            //                 break;
-            //             }
-            //             case RectangleType::TRACK: {
-            //                 cell->source[0][2 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-            //                 break;
-            //             }
-            //             default: {
-            //                 cell->source[0][3 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-            //                 break;
-            //             }
-            //             }
-            //         }
             //     }
             // },
             //     cell, moveBy);

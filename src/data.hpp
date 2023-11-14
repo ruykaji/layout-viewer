@@ -69,6 +69,8 @@ struct WorkingCell {
 };
 
 struct Data {
+    std::string design{};
+
     int32_t cellSize {};
     int32_t numCellX {};
     int32_t numCellY {};
@@ -79,7 +81,6 @@ struct Data {
     std::vector<Point> dieArea {};
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
     std::unordered_map<std::string, std::unordered_set<std::shared_ptr<WorkingCell>>> correspondingToPinCells {};
-    // std::unordered_map<std::string, std::vector<Rectangle>> vias {};
 
     Data() = default;
     ~Data();
