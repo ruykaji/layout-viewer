@@ -8,6 +8,7 @@
 #include <memory>
 #include <string_view>
 
+#include "config.hpp"
 #include "data.hpp"
 #include "pdk/pdk.hpp"
 #include "thread_pool.hpp"
@@ -15,22 +16,28 @@
 class Encoder {
     static ThreadPool s_threadPool;
 
+    struct Container {
+        Config config {};
+        PDK pdk {};
+        std::shared_ptr<Data> data {};
+    };
+
 public:
-    static PDK s_pdk;
-    
     Encoder() = default;
     ~Encoder() = default;
 
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
 
-    void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data);
+    void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data, const PDK& t_pdk, const Config& t_config);
 
 private:
-    static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Data* t_data);
+    static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container);
 
     // Def callbacks
     // ======================================================================================
+
+    static int defDesignCallback(defrCallbackType_e t_type, const char* t_design, void* t_userData);
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 

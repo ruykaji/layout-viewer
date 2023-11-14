@@ -6,10 +6,12 @@
 #include <lefrReader.hpp>
 #include <string_view>
 
+#include "config.hpp"
 #include "pdk/pdk.hpp"
 
 class Convertor {
     struct Data {
+        Config config {};
         PDK pdk {};
         std::string lastMacro {};
     };
@@ -25,6 +27,8 @@ public:
     static void deserialize(const std::string& t_libPath, PDK& t_pdk);
 
 private:
+    static int unitsCallback(lefrCallbackType_e t_type, lefiUnits* t_units, void* t_userData); 
+
     static int layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void* t_userData);
 
     static int macroCallback(lefrCallbackType_e t_type, const char* t_string, void* t_userData);

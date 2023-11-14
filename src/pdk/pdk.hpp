@@ -40,6 +40,7 @@ struct PDK {
         ~Macro() = default;
     };
 
+    double databaseNumber {};
     double scale { INT32_MAX };
     std::unordered_map<std::string, Layer> layers {};
     std::unordered_map<std::string, Macro> macros {};

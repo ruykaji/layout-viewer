@@ -13,8 +13,7 @@ bool PaintBufferObject::operator<(const PaintBufferObject& other) const
 ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
-    Convertor::deserialize("./skyWater130.bin", Encoder::s_pdk);
-    Encoder::s_pdk.scale = static_cast<int32_t>(Encoder::s_pdk.scale * 1000.0);
+    Convertor::deserialize("./skyWater130.bin", m_pdk);
 
     m_encoder = std::make_unique<Encoder>();
     m_data = std::make_shared<Data>();
@@ -33,7 +32,7 @@ void ViewerWidget::setup()
         m_max = { 0, 0 };
         m_min = { INT32_MAX, INT32_MAX };
 
-        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : Encoder::s_pdk.scale;
+        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : m_pdk.scale;
 
         for (auto& [x, y] : m_data->dieArea) {
             m_max.first = std::max(x * scale, m_max.first);
@@ -91,20 +90,21 @@ void ViewerWidget::setup()
                     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, rout->layer });
                 }
 
-                for (auto& mask : col->maskedRoutes) {
-                    QPolygon poly {};
+                // for (auto& mask : col->maskedRoutes) {
+                //     QPolygon poly {};
 
-                    poly.append(QPoint(mask->vertex[0].x * scale + shiftX, mask->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(mask->vertex[1].x * scale + shiftX, mask->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(mask->vertex[2].x * scale + shiftX, mask->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(mask->vertex[3].x * scale + shiftX, mask->vertex[3].y * scale + shiftY));
+                //     poly.append(QPoint(mask->vertex[0].x * scale + shiftX, mask->vertex[0].y * scale + shiftY));
+                //     poly.append(QPoint(mask->vertex[1].x * scale + shiftX, mask->vertex[1].y * scale + shiftY));
+                //     poly.append(QPoint(mask->vertex[2].x * scale + shiftX, mask->vertex[2].y * scale + shiftY));
+                //     poly.append(QPoint(mask->vertex[3].x * scale + shiftX, mask->vertex[3].y * scale + shiftY));
 
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(MetalLayer::NONE);
+                //     std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(MetalLayer::NONE);
 
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, MetalLayer::NONE });
-                }
+                //     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, MetalLayer::NONE });
+                // }
 
                 for (auto& geom : col->geometries) {
+                    if (!(geom->type == RectangleType::TRACK)) {
                     QPolygon poly {};
 
                     poly.append(QPoint(geom->vertex[0].x * scale + shiftX, geom->vertex[0].y * scale + shiftY));
@@ -115,6 +115,7 @@ void ViewerWidget::setup()
                     std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(geom->layer);
 
                     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, geom->layer });
+                    }
                 }
 
                 shiftX += shiftStep;
@@ -338,7 +339,7 @@ void ViewerWidget::wheelEvent(QWheelEvent* t_event)
 
 void ViewerWidget::render(QString& t_fileName)
 {
-    m_encoder->readDef(std::string_view(t_fileName.toStdString()), m_data);
+    m_encoder->readDef(std::string_view(t_fileName.toStdString()), m_data, m_pdk, m_config);
 
     setup();
     update();

@@ -39,6 +39,7 @@ void Convertor::serialize(const std::string& t_directory, const std::string& t_l
         throw std::runtime_error("Error: cant't initialize lef parser!");
     }
 
+    lefrSetUnitsCbk(&unitsCallback);
     lefrSetLayerCbk(&layerCallback);
     lefrSetMacroBeginCbk(&macroCallback);
     lefrSetMacroSizeCbk(&macroSizeCallback);
@@ -276,6 +277,18 @@ void Convertor::deserialize(const std::string& t_libPath, PDK& t_pdk)
     }
 }
 
+int Convertor::unitsCallback(lefrCallbackType_e t_type, lefiUnits* t_units, void* t_userData)
+{
+    if (t_type != lefrUnitsCbkType) {
+        return 2;
+    }
+
+    Data* data = static_cast<Data*>(t_userData);
+    data->pdk.databaseNumber = t_units->databaseNumber();
+
+    return 0;
+}
+
 int Convertor::layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void* t_userData)
 {
     if (t_type != lefrLayerCbkType) {
@@ -292,11 +305,11 @@ int Convertor::layerCallback(lefrCallbackType_e t_type, lefiLayer* t_layer, void
             PDK::Layer layer {};
 
             layer.type = type;
-            layer.width = t_layer->width();
+            layer.width = t_layer->width() * data->pdk.databaseNumber;
             layer.metal = static_cast<MetalLayer>(data->pdk.layers.size());
 
             data->pdk.layers[name] = layer;
-            data->pdk.scale = std::min(data->pdk.scale, layer.width / 2.0);
+            data->pdk.scale = std::min(data->pdk.scale, layer.width / data->config.getPdkScaleFactor());
         }
     }
 
@@ -326,7 +339,7 @@ int Convertor::macroSizeCallback(lefrCallbackType_e t_type, lefiNum t_numbers, v
 
     Data* data = static_cast<Data*>(t_userData);
 
-    data->pdk.macros[data->lastMacro].size = PointF(t_numbers.x, t_numbers.y);
+    data->pdk.macros[data->lastMacro].size = PointF(t_numbers.x * data->pdk.databaseNumber, t_numbers.y * data->pdk.databaseNumber);
 
     return 0;
 };
@@ -353,12 +366,12 @@ int Convertor::pinCallback(lefrCallbackType_e t_type, lefiPin* t_pin, void* t_us
             }
             case lefiGeomEnum::lefiGeomRectE: {
                 lefiGeomRect* portRect = portGeom->getRect(j);
-                double xLeft = portRect->xl;
-                double yTop = portRect->yl;
-                double xRight = portRect->xh;
-                double yBottom = portRect->yh;
+                double xLeft = portRect->xl * data->pdk.databaseNumber;
+                double yTop = portRect->yl * data->pdk.databaseNumber;
+                double xRight = portRect->xh * data->pdk.databaseNumber;
+                double yBottom = portRect->yh * data->pdk.databaseNumber;
 
-                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / 2.0, std::abs(yBottom - yTop)) / 2.0);
+                pinMaxScale = std::max(pinMaxScale, std::min(std::abs(xRight - xLeft) / data->config.getPdkScaleFactor(), std::abs(yBottom - yTop)) / data->config.getPdkScaleFactor());
 
                 pin.ports.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, layer.metal));
                 break;
@@ -402,10 +415,10 @@ int Convertor::obstructionCallback(lefrCallbackType_e t_type, lefiObstruction* t
         }
         case lefiGeomEnum::lefiGeomRectE: {
             lefiGeomRect* portRect = osbrGeom->getRect(i);
-            double xLeft = portRect->xl;
-            double yTop = portRect->yl;
-            double xRight = portRect->xh;
-            double yBottom = portRect->yh;
+            double xLeft = portRect->xl * data->pdk.databaseNumber;
+            double yTop = portRect->yl * data->pdk.databaseNumber;
+            double xRight = portRect->xh * data->pdk.databaseNumber;
+            double yBottom = portRect->yh * data->pdk.databaseNumber;
 
             obs.geometry.emplace_back(RectangleF(xLeft, yTop, xRight, yBottom, layer.metal));
             break;

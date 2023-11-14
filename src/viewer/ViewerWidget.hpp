@@ -57,9 +57,11 @@ class ViewerWidget : public QWidget {
     Mode m_mode {};
     DisplayMode m_displayMode { DisplayMode::SCALED };
 
+    PDK m_pdk{};
+    Config m_config{};
     std::shared_ptr<Data> m_data {};
-    std::multiset<PaintBufferObject> m_paintBuffer {};
     std::unique_ptr<Encoder> m_encoder {};
+    std::multiset<PaintBufferObject> m_paintBuffer {};
 
     std::pair<int32_t, int32_t> m_max { 0, 0 };
     std::pair<int32_t, int32_t> m_min { INT32_MAX, INT32_MAX };
