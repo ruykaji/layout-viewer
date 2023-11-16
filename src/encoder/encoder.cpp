@@ -150,125 +150,152 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
             std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
-            Point moveBy(i * t_data->cellSize + t_data->cellOffsetX - t_config.getBorderRoutesSize(), j * t_data->cellSize + t_data->cellOffsetY - t_config.getBorderRoutesSize());
 
-            torch::Tensor metalLayers = torch::zeros({ 5, t_config.getCellSize(), t_config.getCellSize() });
+            Point moveByBase(i * t_data->cellSize + t_data->cellOffsetX, j * t_data->cellSize + t_data->cellOffsetY);
+            Point moveBy = moveByBase - t_config.getBorderRoutesSize();
 
-            for (const auto& geom : cell->geometries) {
-                auto vertexes = geom->vertex;
+            s_threadPool.enqueue([](Config& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, Point& moveByBase, std::string& name, int32_t& number) {
+                torch::Tensor source = torch::zeros({ 7, config.getCellSize(), config.getCellSize() });
 
-                uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+                // Fill tracks and obstacles
+                // =======================================================================================
 
-                if (layerIndex % 2 == 0) {
+                for (const auto& geom : cell->geometries) {
+                    uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+
+                    if (layerIndex % 2 == 0) {
+                        std::array<Point, 4> vertexes = geom->vertex;
+
+                        for (auto& vertex : vertexes) {
+                            vertex -= moveBy;
+                        }
+
+                        switch (geom->type) {
+                        case RectangleType::DIEAREA: {
+                            source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -0.5;
+                            break;
+                        }
+                        case RectangleType::TRACK: {
+                            source[1 + layerIndex / 2].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
+                            break;
+                        }
+                        default: {
+                            source[1 + layerIndex / 2].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
+                            break;
+                        }
+                        }
+                    }
+                }
+
+                // Collect and normalize net information
+                // =======================================================================================
+
+                for (auto& route : cell->maskedRoutes) {
+                    if (cell->nets.count(route->netIndex) != 0) {
+                        cell->nets[route->netIndex].pins.erase(--cell->nets[route->netIndex].pins.end());
+                        cell->nets[route->netIndex].pins.insert(1);
+                    } else {
+                        cell->nets[route->netIndex] = Net();
+                        cell->nets[route->netIndex].pins.insert(0);
+                    };
+
+                    if (cell->localNetsHash.count(route->netIndex) == 0) {
+                        cell->localNetsHash[route->netIndex] = cell->localNetsHash.size();
+                    }
+                }
+
+                for (auto& [_, pin] : cell->pins) {
+                    if (cell->localNetsHash.count(pin->netIndex) == 0) {
+                        cell->localNetsHash[pin->netIndex] = cell->localNetsHash.size();
+                    }
+                }
+
+                // Fill pins
+                // =======================================================================================
+
+                for (const auto& [_, pin] : cell->pins) {
+                    std::array<Point, 4> vertexes = pin->vertex;
+
                     for (auto& vertex : vertexes) {
                         vertex -= moveBy;
                     }
 
-                    switch (geom->type) {
-                    case RectangleType::DIEAREA: {
-                        metalLayers.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -1.0;
-                        break;
+                    uint8_t layerIndex = static_cast<uint8_t>(pin->layer);
+
+                    if (layerIndex != 0) {
+                        source[1 + layerIndex / 2].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
                     }
-                    case RectangleType::TRACK: {
-                        metalLayers[2 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-                        break;
-                    }
-                    default: {
-                        metalLayers[3 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-                        break;
-                    }
+
+                    source[1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(cell->localNetsHash[pin->netIndex] / cell->localNetsHash.size()) - 0.5;
+
+                    if ((*cell->nets[pin->netIndex].pins.rbegin()) != 0) {
+                        source[0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
+                    } else {
+                        source[0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
                     }
                 }
-            }
 
-            // for (auto& route : cell->maskedRoutes) {
-            //     if (cell->localNetsHash.count(route->netIndex) == 0) {
-            //         cell->localNetsHash[route->netIndex] = cell->localNetsHash.size() + 1;
-            //         route->netIndex = cell->localNetsHash.size();
-            //     } else {
-            //         route->netIndex = cell->localNetsHash[route->netIndex];
-            //     }
-            // }
+                // Fill masked routes
+                // =======================================================================================
 
-            // for (auto& [_, pin] : cell->pins) {
-            //     if (cell->localNetsHash.count(pin->netIndex) == 0) {
-            //         cell->localNetsHash[pin->netIndex] = cell->localNetsHash.size() + 1;
-            //         pin->netIndex = cell->localNetsHash.size();
-            //     } else {
-            //         pin->netIndex = cell->localNetsHash[pin->netIndex];
-            //     }
-            // }
+                for (const auto& mask : cell->maskedRoutes) {
+                    std::array<Point, 4> vertexes = mask->vertex;
 
-            // s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
-            //     std::size_t totalSize = 0;
+                    for (auto& vertex : vertexes) {
+                        vertex -= moveByBase;
+                    }
 
-            //     for (auto& [_, net] : cell->nets) {
-            //         totalSize += net.pins.size();
-            //         std::sort(net.pins.begin(), net.pins.end());
-            //     }
+                    uint8_t layerIndex = static_cast<uint8_t>(mask->layer);
 
-            //     totalSize = totalSize == 0 ? 1 : totalSize;
-            //     cell->cellInformation = torch::zeros({ 1, 1, static_cast<int32_t>(totalSize), 1 });
+                    source[1 + layerIndex / 2].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
+                    source[1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(cell->localNetsHash[mask->netIndex] / cell->localNetsHash.size()) - 0.5;
 
-            //     std::size_t start = 0;
+                    if ((*cell->nets[mask->netIndex].pins.rbegin()) != 0) {
+                        source[0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
+                    } else {
+                        source[0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
+                    }
+                }
 
-            //     for (const auto& [index, net] : cell->nets) {
-            //         for (std::size_t k = 0; k < net.pins.size(); ++k) {
-            //             cell->cellInformation[0][0][start + k][0] = net.pins[k] * index;
-            //         }
+                // Save source tensor
+                // =======================================================================================
 
-            //         start += net.pins.size();
-            //     }
-            // },
-            //     cell, moveBy);
+                auto pickledSource = torch::pickle_save(source);
+                std::ofstream foutSource("./cache/" + name + "/source_" + std::to_string(number) + ".pt", std::ios::out | std::ios::binary);
+                foutSource.write(pickledSource.data(), pickledSource.size());
+                foutSource.close();
+            },
+                t_config, cell, moveBy, moveByBase, t_data->design, (i + 1) * (j + 1));
 
-            // s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
-            //     for (const auto& pin : cell->pins) {
-            //         auto vertexes = pin.second->vertex;
+            s_threadPool.enqueue([](Config& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
+                torch::Tensor target = torch::zeros({ 5, config.getCellSize(), config.getCellSize() });
 
-            //         for (auto& vertex : vertexes) {
-            //             vertex -= moveBy;
-            //         }
+                // Fill target routes
+                // =======================================================================================
 
-            //         uint8_t layerIndex = static_cast<uint8_t>(pin.second->layer);
+                for (const auto& rout : cell->routes) {
+                    auto vertexes = rout->vertex;
 
-            //         if (layerIndex != 0) {
-            //             cell->source[0][1 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(pin.second->netIndex / cell->localNetsHash.size());
-            //         }
+                    uint8_t layerIndex = static_cast<uint8_t>(rout->layer);
 
-            //         cell->source[0][0].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(pin.second->netIndex / cell->localNetsHash.size());
-            //     }
-            // },
-            //     cell, moveBy);
+                    if (layerIndex % 2 == 0) {
+                        for (auto& vertex : vertexes) {
+                            vertex -= moveBy;
+                        }
 
-            // s_threadPool.enqueue([](std::shared_ptr<WorkingCell>& cell, Point& moveBy) {
-            //     for (const auto& rout : cell->routes) {
-            //         auto vertexes = rout->vertex;
+                        target[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
+                    }
+                }
 
-            //         uint8_t layerIndex = static_cast<uint8_t>(rout->layer);
+                // Save target tensor
+                // =======================================================================================
 
-            //         if (layerIndex % 2 == 0) {
-            //             for (auto& vertex : vertexes) {
-            //                 vertex -= moveBy;
-            //             }
-
-            //             cell->target[0][layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0;
-            //         }
-            //     }
-
-            //     for (const auto& mask : cell->maskedRoutes) {
-            //         auto vertexes = mask->vertex;
-
-            //         for (auto& vertex : vertexes) {
-            //             vertex -= moveBy;
-            //         }
-
-            //         uint8_t layerIndex = static_cast<uint8_t>(mask->layer);
-
-            //         cell->source[0][1 + (layerIndex / 2 - 1) * 3].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = static_cast<double>(mask->netIndex / cell->localNetsHash.size());
-            //     }
-            // },
-            //     cell, moveBy);
+                auto pickledTarget = torch::pickle_save(target);
+                std::ofstream foutTarget("./cache/" + name + "/target_" + std::to_string(number) + ".pt", std::ios::out | std::ios::binary);
+                foutTarget.write(pickledTarget.data(), pickledTarget.size());
+                foutTarget.close();
+            },
+                t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
         }
     }
 
@@ -301,6 +328,9 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Cont
     Point lb = (t_target->vertex[3] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
 
     if (lt.x >= t_container->data->numCellX || lt.y >= t_container->data->numCellY || rt.x >= t_container->data->numCellX || lb.y >= t_container->data->numCellY) {
+        std::cout << t_target->vertex[3].x << ' ' << t_target->vertex[3].y << '\n';
+        std::cout << t_container->data->numCellX << ' ' << t_container->data->numCellY << '\n';
+
         throw std::runtime_error("Indexes out of bounds in working cells!");
     }
 
@@ -336,10 +366,11 @@ void Encoder::addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Cont
                     std::shared_ptr<Route> maskedRoutCut {};
 
                     if (inter[2] - inter[0] <= inter[3] - inter[1]) {
-                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], inter[2], cellRect.vertex[2].y, rout->layer, rout->netIndex);
+                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], inter[2], inter[1] + t_container->config.getBorderRoutesSize(), rout->layer, rout->netIndex);
                     } else {
-                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], cellRect.vertex[1].x, inter[3], rout->layer, rout->netIndex);
+                        maskedRoutCut = std::make_shared<Route>(inter[0], inter[1], inter[0] + t_container->config.getBorderRoutesSize(), inter[3], rout->layer, rout->netIndex);
                     }
+
                     t_container->data->cells[j][i]->maskedRoutes.emplace_back(maskedRoutCut);
                 }
 
@@ -447,8 +478,8 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     int32_t height = rightBottom.y - leftTop.y + 1;
 
     container->data->cellSize = container->config.getCellSize() - container->config.getBorderRoutesSize();
-    container->data->numCellX = std::ceil((width + static_cast<double>(container->config.getBorderSize())) / container->data->cellSize);
-    container->data->numCellY = std::ceil((height + static_cast<double>(container->config.getBorderSize())) / container->data->cellSize);
+    container->data->numCellX = std::ceil(static_cast<double>(width + container->config.getBorderSize()) / container->data->cellSize);
+    container->data->numCellY = std::ceil(static_cast<double>(height + container->config.getBorderSize()) / container->data->cellSize);
     container->data->cellOffsetX = leftTop.x - container->config.getBorderSize();
     container->data->cellOffsetY = leftTop.y - container->config.getBorderSize();
     container->data->cells = std::vector<std::vector<std::shared_ptr<WorkingCell>>>(container->data->numCellY, std::vector<std::shared_ptr<WorkingCell>>(container->data->numCellX, nullptr));
@@ -689,31 +720,42 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
             container->data->correspondingToPinCells[pinsNames[i]].insert(cellThatStays);
         }
 
-        Net net { container->data->totalNets, std::vector<int8_t>(pinsNames.size(), 0) };
-
         for (const auto& name : pinsNames) {
             if (container->data->correspondingToPinCells.count(name) == 0) {
                 throw std::runtime_error("Can't find pin '" + name + "' in any of working cells!");
             };
 
             std::shared_ptr<WorkingCell> cell = *container->data->correspondingToPinCells.at(name).begin();
+            Net net {};
+
+            net.index = container->data->totalNets;
 
             if (cell->nets.count(net.index) == 0) {
                 for (std::size_t i = 0; i < pinsNames.size(); ++i) {
                     auto range = cell->pins.equal_range(pinsNames[i]);
 
                     if (range.first != range.second) {
-                        net.pins[i] = 1;
+                        net.pins.insert(1);
 
                         for (auto& it = range.first; it != range.second; ++it) {
                             it->second->netIndex = container->data->totalNets;
                         }
                     } else {
-                        net.pins[i] = 0;
+                        net.pins.insert(0);
                     }
                 }
 
                 cell->nets[net.index] = net;
+            }
+        }
+    } else {
+        for (std::size_t i = 0; i < t_net->numConnections(); ++i) {
+            std::string pinName = std::string(t_net->instance(i)) + t_net->pin(i);
+
+            if (container->data->correspondingToPinCells.count(pinName) != 0) {
+                for (auto& cell : container->data->correspondingToPinCells[pinName]) {
+                    cell->pins.erase(pinName);
+                }
             }
         }
     }

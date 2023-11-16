@@ -42,7 +42,7 @@ struct Route : public Rectangle {
 
 struct Net {
     int32_t index {};
-    std::vector<int8_t> pins {};
+    std::multiset<int8_t, std::greater<int8_t>> pins {};
 
     Net() = default;
     ~Net() = default;
@@ -69,7 +69,7 @@ struct WorkingCell {
 };
 
 struct Data {
-    std::string design{};
+    std::string design {};
 
     int32_t cellSize {};
     int32_t numCellX {};
