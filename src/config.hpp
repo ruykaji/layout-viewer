@@ -59,12 +59,12 @@ private:
 
     // PDK config
     // =================================================================================
-    double m_pdkScaleFactor { 2.0 };
+    double m_pdkScaleFactor { 3.0 };
 
     // Parser config
     // =================================================================================
 
-    int32_t m_cellSize { 480 };
+    int32_t m_cellSize { 320 };
     int32_t m_borderSize { 50 };
     int32_t m_borderRoutesSize { 20 };
 

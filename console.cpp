@@ -45,13 +45,15 @@ int main(int argc, char const* argv[])
             }
         };
 
-        TopologyDataset trainDataset(8);
+        // TopologyDataset trainDataset(8);
 
         for (auto& file : trainFiles) {
+            std::cout << file << std::endl;
+
             std::shared_ptr<Data> data = std::make_shared<Data>();
 
             encoder.readDef(file, data, pdk, config);
-            trainDataset.add(data);
+            // trainDataset.add(data);
         }
 
         // std::vector<std::string_view> validFiles = {
@@ -87,7 +89,7 @@ int main(int argc, char const* argv[])
 
         std::shared_ptr<Data> data = std::make_shared<Data>();
 
-        encoder.readDef("/home/alaie/stuff/circuits/aes.def", data, pdk, config);
+        encoder.readDef("/home/alaie/stuff/circuits/picorv32.def", data, pdk, config);
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);

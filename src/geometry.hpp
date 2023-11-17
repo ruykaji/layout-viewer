@@ -70,19 +70,19 @@ struct Point {
         return Point(t_lhs.x - t_rhs.x, t_lhs.y - t_rhs.y);
     };
 
-    friend constexpr inline Point operator+(const Point& t_lhs, const int32_t& t_rhs) noexcept
+    friend constexpr inline Point operator+(const Point& t_lhs, const double& t_rhs) noexcept
     {
         return Point(t_lhs.x + t_rhs, t_lhs.y + t_rhs);
     };
-    friend constexpr inline Point operator-(const Point& t_lhs, const int32_t& t_rhs) noexcept
+    friend constexpr inline Point operator-(const Point& t_lhs, const double& t_rhs) noexcept
     {
         return Point(t_lhs.x - t_rhs, t_lhs.y - t_rhs);
     };
-    friend constexpr inline Point operator*(const Point& t_lhs, const int32_t& t_rhs) noexcept
+    friend constexpr inline Point operator*(const Point& t_lhs, const double& t_rhs) noexcept
     {
         return Point(t_lhs.x * t_rhs, t_lhs.y * t_rhs);
     };
-    friend constexpr inline Point operator/(const Point& t_lhs, const int32_t& t_rhs) noexcept
+    friend constexpr inline Point operator/(const Point& t_lhs, const double& t_rhs) noexcept
     {
         return Point(t_lhs.x / t_rhs, t_lhs.y / t_rhs);
     };

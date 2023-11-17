@@ -21,35 +21,37 @@ void TopologyDataset::add(const std::shared_ptr<Data>& t_data) noexcept
     for (std::size_t y = 0; y < t_data->numCellY; ++y) {
         for (std::size_t x = 0; x < t_data->numCellX; ++x) {
 
-            torch::Tensor newSource = torch::zeros({ 1, 0, t_data->cells[y][x]->source.size(2), t_data->cells[y][x]->source.size(3) });
+            // torch::Tensor newSource = torch::zeros({ 1, 0, t_data->cells[y][x]->source.size(2), t_data->cells[y][x]->source.size(3) });
 
-            for (std::size_t i = 0; i < t_data->cells[y][x]->source.size(1); ++i) {
-                newSource = torch::cat({ newSource, t_data->cells[y][x]->source[0][i].unsqueeze(0).repeat({ 3, 1, 1 }).unsqueeze(0) }, 1);
+            // for (std::size_t i = 0; i < t_data->cells[y][x]->source.size(1); ++i) {
+            //     newSource = torch::cat({ newSource, t_data->cells[y][x]->source[0][i].unsqueeze(0).repeat({ 3, 1, 1 }).unsqueeze(0) }, 1);
+            // }
+
+            // torch::Tensor newTarget = torch::zeros({ 1, 0, t_data->cells[y][x]->target.size(2), t_data->cells[y][x]->target.size(3) });
+
+            // for (std::size_t i = 0; i <  t_data->cells[y][x]->target.size(1); ++i) {
+            //     newTarget = torch::cat({ newTarget,  t_data->cells[y][x]->target[0][i].unsqueeze(0).repeat({ 7, 1, 1 }).unsqueeze(0) }, 1);
+            // }
+
+            // newSource = newSource.index({ torch::indexing::Slice(), torch::indexing::Slice(0, 32), torch::indexing::Slice(), torch::indexing::Slice() });
+            // newTarget = newTarget.index({ torch::indexing::Slice(), torch::indexing::Slice(0, 32), torch::indexing::Slice(), torch::indexing::Slice() });
+
+            // torch::save(newSource, "./cache/source_" + std::to_string(m_totalCells) + ".pt");
+            // torch::save(newTarget, "./cache/target_" + std::to_string(m_totalCells) + ".pt");
+
+            if (t_data->cells[y][x]->pins.size() != 0 || t_data->cells[y][x]->maskedRoutes.size() != 0) {
+                auto pickledSource = torch::pickle_save(t_data->cells[y][x]->source);
+                std::ofstream foutSource("./cache/source_" + std::to_string(m_totalCells) + ".pt", std::ios::out | std::ios::binary);
+                foutSource.write(pickledSource.data(), pickledSource.size());
+                foutSource.close();
+
+                auto pickledTarget = torch::pickle_save(t_data->cells[y][x]->target);
+                std::ofstream foutTarget("./cache/target_" + std::to_string(m_totalCells) + ".pt", std::ios::out | std::ios::binary);
+                foutTarget.write(pickledTarget.data(), pickledTarget.size());
+                foutTarget.close();
+
+                ++m_totalCells;
             }
-
-            torch::Tensor newTarget = torch::zeros({ 1, 0, t_data->cells[y][x]->target.size(2), t_data->cells[y][x]->target.size(3) });
-
-            for (std::size_t i = 0; i <  t_data->cells[y][x]->target.size(1); ++i) {
-                newTarget = torch::cat({ newTarget,  t_data->cells[y][x]->target[0][i].unsqueeze(0).repeat({ 7, 1, 1 }).unsqueeze(0) }, 1);
-            }
-
-            newSource = newSource.index({ torch::indexing::Slice(), torch::indexing::Slice(0, 32), torch::indexing::Slice(), torch::indexing::Slice() });
-            newTarget = newTarget.index({ torch::indexing::Slice(), torch::indexing::Slice(0, 32), torch::indexing::Slice(), torch::indexing::Slice() });
-
-            torch::save(newSource, "./cache/source_" + std::to_string(m_totalCells) + ".pt");
-            torch::save(newTarget, "./cache/target_" + std::to_string(m_totalCells) + ".pt");
-
-            // auto pickledSource = torch::pickle_save(t_data->cells[y][x]->source);
-            // std::ofstream foutSource("./cache/source_" + std::to_string(m_totalCells) + ".pt", std::ios::out | std::ios::binary);
-            // foutSource.write(pickledSource.data(), pickledSource.size());
-            // foutSource.close();
-
-            // auto pickledTarget = torch::pickle_save(t_data->cells[y][x]->target);
-            // std::ofstream foutTarget("./cache/target_" + std::to_string(m_totalCells) + ".pt", std::ios::out | std::ios::binary);
-            // foutTarget.write(pickledTarget.data(), pickledTarget.size());
-            // foutTarget.close();
-
-            ++m_totalCells;
         }
     }
 }

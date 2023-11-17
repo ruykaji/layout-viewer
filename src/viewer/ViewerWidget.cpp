@@ -42,6 +42,12 @@ void ViewerWidget::setup()
             m_min.second = std::min(y * scale, m_min.second);
         }
 
+        m_max.first = m_max.first / m_pdk.scale;
+        m_max.second = m_max.second / m_pdk.scale;
+
+        m_min.first = m_min.first / m_pdk.scale;
+        m_min.second = m_min.second / m_pdk.scale;
+
         // Setup paint buffer
         // ======================================================================================
 
@@ -105,16 +111,16 @@ void ViewerWidget::setup()
 
                 for (auto& geom : col->geometries) {
                     if (!(geom->type == RectangleType::TRACK)) {
-                    QPolygon poly {};
+                        QPolygon poly {};
 
-                    poly.append(QPoint(geom->vertex[0].x * scale + shiftX, geom->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(geom->vertex[1].x * scale + shiftX, geom->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(geom->vertex[2].x * scale + shiftX, geom->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(geom->vertex[3].x * scale + shiftX, geom->vertex[3].y * scale + shiftY));
+                        poly.append(QPoint(geom->vertex[0].x * scale + shiftX, geom->vertex[0].y * scale + shiftY));
+                        poly.append(QPoint(geom->vertex[1].x * scale + shiftX, geom->vertex[1].y * scale + shiftY));
+                        poly.append(QPoint(geom->vertex[2].x * scale + shiftX, geom->vertex[2].y * scale + shiftY));
+                        poly.append(QPoint(geom->vertex[3].x * scale + shiftX, geom->vertex[3].y * scale + shiftY));
 
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(geom->layer);
+                        std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(geom->layer);
 
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, geom->layer });
+                        m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, geom->layer });
                     }
                 }
 
