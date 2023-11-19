@@ -10,7 +10,6 @@
 
 #include "neural_network/dataset.hpp"
 #include "neural_network/encoders/resnet50.hpp"
-#include "neural_network/train_module.hpp"
 
 int main(int argc, char const* argv[])
 {
@@ -30,6 +29,9 @@ int main(int argc, char const* argv[])
         Encoder encoder;
         Convertor::deserialize("./skyWater130.bin", pdk);
 
+        std::shared_ptr<PDK> pdkPtr = std::make_shared<PDK>(pdk);
+        std::shared_ptr<Config> configPtr = std::make_shared<Config>(config);
+
         // Create(load) train and validation datasets
         // ======================================================================================
 
@@ -45,38 +47,11 @@ int main(int argc, char const* argv[])
             }
         };
 
-        // TopologyDataset trainDataset(8);
-
         for (auto& file : trainFiles) {
-            std::cout << file << std::endl;
+            std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
 
-            std::shared_ptr<Data> data = std::make_shared<Data>();
-
-            encoder.readDef(file, data, pdk, config);
-            // trainDataset.add(data);
+            encoder.readDef(file, dataPtr, pdkPtr, configPtr);
         }
-
-        // std::vector<std::string_view> validFiles = {
-        //     {
-        //         "/home/alaie/stuff/circuits/gcd.def",
-        //         "/home/alaie/stuff/circuits/spm.def",
-        //     }
-        // };
-
-        // TopologyDataset validDataset {};
-
-        // for (auto& file : validFiles) {
-        //     std::shared_ptr<Data> data = std::make_shared<Data>();
-
-        //     encoder.readDef(file, data);
-        //     validDataset.add(data);
-        // }
-
-        // TrainModule trainModule(0);
-
-        // std::cout << std::setprecision(16);
-
-        // trainModule.train(trainDataset, 1000);
 
         break;
     }
@@ -87,19 +62,21 @@ int main(int argc, char const* argv[])
         Encoder encoder;
         Convertor::deserialize("./skyWater130.bin", pdk);
 
-        std::shared_ptr<Data> data = std::make_shared<Data>();
+        std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
+        std::shared_ptr<PDK> pdkPtr = std::make_shared<PDK>(pdk);
+        std::shared_ptr<Config> configPtr = std::make_shared<Config>(config);
 
-        encoder.readDef("/home/alaie/stuff/circuits/picorv32.def", data, pdk, config);
+        encoder.readDef("/home/alaie/stuff/circuits/picorv32.def", dataPtr, pdkPtr, configPtr);
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
 
         std::cout << std::setprecision(12);
         std::cout << "Time taken by reader: " << (duration.count() / 1000000.0) << " seconds\n";
-        std::cout << "Num cells - " << data->numCellX * data->numCellY << "\n";
-        std::cout << "Total Nets - " << data->totalNets << "\n";
-        std::cout << "Total pins to connect - " << data->correspondingToPinCells.size() << "\n";
-        std::cout << "Total tensor memory in mbytes - " << ((data->numCellX * data->numCellY / 1000000.0) * 3 * config.getCellSize() * config.getCellSize() * 5) << "\n";
+        std::cout << "Num cells - " << dataPtr->numCellX * dataPtr->numCellY << "\n";
+        std::cout << "Total Nets - " << dataPtr->totalNets << "\n";
+        std::cout << "Total pins to connect - " << dataPtr->correspondingToPinCells.size() << "\n";
+        std::cout << "Total tensor memory in mbytes - " << ((dataPtr->numCellX * dataPtr->numCellY / 1000000.0) * 3 * config.getCellSize() * config.getCellSize() * 5) << "\n";
         std::cout << std::flush;
 
         break;

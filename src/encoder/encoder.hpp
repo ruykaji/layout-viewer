@@ -17,8 +17,8 @@ class Encoder {
     static ThreadPool s_threadPool;
 
     struct Container {
-        Config config {};
-        PDK pdk {};
+        std::shared_ptr<Config> config {};
+        std::shared_ptr<PDK> pdk {};
         std::shared_ptr<Data> data {};
     };
 
@@ -29,10 +29,12 @@ public:
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
 
-    void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data, const PDK& t_pdk, const Config& t_config);
+    void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data, const std::shared_ptr<PDK>& t_pdk, const std::shared_ptr<Config>& t_config);
 
 private:
-    static void addToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container);
+    static void addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container);
+
+    static void addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, Container* t_container);
 
     // Def callbacks
     // ======================================================================================
