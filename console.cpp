@@ -9,7 +9,6 @@
 #include "pdk/convertor.hpp"
 
 #include "neural_network/dataset.hpp"
-#include "neural_network/encoders/resnet50.hpp"
 
 int main(int argc, char const* argv[])
 {
@@ -66,7 +65,7 @@ int main(int argc, char const* argv[])
         std::shared_ptr<PDK> pdkPtr = std::make_shared<PDK>(pdk);
         std::shared_ptr<Config> configPtr = std::make_shared<Config>(config);
 
-        encoder.readDef("/home/alaie/stuff/circuits/picorv32.def", dataPtr, pdkPtr, configPtr);
+        encoder.readDef("/home/alaie/stuff/circuits/aes.def", dataPtr, pdkPtr, configPtr);
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
@@ -75,7 +74,7 @@ int main(int argc, char const* argv[])
         std::cout << "Time taken by reader: " << (duration.count() / 1000000.0) << " seconds\n";
         std::cout << "Num cells - " << dataPtr->numCellX * dataPtr->numCellY << "\n";
         std::cout << "Total Nets - " << dataPtr->totalNets << "\n";
-        std::cout << "Total pins to connect - " << dataPtr->correspondingToPinCells.size() << "\n";
+        std::cout << "Total pins to connect - " << dataPtr->correspondingToPinCell.size() << "\n";
         std::cout << "Total tensor memory in mbytes - " << ((dataPtr->numCellX * dataPtr->numCellY / 1000000.0) * 3 * config.getCellSize() * config.getCellSize() * 5) << "\n";
         std::cout << std::flush;
 

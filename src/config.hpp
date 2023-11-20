@@ -37,11 +37,6 @@ public:
         return m_borderSize;
     };
 
-    constexpr inline int32_t getBorderRoutesSize() const noexcept
-    {
-        return m_borderRoutesSize;
-    };
-
 private:
     std::string m_configPath {};
     std::unordered_map<std::string, int8_t> m_settingsEnum {
@@ -55,18 +50,17 @@ private:
     // Global config
     // =================================================================================
 
-    Mode m_mode { Mode::TRAIN };
+    Mode m_mode { Mode::TEST };
 
     // PDK config
     // =================================================================================
-    double m_pdkScaleFactor { 3.0 };
+    double m_pdkScaleFactor { 2.0 };
 
     // Parser config
     // =================================================================================
 
     int32_t m_cellSize { 320 };
     int32_t m_borderSize { 50 };
-    int32_t m_borderRoutesSize { 20 };
 
     // Train config
     // =================================================================================

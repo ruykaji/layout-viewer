@@ -14,6 +14,7 @@ struct WorkingCell;
 struct Data;
 
 struct WorkingCell {
+    std::string name {};
     Rectangle originalPlace {};
     std::vector<std::shared_ptr<Rectangle>> geometries {};
     std::vector<std::string> pins {};

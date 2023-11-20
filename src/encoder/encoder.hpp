@@ -34,7 +34,7 @@ public:
 private:
     static void addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container);
 
-    static void addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, Container* t_container);
+    static void addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, const std::string& t_pinName, Container* t_container);
 
     // Def callbacks
     // ======================================================================================

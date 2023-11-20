@@ -43,10 +43,6 @@ Config::Config(int t_argc, char const* t_argv[])
                                 m_borderSize = std::stoi(settings);
                                 break;
                             }
-                            case 4: {
-                                m_borderRoutesSize = std::stoi(settings);
-                                break;
-                            }
                             default:
                                 break;
                             }

@@ -150,11 +150,9 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
             std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
+            Point moveBy(i * t_data->cellSize + t_data->cellOffsetX, j * t_data->cellSize + t_data->cellOffsetY);
 
-            Point moveByBase(i * t_data->cellSize + t_data->cellOffsetX, j * t_data->cellSize + t_data->cellOffsetY);
-            Point moveBy = moveByBase - t_config->getBorderRoutesSize();
-
-            s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, Point& moveByBase, std::string& name, int32_t& number) {
+            s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
                 torch::Tensor source = torch::zeros({ 5, config->getCellSize(), config->getCellSize() });
 
                 // Fill tracks and obstacles
@@ -190,12 +188,9 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 // Save source tensor
                 // =======================================================================================
 
-                auto pickledSource = torch::pickle_save(source);
-                std::ofstream foutSource("./cache/" + name + "/source_" + std::to_string(number) + ".pt", std::ios::out | std::ios::binary);
-                foutSource.write(pickledSource.data(), pickledSource.size());
-                foutSource.close();
+                torch::save(source, "./cache/" + name + "/source_" + std::to_string(number) + ".pt");
             },
-                t_config, cell, moveBy, moveByBase, t_data->design, (i + 1) * (j + 1));
+                t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
         }
     }
 
@@ -252,7 +247,7 @@ void Encoder::addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_targ
     }
 }
 
-void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, Container* t_container)
+void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, const std::string& t_pinName, Container* t_container)
 {
     static auto intersectionArea = [](const Rectangle& t_fl, const std::shared_ptr<Rectangle>& t_rl) {
         return std::array<int32_t, 4> {
@@ -263,18 +258,22 @@ void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>
         };
     };
 
-    for (auto& rect : t_target) {
-        if (!rect) {
+    // TODO: replace with better solution
+    std::unordered_multimap<std::string, std::shared_ptr<Rectangle>> cellsRects {};
+    std::unordered_map<std::string, std::pair<Point, int32_t>> cellsCoordsAndArea {};
+
+    for (auto& targetRect : t_target) {
+        if (!targetRect) {
             throw std::runtime_error("Can't add to working cell, target is not exists!");
         }
 
-        for (auto& point : rect->vertex) {
+        for (auto& point : targetRect->vertex) {
             point = point / t_container->pdk->scale;
         }
 
-        Point lt = (rect->vertex[0] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
-        Point rt = (rect->vertex[1] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
-        Point lb = (rect->vertex[3] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
+        Point lt = (targetRect->vertex[0] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
+        Point rt = (targetRect->vertex[1] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
+        Point lb = (targetRect->vertex[3] - Point(t_container->data->cellOffsetX, t_container->data->cellOffsetY)) / t_container->data->cellSize;
 
         if (lt.x >= t_container->data->numCellX || lt.y >= t_container->data->numCellY || rt.x >= t_container->data->numCellX || lb.y >= t_container->data->numCellY) {
             throw std::runtime_error("Working cells is out of bounds!");
@@ -283,19 +282,58 @@ void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>
         for (std::size_t i = lt.x; i < rt.x + 1; ++i) {
             for (std::size_t j = lt.y; j < lb.y + 1; ++j) {
                 Rectangle cellRect = t_container->data->cells[j][i]->originalPlace;
-                std::array<int32_t, 4> inter = intersectionArea(cellRect, rect);
+                std::array<int32_t, 4> inter = intersectionArea(cellRect, targetRect);
                 std::shared_ptr<Rectangle> rect {};
 
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], rect->layer, rect->type);
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], targetRect->layer, targetRect->type);
                 } else {
                     inter[2] = std::min(cellRect.vertex[2].x, inter[2]);
                     inter[3] = std::min(cellRect.vertex[2].y, inter[3]);
-                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], rect->layer, rect->type);
+                    rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], targetRect->layer, targetRect->type);
                 }
 
-                t_container->data->cells[j][i]->geometries.emplace_back(rect);
+                cellsRects.insert(std::pair(t_container->data->cells[j][i]->name, rect));
+
+                if (cellsCoordsAndArea.count(t_container->data->cells[j][i]->name) == 0) {
+                    cellsCoordsAndArea[t_container->data->cells[j][i]->name] = std::pair(Point(i, j), (inter[2] - inter[0]) * (inter[3] - inter[1]));
+                } else {
+                    cellsCoordsAndArea[t_container->data->cells[j][i]->name].second += (inter[2] - inter[0]) * (inter[3] - inter[1]);
+                }
             }
+        }
+    }
+
+    int32_t maxVal = std::numeric_limits<int32_t>::min();
+    std::string cellIndex {};
+    Point cellCoords {};
+
+    for (const auto& [index, pair] : cellsCoordsAndArea) {
+        if (pair.second > maxVal) {
+            maxVal = pair.second;
+
+            cellIndex = index;
+            cellCoords = pair.first;
+        }
+    }
+
+    t_container->data->correspondingToPinCell[t_pinName] = t_container->data->cells[cellCoords.y][cellCoords.x];
+
+    auto range = cellsRects.equal_range(cellIndex);
+
+    for (auto it = range.first; it != range.second; ++it) {
+        t_container->data->pins.insert(std::pair(t_pinName, it->second));
+    }
+
+
+    // Add rest rectangles as plain geometry
+    cellsCoordsAndArea.erase(cellIndex);
+
+    for (auto& [first, second] : cellsCoordsAndArea) {
+        auto range = cellsRects.equal_range(first);
+
+        for (auto it = range.first; it != range.second; ++it) {
+            addGeometryToWorkingCells(it->second, t_container);
         }
     }
 }
@@ -361,7 +399,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     double width = (rightBottom.x - leftTop.x) / container->pdk->scale;
     double height = (rightBottom.y - leftTop.y) / container->pdk->scale;
 
-    container->data->cellSize = container->config->getCellSize() - container->config->getBorderRoutesSize();
+    container->data->cellSize = container->config->getCellSize();
     container->data->numCellX = std::ceil((width + container->config->getBorderSize()) / container->data->cellSize);
     container->data->numCellY = std::ceil((height + container->config->getBorderSize()) / container->data->cellSize);
     container->data->cellOffsetX = leftTop.x - container->config->getBorderSize();
@@ -377,6 +415,7 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
 
             std::shared_ptr<WorkingCell> cell = std::make_shared<WorkingCell>();
 
+            cell->name = std::to_string(j) + std::to_string(i);
             cell->originalPlace = Rectangle(left, top, right, bottom, MetalLayer::NONE);
             container->data->cells[j][i] = cell;
         }
@@ -457,7 +496,7 @@ int Encoder::defComponentCallback(defrCallbackType_e t_type, defiComponent* t_co
         }
 
         if (!pinsRects.empty()) {
-            addPinToWorkingCells(pinsRects, container);
+            addPinToWorkingCells(pinsRects, std::string(t_component->id()) + pin.name, container);
         }
     }
 
@@ -582,7 +621,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
             std::string pinName = std::string(t_net->instance(i)) + t_net->pin(i);
             auto range = container->data->pins.equal_range(pinName);
 
-            for (auto it = range.first; it != range.second; ++i) {
+            for (auto it = range.first; it != range.second; ++it) {
                 addGeometryToWorkingCells(it->second, container);
             }
 
@@ -722,7 +761,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
             PDK::Layer layer = container->pdk->layers[pinPort->layer(j)];
 
             if (isSignal) {
-                pinsRects.emplace_back(std::make_shared<Rectangle>(xl, yl, xh, yh, layer.metal, RectangleType::PIN), container);
+                pinsRects.emplace_back(std::make_shared<Rectangle>(xl, yl, xh, yh, layer.metal, RectangleType::PIN));
             } else {
                 addGeometryToWorkingCells(std::make_shared<Rectangle>(xl, yl, xh, yh, layer.metal, RectangleType::CLOCK), container);
             }
@@ -730,7 +769,7 @@ int Encoder::defPinCallback(defrCallbackType_e t_type, defiPin* t_pin, void* t_u
     }
 
     if (!pinsRects.empty()) {
-        addPinToWorkingCells(pinsRects, container);
+        addPinToWorkingCells(pinsRects, "PIN" + std::string(t_pin->pinName()), container);
     }
 
     return 0;
