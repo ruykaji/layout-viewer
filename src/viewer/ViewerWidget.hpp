@@ -57,8 +57,8 @@ class ViewerWidget : public QWidget {
     Mode m_mode {};
     DisplayMode m_displayMode { DisplayMode::SCALED };
 
-    PDK m_pdk{};
-    Config m_config{};
+    std::shared_ptr<PDK> m_pdk{};
+    std::shared_ptr<Config> m_config{};
     std::shared_ptr<Data> m_data {};
     std::unique_ptr<Encoder> m_encoder {};
     std::multiset<PaintBufferObject> m_paintBuffer {};

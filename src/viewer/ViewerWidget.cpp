@@ -13,9 +13,12 @@ bool PaintBufferObject::operator<(const PaintBufferObject& other) const
 ViewerWidget::ViewerWidget(QWidget* t_parent)
     : QWidget(t_parent)
 {
-    Convertor::deserialize("./skyWater130.bin", m_pdk);
+    PDK pdk;
+    Convertor::deserialize("./skyWater130.bin", pdk);
 
     m_encoder = std::make_unique<Encoder>();
+    m_pdk = std::make_shared<PDK>(pdk);
+    m_config = std::make_shared<Config>();
     m_data = std::make_shared<Data>();
 
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -32,7 +35,7 @@ void ViewerWidget::setup()
         m_max = { 0, 0 };
         m_min = { INT32_MAX, INT32_MAX };
 
-        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : m_pdk.scale;
+        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : m_pdk->scale;
 
         for (auto& [x, y] : m_data->dieArea) {
             m_max.first = std::max(x * scale, m_max.first);
@@ -42,140 +45,105 @@ void ViewerWidget::setup()
             m_min.second = std::min(y * scale, m_min.second);
         }
 
-        m_max.first = m_max.first / m_pdk.scale;
-        m_max.second = m_max.second / m_pdk.scale;
+        m_max.first = m_max.first / m_pdk->scale;
+        m_max.second = m_max.second / m_pdk->scale;
 
-        m_min.first = m_min.first / m_pdk.scale;
-        m_min.second = m_min.second / m_pdk.scale;
+        m_min.first = m_min.first / m_pdk->scale;
+        m_min.second = m_min.second / m_pdk->scale;
 
         // Setup paint buffer
         // ======================================================================================
 
         m_paintBuffer.clear();
 
-        int32_t shiftStep = m_displayMode == DisplayMode::SCALED ? 25 : 0;
-        int32_t shiftX {};
-        int32_t shiftY {};
-
         for (auto& row : m_data->cells) {
             for (auto& col : row) {
-
                 if (m_displayMode == DisplayMode::SCALED) {
                     QPolygon poly {};
 
                     for (auto& [x, y] : col->originalPlace.vertex) {
-                        poly.append(QPoint(x * scale + shiftX, y * scale + shiftY));
+                        poly.append(QPoint(x * scale, y * scale));
                     }
 
                     m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
                 }
 
-                for (auto& pin : col->pins) {
-                    QPolygon poly {};
-
-                    poly.append(QPoint(pin.second->vertex[0].x * scale + shiftX, pin.second->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(pin.second->vertex[1].x * scale + shiftX, pin.second->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(pin.second->vertex[2].x * scale + shiftX, pin.second->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(pin.second->vertex[3].x * scale + shiftX, pin.second->vertex[3].y * scale + shiftY));
-
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin.second->layer);
-
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin.second->layer });
-                }
-
-                for (auto& rout : col->routes) {
-                    QPolygon poly {};
-
-                    poly.append(QPoint(rout->vertex[0].x * scale + shiftX, rout->vertex[0].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[1].x * scale + shiftX, rout->vertex[1].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[2].x * scale + shiftX, rout->vertex[2].y * scale + shiftY));
-                    poly.append(QPoint(rout->vertex[3].x * scale + shiftX, rout->vertex[3].y * scale + shiftY));
-
-                    std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(rout->layer);
-
-                    m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, rout->layer });
-                }
-
-                // for (auto& mask : col->maskedRoutes) {
-                //     QPolygon poly {};
-
-                //     poly.append(QPoint(mask->vertex[0].x * scale + shiftX, mask->vertex[0].y * scale + shiftY));
-                //     poly.append(QPoint(mask->vertex[1].x * scale + shiftX, mask->vertex[1].y * scale + shiftY));
-                //     poly.append(QPoint(mask->vertex[2].x * scale + shiftX, mask->vertex[2].y * scale + shiftY));
-                //     poly.append(QPoint(mask->vertex[3].x * scale + shiftX, mask->vertex[3].y * scale + shiftY));
-
-                //     std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(MetalLayer::NONE);
-
-                //     m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, MetalLayer::NONE });
-                // }
-
                 for (auto& geom : col->geometries) {
                     if (!(geom->type == RectangleType::TRACK)) {
                         QPolygon poly {};
 
-                        poly.append(QPoint(geom->vertex[0].x * scale + shiftX, geom->vertex[0].y * scale + shiftY));
-                        poly.append(QPoint(geom->vertex[1].x * scale + shiftX, geom->vertex[1].y * scale + shiftY));
-                        poly.append(QPoint(geom->vertex[2].x * scale + shiftX, geom->vertex[2].y * scale + shiftY));
-                        poly.append(QPoint(geom->vertex[3].x * scale + shiftX, geom->vertex[3].y * scale + shiftY));
+                        poly.append(QPoint(geom->vertex[0].x * scale, geom->vertex[0].y * scale));
+                        poly.append(QPoint(geom->vertex[1].x * scale, geom->vertex[1].y * scale));
+                        poly.append(QPoint(geom->vertex[2].x * scale, geom->vertex[2].y * scale));
+                        poly.append(QPoint(geom->vertex[3].x * scale, geom->vertex[3].y * scale));
 
                         std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(geom->layer);
 
                         m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, geom->layer });
                     }
                 }
-
-                shiftX += shiftStep;
             }
-
-            shiftX = 0;
-            shiftY += shiftStep;
-        }
-    } else {
-        m_max = { 0, 0 };
-        m_min = { INT32_MAX, INT32_MAX };
-
-        for (auto& [x, y] : m_data->dieArea) {
-            m_max.first = std::max(x, m_max.first);
-            m_max.second = std::max(y, m_max.second);
-
-            m_min.first = std::min(x, m_min.first);
-            m_min.second = std::min(y, m_min.second);
         }
 
-        // Setup paint buffer
-        // ======================================================================================
+        for (auto& [_, pin] : m_data->pins) {
+            QPolygon poly {};
 
-        m_paintBuffer.clear();
+            poly.append(QPoint(pin->vertex[0].x * scale, pin->vertex[0].y * scale));
+            poly.append(QPoint(pin->vertex[1].x * scale, pin->vertex[1].y * scale));
+            poly.append(QPoint(pin->vertex[2].x * scale, pin->vertex[2].y * scale));
+            poly.append(QPoint(pin->vertex[3].x * scale, pin->vertex[3].y * scale));
 
-        int32_t shiftStep = 25;
-        int32_t shiftX {};
-        int32_t shiftY {};
+            std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin->layer);
 
-        for (int32_t j = 0; j < m_data->numCellY; ++j) {
-            for (int32_t i = 0; i < m_data->numCellX; ++i) {
-                QPolygon poly(QRect(i * (m_data->cellSize + 2) + shiftX, j * (m_data->cellSize + 2) + shiftY, m_data->cellSize + 2, m_data->cellSize + 2));
-
-                m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
-
-                std::pair<QColor, QColor> penBrushColor {};
-
-                for (int8_t k = 0; k < m_data->cells[j][i]->source.size(1); ++k) {
-                    penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
-                    m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[0][k], penBrushColor.first) });
-                }
-
-                // for (int8_t k = 0; k < m_data->cells[j][i]->target.size(1); ++k) {
-                //     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
-                //     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->target[0][k], penBrushColor.first) });
-                // }
-
-                shiftX += shiftStep;
-            }
-
-            shiftX = 0;
-            shiftY += shiftStep;
+            m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin->layer });
         }
     }
+    // else {
+    //     m_max = { 0, 0 };
+    //     m_min = { INT32_MAX, INT32_MAX };
+
+    //     for (auto& [x, y] : m_data->dieArea) {
+    //         m_max.first = std::max(x, m_max.first);
+    //         m_max.second = std::max(y, m_max.second);
+
+    //         m_min.first = std::min(x, m_min.first);
+    //         m_min.second = std::min(y, m_min.second);
+    //     }
+
+    //     // Setup paint buffer
+    //     // ======================================================================================
+
+    //     m_paintBuffer.clear();
+
+    //     int32_t shiftStep = 25;
+    //     int32_t shiftX {};
+    //     int32_t shiftY {};
+
+    //     for (int32_t j = 0; j < m_data->numCellY; ++j) {
+    //         for (int32_t i = 0; i < m_data->numCellX; ++i) {
+    //             QPolygon poly(QRect(i * (m_data->cellSize + 2) + shiftX, j * (m_data->cellSize + 2) + shiftY, m_data->cellSize + 2, m_data->cellSize + 2));
+
+    //             m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
+
+    //             std::pair<QColor, QColor> penBrushColor {};
+
+    //             for (int8_t k = 0; k < m_data->cells[j][i]->source.size(1); ++k) {
+    //                 penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
+    //                 m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[0][k], penBrushColor.first) });
+    //             }
+
+    //             // for (int8_t k = 0; k < m_data->cells[j][i]->target.size(1); ++k) {
+    //             //     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
+    //             //     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->target[0][k], penBrushColor.first) });
+    //             // }
+
+    //             shiftX += shiftStep;
+    //         }
+
+    //         shiftX = 0;
+    //         shiftY += shiftStep;
+    //     }
+    // }
 
     double newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first)), (height() * 0.8) / (std::abs(m_max.second - m_min.second)));
 
