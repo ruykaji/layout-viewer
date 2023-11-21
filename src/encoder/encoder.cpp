@@ -155,9 +155,6 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
             s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
                 torch::Tensor source = torch::zeros({ 5, config->getCellSize(), config->getCellSize() });
 
-                // Fill tracks and obstacles
-                // =======================================================================================
-
                 for (const auto& geom : cell->geometries) {
                     uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
@@ -185,10 +182,24 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     }
                 }
 
-                // Save source tensor
-                // =======================================================================================
-
                 torch::save(source, "./cache/" + name + "/source_" + std::to_string(number) + ".pt");
+            },
+                t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
+
+            s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
+                torch::Tensor totalConnections = torch::zeros({ 0, 7 });
+
+                for (auto& [_, net] : cell->nets) {
+                    torch::Tensor connections = torch::zeros({ static_cast<int32_t>(net.size()), 7 });
+
+                    for (std::size_t i = 0; i < net.size(); ++i) {
+                        connections[i] = torch::tensor({ net[i].start.x, net[i].start.y, net[i].startLayer, net[i].end.x, net[i].end.y, net[i].endLayer, net[i].isOutOfCell });
+                    }
+
+                    totalConnections = torch::cat({ totalConnections, connections }, 0);
+                }
+
+                torch::save(totalConnections, "./cache/" + name + "/connections_" + std::to_string(number) + ".pt");
             },
                 t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
         }
@@ -258,9 +269,9 @@ void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>
         };
     };
 
-    // TODO: replace with better solution
-    std::unordered_multimap<std::string, std::shared_ptr<Rectangle>> cellsRects {};
-    std::unordered_map<std::string, std::pair<Point, int32_t>> cellsCoordsAndArea {};
+    int32_t largestArea = 0;
+    Point cellCoords {};
+    std::shared_ptr<Rectangle> largestRect {};
 
     for (auto& targetRect : t_target) {
         if (!targetRect) {
@@ -293,49 +304,24 @@ void Encoder::addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], targetRect->layer, targetRect->type);
                 }
 
-                cellsRects.insert(std::pair(t_container->data->cells[j][i]->name, rect));
+                int32_t area = (inter[2] - inter[0]) * (inter[3] - inter[1]);
 
-                if (cellsCoordsAndArea.count(t_container->data->cells[j][i]->name) == 0) {
-                    cellsCoordsAndArea[t_container->data->cells[j][i]->name] = std::pair(Point(i, j), (inter[2] - inter[0]) * (inter[3] - inter[1]));
-                } else {
-                    cellsCoordsAndArea[t_container->data->cells[j][i]->name].second += (inter[2] - inter[0]) * (inter[3] - inter[1]);
+                if (area > largestArea) {
+                    largestArea = area;
+                    largestRect = rect;
+                    cellCoords.x = i;
+                    cellCoords.y = j;
+                }
+
+                if (targetRect->layer != MetalLayer::L1) {
+                    t_container->data->cells[j][i]->geometries.emplace_back(targetRect);
                 }
             }
         }
     }
 
-    int32_t maxVal = std::numeric_limits<int32_t>::min();
-    std::string cellIndex {};
-    Point cellCoords {};
-
-    for (const auto& [index, pair] : cellsCoordsAndArea) {
-        if (pair.second > maxVal) {
-            maxVal = pair.second;
-
-            cellIndex = index;
-            cellCoords = pair.first;
-        }
-    }
-
     t_container->data->correspondingToPinCell[t_pinName] = t_container->data->cells[cellCoords.y][cellCoords.x];
-
-    auto range = cellsRects.equal_range(cellIndex);
-
-    for (auto it = range.first; it != range.second; ++it) {
-        t_container->data->pins.insert(std::pair(t_pinName, it->second));
-    }
-
-
-    // Add rest rectangles as plain geometry
-    cellsCoordsAndArea.erase(cellIndex);
-
-    for (auto& [first, second] : cellsCoordsAndArea) {
-        auto range = cellsRects.equal_range(first);
-
-        for (auto it = range.first; it != range.second; ++it) {
-            addGeometryToWorkingCells(it->second, t_container);
-        }
-    }
+    t_container->data->pins[t_pinName] = largestRect;
 }
 
 // Def callbacks
@@ -610,9 +596,30 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
         for (std::size_t i = 0; i < t_net->numConnections(); ++i) {
             pinsNames[i] = std::string(t_net->instance(i)) + t_net->pin(i);
+        }
+
+        for (std::size_t i = 0; i < pinsNames.size(); ++i) {
             std::shared_ptr<WorkingCell> cell = container->data->correspondingToPinCell[pinsNames[i]];
 
-            cell->nets.insert(netName);
+            if (cell->nets.count(netName) == 0) {
+                std::vector<WorkingCell::Connection> connections {};
+                std::shared_ptr<Rectangle> pinRect = container->data->pins[pinsNames[i]];
+                Point start((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
+                MetalLayer startLayer = pinRect->layer;
+
+                for (std::size_t j = 0; j < pinsNames.size(); ++j) {
+                    if (j != i) {
+                        pinRect = container->data->pins[pinsNames[j]];
+
+                        bool isOutOfCell = std::find(cell->pins.begin(), cell->pins.end(), pinsNames[j]) == cell->pins.end();
+                        Point end((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
+
+                        connections.emplace_back(WorkingCell::Connection { static_cast<int8_t>(isOutOfCell), start, static_cast<int8_t>(startLayer) / 2 - 1, end, static_cast<int8_t>(pinRect->layer) / 2 - 1 });
+                    }
+                }
+
+                cell->nets[netName] = connections;
+            }
         }
 
         container->data->signalNets[netName] = pinsNames;

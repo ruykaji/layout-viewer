@@ -14,11 +14,22 @@ struct WorkingCell;
 struct Data;
 
 struct WorkingCell {
+    struct Connection {
+        int8_t isOutOfCell {};
+        Point start {};
+        int32_t startLayer {};
+        Point end {};
+        int32_t endLayer {};
+
+        Connection() = default;
+        ~Connection() = default;
+    };
+
     std::string name {};
     Rectangle originalPlace {};
     std::vector<std::shared_ptr<Rectangle>> geometries {};
     std::vector<std::string> pins {};
-    std::unordered_set<std::string> nets {};
+    std::unordered_map<std::string, std::vector<Connection>> nets {};
 
     WorkingCell() = default;
     ~WorkingCell() = default;
@@ -39,8 +50,8 @@ struct Data {
 
     std::unordered_map<std::string, std::shared_ptr<WorkingCell>> correspondingToPinCell {};
     std::unordered_map<std::string, std::vector<std::string>> signalNets {};
-    
-    std::unordered_multimap<std::string, std::shared_ptr<Rectangle>> pins {};
+
+    std::unordered_map<std::string, std::shared_ptr<Rectangle>> pins {};
 
     Data() = default;
     ~Data();

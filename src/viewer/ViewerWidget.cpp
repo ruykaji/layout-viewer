@@ -82,6 +82,17 @@ void ViewerWidget::setup()
                         m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, geom->layer });
                     }
                 }
+
+                for (auto& [_, net] : col->nets) {
+                    for (auto& connection : net) {
+                        QPolygon poly {};
+
+                        poly.append(QPoint(connection.start.x * scale, connection.start.y * scale));
+                        poly.append(QPoint(connection.end.x * scale, connection.end.y * scale));
+
+                        m_paintBuffer.insert(PaintBufferObject { poly, QColor(Qt::white), QColor(Qt::white), MetalLayer::NONE });
+                    }
+                }
             }
         }
 
