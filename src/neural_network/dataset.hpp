@@ -7,16 +7,14 @@
 
 #include "data.hpp"
 
-class TopologyDataset {
-    std::vector<std::vector<std::size_t>> m_batches {};
-    std::size_t m_totalCells {};
-    std::size_t m_batchSize {};
+class TrainTopologyDataset {
+    std::vector<std::pair<std::string, std::string>> m_cells {};
+    std::vector<std::vector<std::size_t>> m_order {};
     std::size_t m_iter {};
 
 public:
-    ~TopologyDataset() = default;
-
-    TopologyDataset(const std::size_t& t_batchSize);
+    TrainTopologyDataset();
+    ~TrainTopologyDataset() = default;
 
     void add(const std::shared_ptr<Data>& t_data) noexcept;
 
@@ -25,7 +23,8 @@ public:
     std::size_t size() const noexcept;
 
 private:
-    void makeBatches() noexcept;
+    void recursiveCollection(const std::string& t_path);
+    void randomOrder() noexcept;
 };
 
 #endif
