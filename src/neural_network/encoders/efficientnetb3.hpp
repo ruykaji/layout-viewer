@@ -7,53 +7,53 @@
 #include "torch_include.hpp"
 
 struct SwishImplementation : torch::autograd::Function<SwishImplementation> {
-    static torch::autograd::variable_list forward(torch::autograd::AutogradContext* ctx, torch::autograd::Variable input)
+    static torch::autograd::variable_list forward(torch::autograd::AutogradContext* t_ctx, torch::autograd::Variable t_input)
     {
-        ctx->save_for_backward({ input });
+        t_ctx->save_for_backward({ t_input });
 
-        auto result = input * torch::sigmoid(input);
+        auto result = t_input * torch::sigmoid(t_input);
 
         return { result };
     }
 
-    static torch::autograd::variable_list backward(torch::autograd::AutogradContext* ctx, torch::autograd::variable_list grad_outputs)
+    static torch::autograd::variable_list backward(torch::autograd::AutogradContext* t_ctx, torch::autograd::variable_list t_gradOutputs)
     {
-        auto saved = ctx->get_saved_variables();
+        auto saved = t_ctx->get_saved_variables();
         auto input = saved[0];
 
         auto sigmoid_i = torch::sigmoid(input);
-        auto grad_input = grad_outputs[0] * (sigmoid_i * (1 + input * (1 - sigmoid_i)));
+        auto grad_input = t_gradOutputs[0] * (sigmoid_i * (1 + input * (1 - sigmoid_i)));
 
         return { grad_input };
     }
 };
 
 struct MemoryEfficientSwishImpl : torch::nn::Module {
-    torch::Tensor forward(torch::Tensor input)
+    torch::Tensor forward(torch::Tensor t_input)
     {
-        return SwishImplementation::apply(input)[0];
+        return SwishImplementation::apply(t_input)[0];
     }
 };
 
 TORCH_MODULE(MemoryEfficientSwish);
 
 struct Conv2dStaticSamePaddingImpl : torch::nn::Conv2dImpl {
-    torch::nn::Functional static_padding { nullptr };
+    torch::nn::Functional staticPadding { nullptr };
 
-    Conv2dStaticSamePaddingImpl(int64_t in_channels, int64_t out_channels, int64_t kernel_size, int64_t stride = 1, bool bias = true, c10::optional<int64_t> image_size = c10::nullopt, int64_t groups = 1)
-        : Conv2dImpl(torch::nn::Conv2dOptions(in_channels, out_channels, kernel_size).groups(groups).stride(stride).bias(bias))
+    Conv2dStaticSamePaddingImpl(int64_t t_inChannels, int64_t t_outChannels, int64_t t_kernelSize, int64_t t_stride = 1, bool t_bias = true, c10::optional<int64_t> t_imageSize = c10::nullopt, int64_t t_groups = 1)
+        : Conv2dImpl(torch::nn::Conv2dOptions(t_inChannels, t_outChannels, t_kernelSize).groups(t_groups).stride(t_stride).bias(t_bias))
     {
-        if (!image_size.has_value()) {
-            throw std::invalid_argument("image_size must be specified");
+        if (!t_imageSize.has_value()) {
+            throw std::invalid_argument("image size must be specified");
         }
 
         int64_t ih, iw;
 
-        ih = iw = image_size.value();
+        ih = iw = t_imageSize.value();
 
         auto kh = options.kernel_size()->at(0);
         auto kw = options.kernel_size()->at(1);
-        
+
         auto sh = options.stride()->at(0);
         auto sw = options.stride()->at(1);
 
@@ -64,74 +64,74 @@ struct Conv2dStaticSamePaddingImpl : torch::nn::Conv2dImpl {
         auto pad_w = std::max((ow - 1) * sw + (kw - 1) * options.dilation()->at(1) + 1 - iw, static_cast<int64_t>(0));
 
         if (pad_h > 0 || pad_w > 0) {
-            static_padding = register_module("static_padding", torch::nn::Functional(torch::nn::functional::pad, torch::nn::functional::PadFuncOptions({ pad_w / 2, pad_w - pad_w / 2, pad_h / 2, pad_h - pad_h / 2 }).mode(torch::kConstant).value(0)));
+            staticPadding = register_module("staticPadding", torch::nn::Functional(torch::nn::functional::pad, torch::nn::functional::PadFuncOptions({ pad_w / 2, pad_w - pad_w / 2, pad_h / 2, pad_h - pad_h / 2 }).mode(torch::kConstant).value(0)));
         } else {
-            static_padding = register_module("static_padding", torch::nn::Functional([](const torch::Tensor& input) { return input; }));
+            staticPadding = register_module("staticPadding", torch::nn::Functional([](const torch::Tensor& input) { return input; }));
         }
     }
 
     torch::Tensor forward(torch::Tensor x)
     {
-        x = static_padding(x);
+        x = staticPadding(x);
         return torch::nn::Conv2dImpl::forward(x);
     }
 };
 
 TORCH_MODULE(Conv2dStaticSamePadding);
 
-inline int64_t calculate_output_image_size(int64_t input_image_size, int64_t stride)
+inline int64_t calculate_output_image_size(int64_t t_inputImageSize, int64_t t_stride)
 {
-    return static_cast<int64_t>(std::ceil(static_cast<double>(input_image_size) / stride));
+    return static_cast<int64_t>(std::ceil(static_cast<double>(t_inputImageSize) / t_stride));
 }
 
 struct MBConvBlockImpl : torch::nn::Module {
-    int64_t input_filters;
-    int64_t output_filters;
+    int64_t inputFilters;
+    int64_t outputFilters;
     int64_t stride;
-    int64_t expand_ratio;
+    int64_t expandRatio;
     torch::nn::BatchNorm2d bn0 { nullptr }, bn1 { nullptr }, bn2 { nullptr };
-    Conv2dStaticSamePadding expand_conv { nullptr }, se_reduce { nullptr }, se_expand { nullptr }, depthwise_conv { nullptr }, project_conv { nullptr };
+    Conv2dStaticSamePadding expandConv { nullptr }, seReduce { nullptr }, seExpand { nullptr }, depthwiseConv { nullptr }, projectConv { nullptr };
     MemoryEfficientSwish swish;
 
-    MBConvBlockImpl(int64_t input_filters, int64_t output_filters, int64_t kernel_size, int64_t stride, int64_t expand_ratio, int64_t se_ratio, int64_t image_size)
-        : input_filters(input_filters)
-        , output_filters(output_filters)
-        , expand_ratio(expand_ratio)
+    MBConvBlockImpl(int64_t t_inputFilters, int64_t t_outputFilters, int64_t t_kernel_size, int64_t t_stride, int64_t t_expandRatio, int64_t t_seRatio, int64_t t_imageSize)
+        : inputFilters(t_inputFilters)
+        , outputFilters(t_outputFilters)
+        , expandRatio(expandRatio)
         , stride(stride)
     {
-        if (expand_ratio != 1) {
-            expand_conv = Conv2dStaticSamePadding(input_filters, input_filters * expand_ratio, 1, 1, false, image_size);
-            bn0 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(input_filters * expand_ratio).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
+        if (expandRatio != 1) {
+            expandConv = Conv2dStaticSamePadding(inputFilters, inputFilters * expandRatio, 1, 1, false, t_imageSize);
+            bn0 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(inputFilters * expandRatio).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
         }
 
-        depthwise_conv = Conv2dStaticSamePadding(input_filters * expand_ratio, input_filters * expand_ratio, kernel_size, stride, false, image_size, input_filters * expand_ratio);
-        bn1 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(input_filters * expand_ratio).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
+        depthwiseConv = Conv2dStaticSamePadding(inputFilters * expandRatio, inputFilters * expandRatio, t_kernel_size, stride, false, t_imageSize, inputFilters * expandRatio);
+        bn1 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(inputFilters * expandRatio).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
 
-        if (se_ratio > 0) {
-            auto reduced_dim = std::max(static_cast<int64_t>(1), input_filters / se_ratio);
-            se_reduce = Conv2dStaticSamePadding(input_filters * expand_ratio, reduced_dim, 1, 1, true, 1);
-            se_expand = Conv2dStaticSamePadding(reduced_dim, input_filters * expand_ratio, 1, 1, true, 1);
+        if (t_seRatio > 0) {
+            auto reduced_dim = std::max(static_cast<int64_t>(1), inputFilters / t_seRatio);
+            seReduce = Conv2dStaticSamePadding(inputFilters * expandRatio, reduced_dim, 1, 1, true, 1);
+            seExpand = Conv2dStaticSamePadding(reduced_dim, inputFilters * expandRatio, 1, 1, true, 1);
         }
 
-        project_conv = Conv2dStaticSamePadding(input_filters * expand_ratio, output_filters, 1, 1, false, calculate_output_image_size(image_size, stride));
-        bn2 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(output_filters).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
+        projectConv = Conv2dStaticSamePadding(inputFilters * expandRatio, outputFilters, 1, 1, false, calculate_output_image_size(t_imageSize, stride));
+        bn2 = torch::nn::BatchNorm2d(torch::nn::BatchNorm2dOptions(outputFilters).eps(0.001).momentum(0.01).affine(true).track_running_stats(true));
 
         swish = MemoryEfficientSwish();
 
-        if (expand_ratio != 1) {
-            register_module("expand_conv", expand_conv);
+        if (expandRatio != 1) {
+            register_module("expandConv", expandConv);
             register_module("bn0", bn0);
         }
 
-        register_module("depthwise_conv", depthwise_conv);
+        register_module("depthwiseConv", depthwiseConv);
         register_module("bn1", bn1);
 
-        if (se_ratio > 0) {
-            register_module("se_reduce", se_reduce);
-            register_module("se_expand", se_expand);
+        if (t_seRatio > 0) {
+            register_module("seReduce", seReduce);
+            register_module("seExpand", seExpand);
         }
 
-        register_module("project_conv", project_conv);
+        register_module("projectConv", projectConv);
         register_module("bn2", bn2);
         register_module("swish", swish);
     }
@@ -140,25 +140,25 @@ struct MBConvBlockImpl : torch::nn::Module {
     {
         torch::Tensor out;
 
-        if (expand_ratio != 1) {
-            out = swish(bn0(expand_conv(x)));
+        if (expandRatio != 1) {
+            out = swish(bn0(expandConv(x)));
         } else {
             out = x;
         }
 
-        out = swish(bn1(depthwise_conv(out)));
+        out = swish(bn1(depthwiseConv(out)));
 
-        if (se_reduce && se_expand) {
-            auto out_squeezed = torch::nn::functional::adaptive_avg_pool2d(out, torch::nn::functional::AdaptiveAvgPool2dFuncOptions(1));
-            out_squeezed = se_reduce->forward(out_squeezed);
-            out_squeezed = swish(out_squeezed);
-            out_squeezed = se_expand->forward(out_squeezed);
-            out = torch::sigmoid(out_squeezed) * out;
+        if (seReduce && seExpand) {
+            auto outSqueezed = torch::nn::functional::adaptive_avg_pool2d(out, torch::nn::functional::AdaptiveAvgPool2dFuncOptions(1));
+            outSqueezed = seReduce->forward(outSqueezed);
+            outSqueezed = swish(outSqueezed);
+            outSqueezed = seExpand->forward(outSqueezed);
+            out = torch::sigmoid(outSqueezed) * out;
         }
 
-        out = bn2(project_conv(out));
+        out = bn2(projectConv(out));
 
-        if (input_filters == output_filters && stride == 1) {
+        if (inputFilters == outputFilters && stride == 1) {
             x = torch::nn::functional::dropout2d(x, torch::nn::functional::Dropout2dFuncOptions().p(0.3).training(is_training()));
             out = out + x;
         }
@@ -170,97 +170,107 @@ struct MBConvBlockImpl : torch::nn::Module {
 TORCH_MODULE(MBConvBlock);
 
 struct EfficientNetB3Impl : torch::nn::Module {
-    Conv2dStaticSamePadding stem_conv { nullptr };
-    torch::nn::BatchNorm2d stem_bn { nullptr };
+    Conv2dStaticSamePadding stemConv { nullptr };
+    torch::nn::BatchNorm2d stemBn { nullptr };
 
     std::vector<MBConvBlock> blocks {};
 
-    Conv2dStaticSamePadding head_conv { nullptr };
-    torch::nn::BatchNorm2d head_bn { nullptr };
+    Conv2dStaticSamePadding headConv { nullptr };
+    torch::nn::BatchNorm2d headBn { nullptr };
 
     MemoryEfficientSwish swish;
 
     torch::nn::AdaptiveAvgPool2d avgpool { nullptr };
-    torch::nn::Dropout dropout;
+    torch::nn::Dropout dropout { nullptr };
     torch::nn::Linear fc { nullptr };
 
-    EfficientNetB3Impl()
+    EfficientNetB3Impl(const int64_t t_outputSize)
     {
-        int64_t image_size = 300;
+        int64_t imageSize = 300;
 
-        stem_conv = Conv2dStaticSamePadding(11, 40, 3, 2, false, image_size);
-        stem_bn = torch::nn::BatchNorm2d(40);
+        register_module("swish", swish);
 
-        image_size = calculate_output_image_size(image_size, 2);
+        stemConv = Conv2dStaticSamePadding(11, 40, 3, 2, false, imageSize);
+        register_module("stemConv", stemConv);
 
-        blocks.emplace_back(MBConvBlock(40, 24, 3, 1, 1, 4, image_size)); // block 0
-        blocks.emplace_back(MBConvBlock(24, 24, 3, 1, 1, 4, image_size)); // block 1
-        blocks.emplace_back(MBConvBlock(24, 32, 3, 2, 6, 24, image_size)); // block 2
+        stemBn = torch::nn::BatchNorm2d(40);
+        register_module("stemBn", stemBn);
 
-        image_size = calculate_output_image_size(image_size, 2);
+        imageSize = calculate_output_image_size(imageSize, 2);
 
-        blocks.emplace_back(MBConvBlock(32, 32, 3, 1, 6, 24, image_size)); // block 3
-        blocks.emplace_back(MBConvBlock(32, 32, 3, 1, 6, 24, image_size)); // block 4
-        blocks.emplace_back(MBConvBlock(32, 48, 5, 2, 6, 24, image_size)); // block 5
+        blocks.emplace_back(MBConvBlock(40, 24, 3, 1, 1, 4, imageSize)); // block 0
+        blocks.emplace_back(MBConvBlock(24, 24, 3, 1, 1, 4, imageSize)); // block 1
+        blocks.emplace_back(MBConvBlock(24, 32, 3, 2, 6, 24, imageSize)); // block 2
 
-        image_size = calculate_output_image_size(image_size, 2);
+        imageSize = calculate_output_image_size(imageSize, 2);
 
-        blocks.emplace_back(MBConvBlock(48, 48, 5, 1, 6, 24, image_size)); // block 6
-        blocks.emplace_back(MBConvBlock(48, 48, 5, 1, 6, 24, image_size)); // block 7
-        blocks.emplace_back(MBConvBlock(48, 96, 3, 2, 6, 24, image_size)); // block 8
+        blocks.emplace_back(MBConvBlock(32, 32, 3, 1, 6, 24, imageSize)); // block 3
+        blocks.emplace_back(MBConvBlock(32, 32, 3, 1, 6, 24, imageSize)); // block 4
+        blocks.emplace_back(MBConvBlock(32, 48, 5, 2, 6, 24, imageSize)); // block 5
 
-        image_size = calculate_output_image_size(image_size, 2);
+        imageSize = calculate_output_image_size(imageSize, 2);
 
-        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, image_size)); // block 9
-        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, image_size)); // block 10
-        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, image_size)); // block 11
-        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, image_size)); // block 12
-        blocks.emplace_back(MBConvBlock(96, 136, 5, 1, 6, 24, image_size)); // block 13
-        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, image_size)); // block 14
-        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, image_size)); // block 15
-        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, image_size)); // block 16
-        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, image_size)); // block 17
+        blocks.emplace_back(MBConvBlock(48, 48, 5, 1, 6, 24, imageSize)); // block 6
+        blocks.emplace_back(MBConvBlock(48, 48, 5, 1, 6, 24, imageSize)); // block 7
+        blocks.emplace_back(MBConvBlock(48, 96, 3, 2, 6, 24, imageSize)); // block 8
 
-        image_size = calculate_output_image_size(image_size, 2);
+        imageSize = calculate_output_image_size(imageSize, 2);
 
-        blocks.emplace_back(MBConvBlock(136, 232, 5, 2, 6, 24, image_size)); // block 18
-        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, image_size)); // block 19
-        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, image_size)); // block 20
-        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, image_size)); // block 21
-        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, image_size)); // block 22
-        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, image_size)); // block 23
-        blocks.emplace_back(MBConvBlock(232, 384, 3, 1, 6, 24, image_size)); // block 24
-        blocks.emplace_back(MBConvBlock(384, 384, 3, 1, 6, 24, image_size)); // block 25
+        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, imageSize)); // block 9
+        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, imageSize)); // block 10
+        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, imageSize)); // block 11
+        blocks.emplace_back(MBConvBlock(96, 96, 3, 1, 6, 24, imageSize)); // block 12
+        blocks.emplace_back(MBConvBlock(96, 136, 5, 1, 6, 24, imageSize)); // block 13
+        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, imageSize)); // block 14
+        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, imageSize)); // block 15
+        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, imageSize)); // block 16
+        blocks.emplace_back(MBConvBlock(136, 136, 5, 1, 6, 24, imageSize)); // block 17
+
+        imageSize = calculate_output_image_size(imageSize, 2);
+
+        blocks.emplace_back(MBConvBlock(136, 232, 5, 2, 6, 24, imageSize)); // block 18
+        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, imageSize)); // block 19
+        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, imageSize)); // block 20
+        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, imageSize)); // block 21
+        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, imageSize)); // block 22
+        blocks.emplace_back(MBConvBlock(232, 232, 5, 1, 6, 24, imageSize)); // block 23
+        blocks.emplace_back(MBConvBlock(232, 384, 3, 1, 6, 24, imageSize)); // block 24
+        blocks.emplace_back(MBConvBlock(384, 384, 3, 1, 6, 24, imageSize)); // block 25
 
         for (std::size_t i = 0; i < blocks.size(); ++i) {
             register_module("block_" + std::to_string(i), blocks[i]);
         }
 
-        register_module("stem_conv", stem_conv);
-        register_module("stem_bn", stem_bn);
+        headConv = Conv2dStaticSamePadding(384, 1536, 1, 1, false, imageSize);
+        register_module("headConv", headConv);
 
-        register_module("swish", swish);
+        headBn = torch::nn::BatchNorm2d(1536);
+        register_module("headBn", headBn);
+
+        avgpool = torch::nn::AdaptiveAvgPool2d(torch::nn::AdaptiveAvgPool2dOptions(1));
+        register_module("avgpool", avgpool);
+
+        dropout = torch::nn::Dropout(torch::nn::DropoutOptions(0.3).inplace(false));
+        register_module("dropout", dropout);
+
+        fc = torch::nn::Linear(1536, t_outputSize);
+        register_module("fc", fc);
     }
 
-    std::vector<torch::Tensor> forward(torch::Tensor x)
+    torch::Tensor forward(torch::Tensor x)
     {
-        std::vector<torch::Tensor> features {};
-
-        x = stem_bn(stem_conv(x));
-
-        features.emplace_back(x);
+        x = stemBn(stemConv(x));
 
         x = swish(x);
 
         for (std::size_t i = 0; i < blocks.size(); ++i) {
             x = blocks[i]->forward(x);
-
-            if (i == 4 || i == 7 || i == 17 || i == 25) {
-                features.emplace_back(x);
-            }
         }
 
-        return features;
+        x = headBn->forward(headConv->forward(x));
+        x = fc->forward(dropout->forward(avgpool->forward(x)));
+
+        return x;
     }
 };
 
