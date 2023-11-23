@@ -193,7 +193,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                     torch::Tensor connections = torch::zeros({ static_cast<int32_t>(net.size()), 7 });
 
                     for (std::size_t i = 0; i < net.size(); ++i) {
-                        connections[i] = torch::tensor({ net[i].start.x, net[i].start.y, net[i].startLayer, net[i].end.x, net[i].end.y, net[i].endLayer, net[i].isOutOfCell });
+                        connections[i] = torch::tensor({ net[i].start.x - moveBy.x, net[i].start.y - moveBy.y, net[i].startLayer, net[i].end.x - moveBy.x, net[i].end.y - moveBy.y, net[i].endLayer, net[i].isOutOfCell });
                     }
 
                     totalConnections = torch::cat({ totalConnections, connections }, 0);
@@ -614,7 +614,10 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                         bool isOutOfCell = std::find(cell->pins.begin(), cell->pins.end(), pinsNames[j]) == cell->pins.end();
                         Point end((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
 
-                        connections.emplace_back(WorkingCell::Connection { static_cast<int8_t>(isOutOfCell), start, static_cast<int8_t>(startLayer) / 2 - 1, end, static_cast<int8_t>(pinRect->layer) / 2 - 1 });
+                        int32_t startZ = startLayer != MetalLayer::L1 ? static_cast<int32_t>(startLayer) / 2 - 1 : 0;
+                        int32_t endZ = pinRect->layer != MetalLayer::L1 ? static_cast<int32_t>(pinRect->layer) / 2 - 1 : 0;
+
+                        connections.emplace_back(WorkingCell::Connection { static_cast<int32_t>(isOutOfCell), start, startZ, end, endZ });
                     }
                 }
 

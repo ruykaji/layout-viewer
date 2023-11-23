@@ -9,7 +9,7 @@
 
 class TrainTopologyDataset {
     std::vector<std::pair<std::string, std::string>> m_cells {};
-    std::vector<std::vector<std::size_t>> m_order {};
+    std::vector<std::size_t> m_order {};
     std::size_t m_iter {};
 
 public:

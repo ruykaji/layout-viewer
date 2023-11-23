@@ -96,8 +96,8 @@ struct MBConvBlockImpl : torch::nn::Module {
     MBConvBlockImpl(int64_t t_inputFilters, int64_t t_outputFilters, int64_t t_kernel_size, int64_t t_stride, int64_t t_expandRatio, int64_t t_seRatio, int64_t t_imageSize)
         : inputFilters(t_inputFilters)
         , outputFilters(t_outputFilters)
-        , expandRatio(expandRatio)
-        , stride(stride)
+        , expandRatio(t_expandRatio)
+        , stride(t_stride)
     {
         if (expandRatio != 1) {
             expandConv = Conv2dStaticSamePadding(inputFilters, inputFilters * expandRatio, 1, 1, false, t_imageSize);
@@ -190,7 +190,7 @@ struct EfficientNetB3Impl : torch::nn::Module {
 
         register_module("swish", swish);
 
-        stemConv = Conv2dStaticSamePadding(11, 40, 3, 2, false, imageSize);
+        stemConv = Conv2dStaticSamePadding(5, 40, 3, 2, false, imageSize);
         register_module("stemConv", stemConv);
 
         stemBn = torch::nn::BatchNorm2d(40);
@@ -268,7 +268,7 @@ struct EfficientNetB3Impl : torch::nn::Module {
         }
 
         x = headBn->forward(headConv->forward(x));
-        x = fc->forward(dropout->forward(avgpool->forward(x)));
+        x = fc->forward(dropout->forward(avgpool->forward(x)).flatten());
 
         return x;
     }

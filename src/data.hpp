@@ -15,7 +15,7 @@ struct Data;
 
 struct WorkingCell {
     struct Connection {
-        int8_t isOutOfCell {};
+        int32_t isOutOfCell {};
         Point start {};
         int32_t startLayer {};
         Point end {};

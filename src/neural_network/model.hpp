@@ -9,11 +9,11 @@ struct QModelImpl : torch::nn::Module {
 
     QModelImpl(const int64_t& t_inputSize, const int64_t& t_midSize, const int64_t& t_outputSize, const int64_t t_numBlocks)
     {
-        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_inputSize, t_midSize), torch::nn::BatchNorm2d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
+        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_inputSize, t_midSize), torch::nn::BatchNorm1d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
         register_module("blockStart", blocks.back());
 
         for (std::size_t i = 0; i < t_numBlocks; ++i) {
-            blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_midSize), torch::nn::BatchNorm2d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
+            blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_midSize), torch::nn::BatchNorm1d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
             register_module("block" + std::to_string(i), blocks.back());
         }
 
@@ -43,16 +43,17 @@ struct TRLMImpl : torch::nn::Module {
         environmentEncoder = EfficientNetB3(1000);
         register_module("environmentEncoder", environmentEncoder);
 
-        stateEncoder = torch::nn::Sequential(torch::nn::Linear(t_states, 256), torch::nn::BatchNorm2d(256), torch::nn::ReLU6(torch::nn::ReLU6Options(true)));
+        stateEncoder = torch::nn::Sequential(torch::nn::Linear(t_states, 256), torch::nn::BatchNorm1d(256), torch::nn::ReLU6(torch::nn::ReLU6Options(true)));
         register_module("stateEncoder", stateEncoder);
 
         qModel = QModel(1256, 2048, 6, 4);
+        register_module("qModel", qModel);
     }
 
     torch::Tensor forward(torch::Tensor environment, torch::Tensor state)
     {
         state = stateEncoder->forward(state);
-        environment = environmentEncoder->forward(environment);
+        environment = environmentEncoder->forward(environment).unsqueeze(0).repeat({ state.size(0), 1 });
 
         torch::Tensor statedEnvironment = torch::cat({ state, environment }, -1);
 

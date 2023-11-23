@@ -11,13 +11,14 @@ TrainTopologyDataset::TrainTopologyDataset()
 std::pair<torch::Tensor, torch::Tensor> TrainTopologyDataset::get(const std::size_t& t_index) noexcept
 {
     if (m_iter == m_cells.size()) {
+        randomOrder();
         m_iter = 0;
     }
 
     torch::Tensor source {};
     torch::Tensor connections {};
 
-    for (const auto& index : m_order[m_iter]) {
+    for (const auto& index : m_order) {
         torch::load(source, m_cells[index].first);
         torch::load(connections, m_cells[index].second);
 
@@ -58,11 +59,5 @@ void TrainTopologyDataset::randomOrder() noexcept
     std::iota(indexes.begin(), indexes.end(), 0);
     std::shuffle(indexes.begin(), indexes.end(), std::default_random_engine(std::chrono::system_clock::now().time_since_epoch().count()));
 
-    auto it = indexes.begin();
-
-    for (std::size_t i = 0; i < size(); ++i) {
-        std::vector<std::size_t> part(it, it + 1);
-        m_order.emplace_back(part);
-        it += 1;
-    }
+    m_order = indexes;
 }
