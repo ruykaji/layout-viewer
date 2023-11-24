@@ -18,7 +18,6 @@ public:
 
         std::vector<int8_t> actions {};
         std::vector<double> rewards {};
-        std::vector<bool> isTerminal {};
 
         Data() = default;
         ~Data() = default;
@@ -45,6 +44,9 @@ class Environment {
     torch::Tensor m_env {};
     torch::Tensor m_state {};
 
+    std::vector<int8_t> m_terminals {};
+    std::vector<int8_t> m_lastActions {};
+
 public:
     Environment() = default;
     ~Environment() = default;
@@ -55,7 +57,9 @@ public:
 
     torch::Tensor getState();
 
-    ReplayBuffer::Data replayStep(const torch::Tensor& t_actions);
+    ReplayBuffer::Data replayStep(const torch::Tensor& t_actions, const int32_t& t_steps);
+
+    std::pair<double, int8_t> getRewardAndTerminal(const torch::Tensor& t_newState, const bool& t_isChangeDirection);
 
 private:
     int32_t selectRandomAction(const int32_t& t_actionSpace);
@@ -70,24 +74,24 @@ class Agent {
     TRLM m_QTargetModel { nullptr };
 
 public:
-    Agent(const TRLM& t_model);
+    Agent();
     ~Agent() = default;
 
     torch::Tensor replayAction(torch::Tensor t_env, torch::Tensor t_state);
 
     std::pair<torch::Tensor, torch::Tensor> trainAction(const ReplayBuffer::Data& t_replay);
 
-    void updateTargetModel();
+    std::vector<at::Tensor, std::allocator<at::Tensor>> getModelParameters();
+
+    void softUpdateTargetModel(const double& t_tau);
 
 private:
     void copyModelWeights(const TRLM& t_source, TRLM& t_target);
 };
 
 class Train {
-    TRLM m_model { nullptr };
-
 public:
-    Train();
+    Train() = default;
     ~Train() = default;
 
     double episodeStep(torch::Tensor t_env, torch::Tensor t_state);

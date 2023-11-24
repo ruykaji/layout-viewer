@@ -9,11 +9,11 @@ struct QModelImpl : torch::nn::Module {
 
     QModelImpl(const int64_t& t_inputSize, const int64_t& t_midSize, const int64_t& t_outputSize, const int64_t t_numBlocks)
     {
-        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_inputSize, t_midSize), torch::nn::BatchNorm1d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
+        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_inputSize, t_midSize), torch::nn::ReLU(torch::nn::ReLUOptions(true))));
         register_module("blockStart", blocks.back());
 
         for (std::size_t i = 0; i < t_numBlocks; ++i) {
-            blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_midSize), torch::nn::BatchNorm1d(t_midSize), torch::nn::ReLU6(torch::nn::ReLU6Options(true))));
+            blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_midSize), torch::nn::ReLU(torch::nn::ReLUOptions(true))));
             register_module("block" + std::to_string(i), blocks.back());
         }
 
@@ -40,13 +40,18 @@ struct TRLMImpl : torch::nn::Module {
 
     TRLMImpl(const int64_t t_states)
     {
-        environmentEncoder = EfficientNetB3(1000);
+        environmentEncoder = EfficientNetB3(1024);
         register_module("environmentEncoder", environmentEncoder);
 
-        stateEncoder = torch::nn::Sequential(torch::nn::Linear(t_states, 256), torch::nn::BatchNorm1d(256), torch::nn::ReLU6(torch::nn::ReLU6Options(true)));
+        stateEncoder = torch::nn::Sequential(
+            torch::nn::Linear(t_states, 256), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
+            torch::nn::Linear(256, 512), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
+            torch::nn::Linear(512, 1024), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
+            torch::nn::Linear(1024, 1024));
+
         register_module("stateEncoder", stateEncoder);
 
-        qModel = QModel(1256, 2048, 6, 4);
+        qModel = QModel(2048, 2048, 6, 4);
         register_module("qModel", qModel);
     }
 
