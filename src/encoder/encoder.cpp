@@ -131,7 +131,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
-    defrSetTrackCbk(&defTrackCallback);
+    // defrSetTrackCbk(&defTrackCallback);
 
     // Read file
     //=================================================================
@@ -158,7 +158,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 for (const auto& geom : cell->geometries) {
                     uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                    if (layerIndex % 2 == 0) {
+                    if (layerIndex % 2 == 0 || geom->type == RectangleType::DIEAREA) {
                         std::array<Point, 4> vertexes = geom->vertex;
 
                         for (auto& vertex : vertexes) {
@@ -167,15 +167,11 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
 
                         switch (geom->type) {
                         case RectangleType::DIEAREA: {
-                            source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = -0.5;
+                            source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = 0.5;
                             break;
                         }
-                        // case RectangleType::TRACK: {
-                        //     source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
-                        //     break;
-                        // }
                         default: {
-                            source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = -0.5;
+                            source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
                             break;
                         }
                         }
@@ -413,6 +409,9 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
         int32_t right = container->data->dieArea[i + 1].x;
         int32_t bottom = container->data->dieArea[i + 1].y;
 
+        right += 250;
+        bottom += 250;
+
         addGeometryToWorkingCells(std::make_shared<Rectangle>(left, top, right, bottom, MetalLayer::NONE, RectangleType::DIEAREA), container);
     }
 
@@ -614,8 +613,8 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                         bool isOutOfCell = std::find(cell->pins.begin(), cell->pins.end(), pinsNames[j]) == cell->pins.end();
                         Point end((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
 
-                        int32_t startZ = startLayer != MetalLayer::L1 ? static_cast<int32_t>(startLayer) / 2 - 1 : 0;
-                        int32_t endZ = pinRect->layer != MetalLayer::L1 ? static_cast<int32_t>(pinRect->layer) / 2 - 1 : 0;
+                        int32_t startZ = static_cast<int32_t>(startLayer) / 2;
+                        int32_t endZ = static_cast<int32_t>(pinRect->layer) / 2;
 
                         connections.emplace_back(WorkingCell::Connection { static_cast<int32_t>(isOutOfCell), start, startZ, end, endZ });
                     }

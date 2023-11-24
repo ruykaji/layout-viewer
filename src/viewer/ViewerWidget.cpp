@@ -95,19 +95,6 @@ void ViewerWidget::setup()
                 }
             }
         }
-
-        for (auto& [_, pin] : m_data->pins) {
-            QPolygon poly {};
-
-            poly.append(QPoint(pin->vertex[0].x * scale, pin->vertex[0].y * scale));
-            poly.append(QPoint(pin->vertex[1].x * scale, pin->vertex[1].y * scale));
-            poly.append(QPoint(pin->vertex[2].x * scale, pin->vertex[2].y * scale));
-            poly.append(QPoint(pin->vertex[3].x * scale, pin->vertex[3].y * scale));
-
-            std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(pin->layer);
-
-            m_paintBuffer.insert(PaintBufferObject { poly, penBrushColor.first, penBrushColor.second, pin->layer });
-        }
     }
     // else {
     //     m_max = { 0, 0 };
