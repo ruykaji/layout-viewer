@@ -50,7 +50,7 @@ void ReplayBuffer::add(const ReplayBuffer::Data& t_data)
     m_data.emplace_back(t_data);
 }
 
-ReplayBuffer::Data ReplayBuffer::get(const std::size_t& t_index)
+ReplayBuffer::Data ReplayBuffer::get()
 {
     if (m_iter == m_order.size() || m_iter == 0) {
         randomOrder();
@@ -96,7 +96,7 @@ torch::Tensor Environment::getState()
     return m_state;
 }
 
-ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, const int32_t& t_steps)
+ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, int32_t& t_steps)
 {
     ReplayBuffer::Data replay {};
 
@@ -106,8 +106,10 @@ ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, const
     replay.rewards = std::vector<double>(m_state.size(0), 0.0);
 
     for (std::size_t i = 0; i < t_actions.size(0); ++i) {
-        double epsTrh = 0.05 + (0.9 - 0.05) * std::exp(-1.0 * t_steps / 1000);
-        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 4);
+        ++t_steps;
+
+        double epsTrh = 0.05 + (0.9 - 0.05) * std::exp(-1.0 * t_steps / 1e4);
+        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 6);
         int32_t direction = (action == 0 || action == 2 || action == 4) ? -1 : 1;
         bool isChangeDirection = action != m_lastActions[i] && m_lastActions[i] < 4;
         torch::Tensor newState = m_state[i].clone();
@@ -120,7 +122,11 @@ ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, const
             newState[2] += direction;
         }
 
-        auto pair = getRewardAndTerminal(newState, isChangeDirection);
+        double oldDistance = ((m_state[i][0] - m_state[i][1]).abs() + (m_state[i][1] - m_state[i][2]).abs() + (m_state[i][2] - m_state[i][3]).abs()).item<double>();
+        double newDistance = ((newState[0] - newState[1]).abs() + (newState[1] - newState[2]).abs() + (newState[2] - newState[3]).abs()).item<double>();
+        bool isMoveAway = oldDistance < newDistance;
+
+        auto pair = getRewardAndTerminal(newState, isChangeDirection, isMoveAway);
 
         if (pair.second == 0) {
             m_state[i] = newState;
@@ -140,7 +146,7 @@ ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, const
     std::size_t terminalsSize = m_terminals.size();
 
     for (std::size_t i = 0; i < terminalsSize; ++i) {
-        if (m_terminals[i] != 0) {
+        if (m_terminals[i] == 2) {
             auto first_part = m_state.slice(0, 0, i);
             auto second_part = m_state.slice(0, i + 1);
 
@@ -156,7 +162,7 @@ ReplayBuffer::Data Environment::replayStep(const torch::Tensor& t_actions, const
     return replay;
 }
 
-std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor& t_newState, const bool& t_isChangeDirection)
+std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor& t_newState, const bool& t_isChangeDirection, const bool& t_isMoveAway)
 {
     double reward = -0.05;
 
@@ -164,34 +170,38 @@ std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor&
         reward -= 0.1;
     }
 
+    if (t_isMoveAway) {
+        reward -= 0.15;
+    }
+
     // Checking for bounds collision
     if (t_newState[0].item<int32_t>() < 0 || t_newState[1].item<int32_t>() < 0 || t_newState[2].item<int32_t>() < 0 || t_newState[0].item<int32_t>() > (m_env.size(-1) - 1) || t_newState[1].item<int32_t>() > (m_env.size(-1) - 1) || t_newState[2].item<int32_t>() > (m_env.size(-3) - 1)) {
-        return std::pair(reward - 0.8, 1);
+        return std::pair(reward - 0.7, 1);
     }
 
     // Checking for track is out of cell and it reached border
     if (t_newState[-1].item<int64_t>() == 1 && (t_newState[0].item<int32_t>() == 0 || t_newState[1].item<int32_t>() == 0 || t_newState[0].item<int32_t>() == (m_env.size(-1) - 1) || t_newState[1].item<int32_t>() == (m_env.size(-1) - 1))) {
-        m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 1.0;
-        return std::pair(reward + 1.0, 2);
+        m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 0.75;
+        return std::pair(1.0, 2);
     }
 
     // Checking for obstacles collision
     if (m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()].item<double>() == 0.5) {
-        return std::pair(reward - 0.7, 1);
+        return std::pair(reward - 0.6, 1);
     }
 
     // Checking for end of track
     if (t_newState[2].item<int32_t>() == t_newState[5].item<int32_t>() && t_newState[1].item<int32_t>() == t_newState[4].item<int32_t>() && t_newState[0].item<int32_t>() == t_newState[3].item<int32_t>()) {
-        m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 1.0;
-        return std::pair(reward + 1.0, 2);
+        m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 0.75;
+        return std::pair(1.0, 2);
     }
 
     // Checking for collision between tracks
-    if (m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()].item<double>() == 1.0) {
+    if (m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()].item<double>() == 0.75) {
         return std::pair(reward - 0.25, 1);
     }
 
-    m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 1.0;
+    m_env[0][t_newState[2].item<int64_t>()][t_newState[1].item<int64_t>()][t_newState[0].item<int64_t>()] = 0.75;
     return std::pair(reward, 0);
 };
 
@@ -258,12 +268,17 @@ std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::D
     auto qPredicted = w1.gather(1, indexes);
 
     auto rewards = torch::zeros({ w2.size(0), 1 }).to(torch::device(torch::kCUDA));
+    auto td = std::get<0>(w2.max(1, true));
 
-    for (std::size_t i = 0; i < w1.size(0); ++i) {
+    for (std::size_t i = 0; i < w2.size(0); ++i) {
         rewards[i][0] = t_replay.rewards[i];
+
+        if (t_replay.rewards[i] == 1.0) {
+            td[i][0] = 0.0;
+        }
     }
 
-    auto qTarget = rewards + 0.95 * std::get<0>(w2.max(1, true));
+    auto qTarget = rewards + 0.99 * td;
 
     return std::pair(qPredicted, qTarget);
 }
@@ -273,17 +288,19 @@ std::vector<at::Tensor, std::allocator<at::Tensor>> Agent::getModelParameters()
     return m_QPredictionModel->parameters();
 };
 
-void Agent::softUpdateTargetModel(const double& t_tau)
+void Agent::updateTargetModel()
 {
-    auto source_parameters = m_QPredictionModel->named_parameters(true);
-    auto target_parameters = m_QTargetModel->named_parameters(true);
+    auto sourceParams = m_QPredictionModel->named_parameters(true);
+    auto targetParams = m_QTargetModel->named_parameters(true);
 
-    for (const auto& source_param : source_parameters) {
-        auto name = source_param.key();
-        auto& target_param = target_parameters[name];
+    for (const auto& param : sourceParams) {
+        auto& name = param.key();
+        auto& sourceTensor = param.value();
+        auto targetTensor = targetParams.find(name);
 
-        target_param.data().mul_(1.0 - t_tau);
-        target_param.data().add_(source_param.value().data(), t_tau);
+        if (targetTensor != nullptr) {
+            targetTensor->copy_(sourceTensor.detach());
+        }
     }
 };
 
@@ -307,28 +324,34 @@ void Agent::copyModelWeights(const TRLM& t_source, TRLM& t_target)
 // Train methods
 // ============================================================================================
 
-double Train::episodeStep(torch::Tensor t_env, torch::Tensor t_state)
+void Train::train(TrainTopologyDataset& t_trainDataset)
 {
-    Environment environment {};
-    Agent agent {};
+    std::size_t bufferSize = 600;
+    std::size_t samples = 4;
+    std::size_t batchSize = 12;
 
+    Agent agent {};
+    Environment environment {};
     torch::optim::AdamW optimizer(agent.getModelParameters(), torch::optim::AdamWOptions(1e-4));
 
-    for (std::size_t epoch = 0; epoch < 1000; ++epoch) {
-        std::size_t bufferSize = 1000;
+    for (std::size_t epoch = 0; epoch < 100; ++epoch) {
+        int32_t steps {};
         ReplayBuffer replayBuffer {};
-        double episodeLoss {};
-        double episodeReward {};
+        double epochReward {};
+        double epochLoss {};
 
-        // Create replay buffer
-        // ============================================================================
+        for (std::size_t i = 0; i < samples; ++i) {
+            std::pair<at::Tensor, at::Tensor> pair = t_trainDataset.get();
 
-        environment.set(t_env.cuda(), t_state.cuda());
+            environment.set(pair.first.cuda(), pair.second.cuda());
 
-        for (std::size_t i = 0; i < bufferSize; ++i) {
-            if (environment.getState().size(0) > 1) {
+            for (std::size_t j = 0; j < bufferSize / samples; ++j) {
+                if (environment.getState().size(0) <= 1) {
+                    break;
+                }
+
                 torch::Tensor qValues = agent.replayAction(environment.getEnv(), environment.getState());
-                ReplayBuffer::Data replay = environment.replayStep(qValues, i + 1);
+                ReplayBuffer::Data replay = environment.replayStep(qValues, steps);
 
                 replayBuffer.add(replay);
 
@@ -338,46 +361,46 @@ double Train::episodeStep(torch::Tensor t_env, torch::Tensor t_state)
                     replayReward += reward;
                 }
 
-                episodeReward += replayReward / replay.rewards.size();
+                epochReward += replayReward / replay.rewards.size();
 
-                displayProgressBar(i + 1, bufferSize, 50, "Making replay buffer");
+                displayProgressBar(bufferSize / samples * i + j + 1, bufferSize, 50, "Epoch replay-buffer");
                 createHeatMap(replay.env);
-            } else {
-                break;
             }
         }
 
         std::cout << '\n'
                   << std::flush;
 
-        // Train on random samples from replay buffer
-        // ============================================================================
-
-        for (std::size_t i = 0; i < replayBuffer.size(); ++i) {
+        for (std::size_t i = 0; i < replayBuffer.size() / batchSize; ++i) {
             optimizer.zero_grad();
 
-            ReplayBuffer::Data replay = replayBuffer.get(i);
-            auto pair = agent.trainAction(replay);
+            torch::Tensor loss {};
 
-            auto loss = torch::nn::functional::huber_loss(pair.first, pair.second);
+            for (std::size_t j = 0; j < batchSize; ++j) {
+                ReplayBuffer::Data replay = replayBuffer.get();
+                std::pair<at::Tensor, at::Tensor> pair = agent.trainAction(replay);
+
+                if (loss.defined()) {
+                    loss += torch::nn::functional::mse_loss(pair.first, pair.second);
+                } else {
+                    loss = torch::nn::functional::mse_loss(pair.first, pair.second);
+                }
+
+                displayProgressBar(replayBuffer.size() / batchSize * i + j + 1, replayBuffer.size(), 50, "Epoch training: ");
+            }
 
             loss.backward();
-            episodeLoss += loss.item<double>();
-
             optimizer.step();
-            agent.softUpdateTargetModel(0.005);
 
-            displayProgressBar(i + 1, bufferSize, 50, "Episode training: ");
+            epochLoss += loss.item<double>();
         }
 
-        std::cout << "\n\n"
-                  << std::flush;
+        agent.updateTargetModel();
 
-        std::cout << "Episode epoch - " << epoch + 1 << '\n'
-                  << "MSE Loss: " << episodeLoss / bufferSize << '\n'
-                  << "Episode reward: " << episodeReward / bufferSize << "\n\n\n"
+        std::cout << "\n\n"
+                  << "Epoch - " << epoch + 1 << '\n'
+                  << "MSE Loss: " << epochLoss / replayBuffer.size() << '\n'
+                  << "Mean Reward: " << epochReward / replayBuffer.size() << "\n\n"
                   << std::flush;
     }
-
-    return 0.0;
 }

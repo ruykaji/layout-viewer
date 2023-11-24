@@ -3,6 +3,7 @@
 
 #include "data.hpp"
 #include "encoders/efficientnetb3.hpp"
+#include "encoders/resnet50.hpp"
 
 struct QModelImpl : torch::nn::Module {
     std::vector<torch::nn::Sequential> blocks {};
@@ -35,23 +36,24 @@ TORCH_MODULE(QModel);
 
 struct TRLMImpl : torch::nn::Module {
     EfficientNetB3 environmentEncoder { nullptr };
+    // ResNet50 environmentEncoder { nullptr };
     torch::nn::Sequential stateEncoder { nullptr };
     QModel qModel { nullptr };
 
     TRLMImpl(const int64_t t_states)
     {
+        // environmentEncoder = ResNet50(256);
         environmentEncoder = EfficientNetB3(1024);
         register_module("environmentEncoder", environmentEncoder);
 
         stateEncoder = torch::nn::Sequential(
-            torch::nn::Linear(t_states, 256), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
-            torch::nn::Linear(256, 512), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
-            torch::nn::Linear(512, 1024), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
-            torch::nn::Linear(1024, 1024));
+            torch::nn::Linear(t_states, 128), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
+            torch::nn::Linear(128, 256), torch::nn::ReLU(torch::nn::ReLUOptions(true)),
+            torch::nn::Linear(256, 256));
 
         register_module("stateEncoder", stateEncoder);
 
-        qModel = QModel(2048, 2048, 6, 4);
+        qModel = QModel(1280, 1280, 6, 4);
         register_module("qModel", qModel);
     }
 

@@ -18,7 +18,7 @@ public:
 
     void add(const std::shared_ptr<Data>& t_data) noexcept;
 
-    std::pair<torch::Tensor, torch::Tensor> get(const std::size_t& t_index) noexcept;
+    std::pair<torch::Tensor, torch::Tensor> get() noexcept;
 
     std::size_t size() const noexcept;
 

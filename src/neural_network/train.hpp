@@ -4,8 +4,8 @@
 #include <array>
 #include <vector>
 
-#include "dataset.hpp"
-#include "model.hpp"
+#include "neural_network/dataset.hpp"
+#include "neural_network/model.hpp"
 
 class ReplayBuffer {
 public:
@@ -30,7 +30,7 @@ public:
 
     void add(const Data& t_data);
 
-    Data get(const std::size_t& t_index);
+    Data get();
 
 private:
     std::vector<ReplayBuffer::Data> m_data {};
@@ -57,9 +57,9 @@ public:
 
     torch::Tensor getState();
 
-    ReplayBuffer::Data replayStep(const torch::Tensor& t_actions, const int32_t& t_steps);
+    ReplayBuffer::Data replayStep(const torch::Tensor& t_actions, int32_t& t_steps);
 
-    std::pair<double, int8_t> getRewardAndTerminal(const torch::Tensor& t_newState, const bool& t_isChangeDirection);
+    std::pair<double, int8_t> getRewardAndTerminal(const torch::Tensor& t_newState, const bool& t_isChangeDirection, const bool& t_isMoveAway);
 
 private:
     int32_t selectRandomAction(const int32_t& t_actionSpace);
@@ -83,7 +83,7 @@ public:
 
     std::vector<at::Tensor, std::allocator<at::Tensor>> getModelParameters();
 
-    void softUpdateTargetModel(const double& t_tau);
+    void updateTargetModel();
 
 private:
     void copyModelWeights(const TRLM& t_source, TRLM& t_target);
@@ -94,7 +94,7 @@ public:
     Train() = default;
     ~Train() = default;
 
-    double episodeStep(torch::Tensor t_env, torch::Tensor t_state);
+    void train(TrainTopologyDataset& t_trainDataset);
 };
 
 #endif

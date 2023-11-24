@@ -8,7 +8,7 @@ TrainTopologyDataset::TrainTopologyDataset()
     randomOrder();
 }
 
-std::pair<torch::Tensor, torch::Tensor> TrainTopologyDataset::get(const std::size_t& t_index) noexcept
+std::pair<torch::Tensor, torch::Tensor> TrainTopologyDataset::get() noexcept
 {
     if (m_iter == m_cells.size()) {
         randomOrder();
@@ -18,12 +18,10 @@ std::pair<torch::Tensor, torch::Tensor> TrainTopologyDataset::get(const std::siz
     torch::Tensor source {};
     torch::Tensor connections {};
 
-    for (const auto& index : m_order) {
-        torch::load(source, m_cells[index].first);
-        torch::load(connections, m_cells[index].second);
+    torch::load(source, m_cells[m_order[m_iter]].first);
+    torch::load(connections, m_cells[m_order[m_iter]].second);
 
-        source = source.unsqueeze(0);
-    }
+    source = source.unsqueeze(0);
 
     ++m_iter;
 

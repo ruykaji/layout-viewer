@@ -73,7 +73,7 @@ struct BottleneckImpl : torch::nn::Module {
 
 TORCH_MODULE(Bottleneck);
 
-struct ResNet50BackboneImpl : torch::nn::Module {
+struct ResNet50Impl : torch::nn::Module {
     torch::nn::Conv2d conv1 { nullptr };
     torch::nn::BatchNorm2d bn1 { nullptr };
     torch::nn::ReLU relu { nullptr };
@@ -83,11 +83,13 @@ struct ResNet50BackboneImpl : torch::nn::Module {
     torch::nn::Sequential layer3 { nullptr };
     torch::nn::Sequential layer4 { nullptr };
 
+    torch::nn::AdaptiveAvgPool2d avgpool { nullptr };
+    torch::nn::Dropout dropout { nullptr };
     torch::nn::Linear fc { nullptr };
 
-    ResNet50BackboneImpl(const int64_t t_outputSize)
+    ResNet50Impl(const int64_t t_outputSize)
     {
-        conv1 = torch::nn::Conv2d(torch::nn::Conv2dOptions(11, 64, 7).stride(2).padding(3).bias(false));
+        conv1 = torch::nn::Conv2d(torch::nn::Conv2dOptions(5, 64, 7).stride(2).padding(3).bias(false));
         bn1 = torch::nn::BatchNorm2d(64);
         relu = torch::nn::ReLU(torch::nn::ReLUOptions().inplace(true));
 
@@ -98,12 +100,20 @@ struct ResNet50BackboneImpl : torch::nn::Module {
 
         register_module("conv1", conv1);
         register_module("bn1", bn1);
+        register_module("relu", relu);
         register_module("layer1", layer1);
         register_module("layer2", layer2);
         register_module("layer3", layer3);
-        register_module("layer4", layer3);
+        register_module("layer4", layer4);
+
+        avgpool = torch::nn::AdaptiveAvgPool2d(torch::nn::AdaptiveAvgPool2dOptions(1));
+        register_module("avgpool", avgpool);
+
+        dropout = torch::nn::Dropout(torch::nn::DropoutOptions(0.3).inplace(false));
+        register_module("dropout", dropout);
 
         fc = torch::nn::Linear(2048, t_outputSize);
+        register_module("fc", fc);
     };
 
     torch::Tensor forward(torch::Tensor x)
@@ -116,10 +126,10 @@ struct ResNet50BackboneImpl : torch::nn::Module {
 
         x = layer4->forward(layer3->forward(layer2->forward(layer1->forward(x))));
 
-        return fc->forward(x);
+        return fc->forward(dropout->forward(avgpool->forward(x)).flatten());
     }
 };
 
-TORCH_MODULE(ResNet50Backbone);
+TORCH_MODULE(ResNet50);
 
 #endif

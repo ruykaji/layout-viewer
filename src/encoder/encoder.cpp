@@ -150,54 +150,62 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     for (int32_t j = 0; j < t_data->numCellY; ++j) {
         for (int32_t i = 0; i < t_data->numCellX; ++i) {
             std::shared_ptr<WorkingCell> cell = t_data->cells[j][i];
-            Point moveBy(i * t_data->cellSize + t_data->cellOffsetX, j * t_data->cellSize + t_data->cellOffsetY);
 
-            s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
-                torch::Tensor source = torch::zeros({ 5, config->getCellSize(), config->getCellSize() });
+            if (cell->nets.size() != 0) {
+                Point moveBy(i * t_data->cellSize, j * t_data->cellSize);
 
-                for (const auto& geom : cell->geometries) {
-                    uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
+                s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
+                    torch::Tensor source = torch::zeros({ 5, config->getCellSize(), config->getCellSize() });
 
-                    if (layerIndex % 2 == 0 || geom->type == RectangleType::DIEAREA) {
-                        std::array<Point, 4> vertexes = geom->vertex;
+                    for (const auto& geom : cell->geometries) {
+                        uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                        for (auto& vertex : vertexes) {
-                            vertex -= moveBy;
-                        }
+                        if (layerIndex % 2 == 0 || geom->type == RectangleType::DIEAREA) {
+                            std::array<Point, 4> vertexes = geom->vertex;
 
-                        switch (geom->type) {
-                        case RectangleType::DIEAREA: {
-                            source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = 0.5;
-                            break;
-                        }
-                        default: {
-                            source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
-                            break;
-                        }
+                            for (auto& vertex : vertexes) {
+                                vertex -= moveBy;
+                            }
+
+                            switch (geom->type) {
+                            case RectangleType::DIEAREA: {
+                                source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = 0.5;
+                                break;
+                            }
+                            default: {
+                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
+                                break;
+                            }
+                            }
                         }
                     }
-                }
 
-                torch::save(source, "./cache/" + name + "/source_" + std::to_string(number) + ".pt");
-            },
-                t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
+                    torch::save(source, "./cache/" + name + "/source_" + std::to_string(number) + ".pt");
+                },
+                    t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
 
-            s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
-                torch::Tensor totalConnections = torch::zeros({ 0, 7 });
+                s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name, int32_t& number) {
+                    torch::Tensor totalConnections = torch::zeros({ 0, 7 });
 
-                for (auto& [_, net] : cell->nets) {
-                    torch::Tensor connections = torch::zeros({ static_cast<int32_t>(net.size()), 7 });
+                    for (auto& [_, net] : cell->nets) {
+                        torch::Tensor connections = torch::zeros({ static_cast<int32_t>(net.size()), 7 });
 
-                    for (std::size_t i = 0; i < net.size(); ++i) {
-                        connections[i] = torch::tensor({ net[i].start.x - moveBy.x, net[i].start.y - moveBy.y, net[i].startLayer, net[i].end.x - moveBy.x, net[i].end.y - moveBy.y, net[i].endLayer, net[i].isOutOfCell });
+                        for (std::size_t i = 0; i < net.size(); ++i) {
+                            int32_t startX = net[i].start.x - moveBy.x;
+                            int32_t startY = net[i].start.y - moveBy.y;
+                            int32_t endX = net[i].end.x - moveBy.x;
+                            int32_t endY = net[i].end.y - moveBy.y;
+
+                            connections[i] = torch::tensor({ startX, startY, net[i].startLayer, endX, endY, net[i].endLayer, net[i].isOutOfCell });
+                        }
+
+                        totalConnections = torch::cat({ totalConnections, connections }, 0);
                     }
 
-                    totalConnections = torch::cat({ totalConnections, connections }, 0);
-                }
-
-                torch::save(totalConnections, "./cache/" + name + "/connections_" + std::to_string(number) + ".pt");
-            },
-                t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
+                    torch::save(totalConnections, "./cache/" + name + "/connections_" + std::to_string(number) + ".pt");
+                },
+                    t_config, cell, moveBy, t_data->design, (i + 1) * (j + 1));
+            }
         }
     }
 
@@ -603,7 +611,7 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
             if (cell->nets.count(netName) == 0) {
                 std::vector<WorkingCell::Connection> connections {};
                 std::shared_ptr<Rectangle> pinRect = container->data->pins[pinsNames[i]];
-                Point start((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
+                Point start((pinRect->vertex[1].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
                 MetalLayer startLayer = pinRect->layer;
 
                 for (std::size_t j = 0; j < pinsNames.size(); ++j) {
