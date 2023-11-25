@@ -131,7 +131,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
     defrSetPinCbk(&defPinCallback);
     defrSetNetCbk(&defNetCallback);
     defrSetSNetCbk(&defSpecialNetCallback);
-    // defrSetTrackCbk(&defTrackCallback);
+    defrSetTrackCbk(&defTrackCallback);
 
     // Read file
     //=================================================================
@@ -170,6 +170,10 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                             switch (geom->type) {
                             case RectangleType::DIEAREA: {
                                 source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = 0.5;
+                                break;
+                            }
+                            case RectangleType::TRACK: {
+                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.25;
                                 break;
                             }
                             default: {
@@ -251,8 +255,8 @@ void Encoder::addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_targ
                 if (inter[0] != inter[2] && inter[1] != inter[3]) {
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 } else {
-                    inter[2] = std::min(cellRect.vertex[2].x, inter[2]);
-                    inter[3] = std::min(cellRect.vertex[2].y, inter[3]);
+                    inter[2] = std::min(cellRect.vertex[2].x, inter[2] + 1);
+                    inter[3] = std::min(cellRect.vertex[2].y, inter[3] + 1);
                     rect = std::make_shared<Rectangle>(inter[0], inter[1], inter[2], inter[3], t_target->layer, t_target->type);
                 }
 
@@ -815,13 +819,23 @@ int Encoder::defTrackCallback(defrCallbackType_e t_type, defiTrack* t_track, voi
         double number = t_track->xNum();
         double step = t_track->xStep();
 
+        // if (strcmp(t_track->macro(), "X") == 0) {
+        //     for (double x = offset; x < number * step; x += step) {
+        //         addGeometryToWorkingCells(std::make_shared<Rectangle>(x - layer.width / 2.0, 0, x + layer.width / 2.0, container->data->dieArea[2].y, layer.metal, RectangleType::TRACK), container);
+        //     }
+        // } else if (strcmp(t_track->macro(), "Y") == 0) {
+        //     for (double y = offset; y < number * step; y += step) {
+        //         addGeometryToWorkingCells(std::make_shared<Rectangle>(0, y - layer.width / 2.0, container->data->dieArea[2].x, y + layer.width / 2.0, layer.metal, RectangleType::TRACK), container);
+        //     }
+        // }
+
         if (strcmp(t_track->macro(), "X") == 0) {
             for (double x = offset; x < number * step; x += step) {
-                addGeometryToWorkingCells(std::make_shared<Rectangle>(x - layer.width / 2.0, 0, x + layer.width / 2.0, container->data->dieArea[2].y, layer.metal, RectangleType::TRACK), container);
+                addGeometryToWorkingCells(std::make_shared<Rectangle>(x, 0, x, container->data->dieArea[2].y, layer.metal, RectangleType::TRACK), container);
             }
         } else if (strcmp(t_track->macro(), "Y") == 0) {
             for (double y = offset; y < number * step; y += step) {
-                addGeometryToWorkingCells(std::make_shared<Rectangle>(0, y - layer.width / 2.0, container->data->dieArea[2].x, y + layer.width / 2.0, layer.metal, RectangleType::TRACK), container);
+                addGeometryToWorkingCells(std::make_shared<Rectangle>(0, y, container->data->dieArea[2].x, y, layer.metal, RectangleType::TRACK), container);
             }
         }
     }

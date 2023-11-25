@@ -9,6 +9,7 @@
 #include "pdk/convertor.hpp"
 
 #include "neural_network/dataset.hpp"
+#include "neural_network/train/train.hpp"
 
 int main(int argc, char const* argv[])
 {
@@ -46,11 +47,16 @@ int main(int argc, char const* argv[])
             }
         };
 
-        for (auto& file : trainFiles) {
-            std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
+        // for (auto& file : trainFiles) {
+        //     std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
 
-            encoder.readDef(file, dataPtr, pdkPtr, configPtr);
-        }
+        //     encoder.readDef(file, dataPtr, pdkPtr, configPtr);
+        // }
+
+        TrainTopologyDataset trainDataset {};
+        Train train {};
+
+        train.train(trainDataset);
 
         break;
     }

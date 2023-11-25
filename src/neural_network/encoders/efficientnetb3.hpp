@@ -175,13 +175,13 @@ struct EfficientNetB3Impl : torch::nn::Module {
 
     std::vector<MBConvBlock> blocks {};
 
-    Conv2dStaticSamePadding headConv { nullptr };
-    torch::nn::BatchNorm2d headBn { nullptr };
-
     MemoryEfficientSwish swish;
 
-    torch::nn::AdaptiveAvgPool2d avgpool { nullptr };
-    torch::nn::Dropout dropout { nullptr };
+    // Conv2dStaticSamePadding headConv { nullptr };
+    // torch::nn::BatchNorm2d headBn { nullptr };
+
+    // torch::nn::AdaptiveAvgPool2d avgpool { nullptr };
+    // torch::nn::Dropout dropout { nullptr };
     torch::nn::Linear fc { nullptr };
 
     EfficientNetB3Impl(const int64_t t_outputSize)
@@ -241,19 +241,19 @@ struct EfficientNetB3Impl : torch::nn::Module {
             register_module("block_" + std::to_string(i), blocks[i]);
         }
 
-        headConv = Conv2dStaticSamePadding(384, 1536, 1, 1, false, imageSize);
-        register_module("headConv", headConv);
+        // headConv = Conv2dStaticSamePadding(384, 1536, 1, 1, false, imageSize);
+        // register_module("headConv", headConv);
 
-        headBn = torch::nn::BatchNorm2d(1536);
-        register_module("headBn", headBn);
+        // headBn = torch::nn::BatchNorm2d(1536);
+        // register_module("headBn", headBn);
 
-        avgpool = torch::nn::AdaptiveAvgPool2d(torch::nn::AdaptiveAvgPool2dOptions(1));
-        register_module("avgpool", avgpool);
+        // avgpool = torch::nn::AdaptiveAvgPool2d(torch::nn::AdaptiveAvgPool2dOptions(1));
+        // register_module("avgpool", avgpool);
 
-        dropout = torch::nn::Dropout(torch::nn::DropoutOptions(0.3).inplace(false));
-        register_module("dropout", dropout);
+        // dropout = torch::nn::Dropout(torch::nn::DropoutOptions(0.3).inplace(false));
+        // register_module("dropout", dropout);
 
-        fc = torch::nn::Linear(1536, t_outputSize);
+        fc = torch::nn::Linear(86400, t_outputSize);
         register_module("fc", fc);
     }
 
@@ -267,8 +267,10 @@ struct EfficientNetB3Impl : torch::nn::Module {
             x = blocks[i]->forward(x);
         }
 
-        x = headBn->forward(headConv->forward(x));
-        x = fc->forward(dropout->forward(avgpool->forward(x)).flatten());
+        // x = headBn->forward(headConv->forward(x));
+        // x = fc->forward(dropout->forward(avgpool->forward(x)).flatten());
+
+        x = fc->forward(x.flatten());
 
         return x;
     }
