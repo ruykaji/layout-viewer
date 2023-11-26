@@ -8,8 +8,7 @@ class ControlPanelWidget : public QMenuBar {
     Q_OBJECT
 
     QMenu* m_displayMenu {};
-    QAction* m_displayScaled {};
-    QAction* m_displayUnScaled {};
+    QAction* m_displayDefault {};
     QAction* m_displayTensor {};
 
 public:

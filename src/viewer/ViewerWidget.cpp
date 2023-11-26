@@ -31,18 +31,16 @@ ViewerWidget::ViewerWidget(QWidget* t_parent)
 
 void ViewerWidget::setup()
 {
-    if (m_displayMode != DisplayMode::TENSOR) {
+    if (m_displayMode == DisplayMode::DEFAULT) {
         m_max = { 0, 0 };
         m_min = { INT32_MAX, INT32_MAX };
 
-        int32_t scale = m_displayMode == DisplayMode::SCALED ? 1 : m_pdk->scale;
-
         for (auto& [x, y] : m_data->dieArea) {
-            m_max.first = std::max(x * scale, m_max.first);
-            m_max.second = std::max(y * scale, m_max.second);
+            m_max.first = std::max(x, m_max.first);
+            m_max.second = std::max(y, m_max.second);
 
-            m_min.first = std::min(x * scale, m_min.first);
-            m_min.second = std::min(y * scale, m_min.second);
+            m_min.first = std::min(x, m_min.first);
+            m_min.second = std::min(y, m_min.second);
         }
 
         m_max.first = m_max.first / m_pdk->scale;
@@ -58,24 +56,22 @@ void ViewerWidget::setup()
 
         for (auto& row : m_data->cells) {
             for (auto& col : row) {
-                if (m_displayMode == DisplayMode::SCALED) {
-                    QPolygon poly {};
+                QPolygon poly {};
 
-                    for (auto& [x, y] : col->originalPlace.vertex) {
-                        poly.append(QPoint(x * scale, y * scale));
-                    }
-
-                    m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
+                for (auto& [x, y] : col->originalPlace.vertex) {
+                    poly.append(QPoint(x, y));
                 }
+
+                m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
 
                 for (auto& geom : col->geometries) {
                     if (!(geom->type == RectangleType::TRACK)) {
                         QPolygon poly {};
 
-                        poly.append(QPoint(geom->vertex[0].x * scale, geom->vertex[0].y * scale));
-                        poly.append(QPoint(geom->vertex[1].x * scale, geom->vertex[1].y * scale));
-                        poly.append(QPoint(geom->vertex[2].x * scale, geom->vertex[2].y * scale));
-                        poly.append(QPoint(geom->vertex[3].x * scale, geom->vertex[3].y * scale));
+                        poly.append(QPoint(geom->vertex[0].x, geom->vertex[0].y));
+                        poly.append(QPoint(geom->vertex[1].x, geom->vertex[1].y));
+                        poly.append(QPoint(geom->vertex[2].x, geom->vertex[2].y));
+                        poly.append(QPoint(geom->vertex[3].x, geom->vertex[3].y));
 
                         std::pair<QColor, QColor> penBrushColor = selectBrushAndPen(geom->layer);
 
@@ -87,61 +83,27 @@ void ViewerWidget::setup()
                     for (auto& connection : net) {
                         QPolygon poly {};
 
-                        poly.append(QPoint(connection.start.x * scale, connection.start.y * scale));
-                        poly.append(QPoint(connection.end.x * scale, connection.end.y * scale));
+                        poly.append(QPoint(connection.start.x, connection.start.y));
+                        poly.append(QPoint(connection.end.x, connection.end.y));
 
                         m_paintBuffer.insert(PaintBufferObject { poly, QColor(Qt::white), QColor(Qt::white), MetalLayer::NONE });
                     }
                 }
             }
         }
+    } else {
+        m_paintBuffer.clear();
+
+        std::pair<QColor, QColor> penBrushColor {};
+
+        for (int8_t i = 0; i < m_source.size(0); ++i) {
+            penBrushColor = selectBrushAndPen(static_cast<MetalLayer>((i + 1) * 2));
+            m_paintBuffer.insert(PaintBufferObject { Point(0, 0), torchMatrixToQImage(m_source[i], penBrushColor.second) });
+        }
+
+        m_max = { m_source.size(-1), m_source.size(-1) };
+        m_min = { 0, 0 };
     }
-    // else {
-    //     m_max = { 0, 0 };
-    //     m_min = { INT32_MAX, INT32_MAX };
-
-    //     for (auto& [x, y] : m_data->dieArea) {
-    //         m_max.first = std::max(x, m_max.first);
-    //         m_max.second = std::max(y, m_max.second);
-
-    //         m_min.first = std::min(x, m_min.first);
-    //         m_min.second = std::min(y, m_min.second);
-    //     }
-
-    //     // Setup paint buffer
-    //     // ======================================================================================
-
-    //     m_paintBuffer.clear();
-
-    //     int32_t shiftStep = 25;
-    //     int32_t shiftX {};
-    //     int32_t shiftY {};
-
-    //     for (int32_t j = 0; j < m_data->numCellY; ++j) {
-    //         for (int32_t i = 0; i < m_data->numCellX; ++i) {
-    //             QPolygon poly(QRect(i * (m_data->cellSize + 2) + shiftX, j * (m_data->cellSize + 2) + shiftY, m_data->cellSize + 2, m_data->cellSize + 2));
-
-    //             m_paintBuffer.insert(PaintBufferObject { poly, QColor(255, 255, 255, 255), QColor(Qt::transparent), MetalLayer::NONE });
-
-    //             std::pair<QColor, QColor> penBrushColor {};
-
-    //             for (int8_t k = 0; k < m_data->cells[j][i]->source.size(1); ++k) {
-    //                 penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
-    //                 m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->source[0][k], penBrushColor.first) });
-    //             }
-
-    //             // for (int8_t k = 0; k < m_data->cells[j][i]->target.size(1); ++k) {
-    //             //     penBrushColor = selectBrushAndPen(static_cast<MetalLayer>(k));
-    //             //     m_paintBuffer.insert(PaintBufferObject { Point(poly[0].x(), poly[0].y()), torchMatrixToQImage(m_data->cells[j][i]->target[0][k], penBrushColor.first) });
-    //             // }
-
-    //             shiftX += shiftStep;
-    //         }
-
-    //         shiftX = 0;
-    //         shiftY += shiftStep;
-    //     }
-    // }
 
     double newInitialScale = std::min((width() * 0.8) / (std::abs(m_max.first - m_min.first)), (height() * 0.8) / (std::abs(m_max.second - m_min.second)));
 
@@ -161,31 +123,22 @@ std::pair<QColor, QColor> ViewerWidget::selectBrushAndPen(const MetalLayer& t_la
         return std::pair<QColor, QColor>(QColor(255, 0, 0), QColor(255, 0, 0, 55));
     case MetalLayer::M2:
         return std::pair<QColor, QColor>(QColor(0, 255, 0), QColor(0, 255, 0, 55));
-        break;
     case MetalLayer::M3:
         return std::pair<QColor, QColor>(QColor(255, 255, 0), QColor(255, 255, 0, 55));
-        break;
     case MetalLayer::M4:
         return std::pair<QColor, QColor>(QColor(0, 255, 255), QColor(0, 255, 255, 55));
-        break;
     case MetalLayer::M5:
         return std::pair<QColor, QColor>(QColor(255, 0, 255), QColor(255, 0, 255, 55));
-        break;
     case MetalLayer::M6:
         return std::pair<QColor, QColor>(QColor(125, 125, 255), QColor(125, 125, 255, 55));
-        break;
     case MetalLayer::M7:
         return std::pair<QColor, QColor>(QColor(255, 125, 125), QColor(255, 125, 125, 55));
-        break;
     case MetalLayer::M8:
         return std::pair<QColor, QColor>(QColor(125, 255, 125), QColor(125, 255, 125, 55));
-        break;
     case MetalLayer::M9:
         return std::pair<QColor, QColor>(QColor(255, 75, 125), QColor(255, 75, 125, 55));
-        break;
     default:
         return std::pair<QColor, QColor>(QColor(255, 255, 255), QColor(255, 255, 255, 55));
-        break;
     }
 };
 
@@ -197,12 +150,8 @@ QImage ViewerWidget::torchMatrixToQImage(const torch::Tensor& t_matrix, const QC
 
     for (int32_t y = 0; y < height; ++y) {
         for (int32_t x = 0; x < width; ++x) {
-            if (t_matrix[y][x].item<float>() != 0.0) {
-                if (t_matrix[y][x].item<float>() > 0) {
-                    image.setPixelColor(x, y, t_fillColor);
-                } else {
-                    image.setPixelColor(x, y, QColor(255, 255, 255));
-                }
+            if (t_matrix[y][x].item<float>() != 0.5) {
+                image.setPixelColor(x, y, t_fillColor);
             } else {
                 image.setPixelColor(x, y, QColor(0, 0, 0, 0));
             }
@@ -311,7 +260,11 @@ void ViewerWidget::wheelEvent(QWheelEvent* t_event)
 
 void ViewerWidget::render(QString& t_fileName)
 {
-    m_encoder->readDef(std::string_view(t_fileName.toStdString()), m_data, m_pdk, m_config);
+    if (m_displayMode == DisplayMode::DEFAULT) {
+        m_encoder->readDef(std::string_view(t_fileName.toStdString()), m_data, m_pdk, m_config);
+    } else {
+        torch::load(m_source, ("./cache/" + t_fileName).toStdString());
+    }
 
     setup();
     update();
@@ -320,7 +273,4 @@ void ViewerWidget::render(QString& t_fileName)
 void ViewerWidget::setDisplayMode(const int8_t& t_mode)
 {
     m_displayMode = static_cast<DisplayMode>(t_mode);
-
-    setup();
-    update();
 }

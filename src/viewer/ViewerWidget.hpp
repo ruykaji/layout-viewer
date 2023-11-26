@@ -2,6 +2,7 @@
 #define __DEF_VIEWER_WIDGET_H__
 
 #include <QImage>
+#include <QListWidget>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
@@ -49,16 +50,18 @@ class ViewerWidget : public QWidget {
     };
 
     enum class DisplayMode {
-        SCALED,
-        UNSCALED,
+        DEFAULT,
         TENSOR
     };
 
-    Mode m_mode {};
-    DisplayMode m_displayMode { DisplayMode::SCALED };
+    QListWidget* m_listWidget {};
 
-    std::shared_ptr<PDK> m_pdk{};
-    std::shared_ptr<Config> m_config{};
+    Mode m_mode {};
+    DisplayMode m_displayMode { DisplayMode::DEFAULT };
+
+    torch::Tensor m_source {};
+    std::shared_ptr<PDK> m_pdk {};
+    std::shared_ptr<Config> m_config {};
     std::shared_ptr<Data> m_data {};
     std::unique_ptr<Encoder> m_encoder {};
     std::multiset<PaintBufferObject> m_paintBuffer {};
