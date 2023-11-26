@@ -46,6 +46,8 @@ struct Data {
     int32_t totalNets {};
 
     std::vector<Point> dieArea {};
+    std::unordered_map<int32_t, std::array<double, 4>> tracksX {};
+    std::unordered_map<int32_t, std::array<double, 4>> tracksY {};
     std::vector<std::vector<std::shared_ptr<WorkingCell>>> cells {};
 
     std::unordered_map<std::string, std::shared_ptr<WorkingCell>> correspondingToPinCell {};

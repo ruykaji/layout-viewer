@@ -32,14 +32,12 @@ public:
     void readDef(const std::string_view& t_fileName, const std::shared_ptr<Data>& t_data, const std::shared_ptr<PDK>& t_pdk, const std::shared_ptr<Config>& t_config);
 
 private:
-    static void addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container);
+    static void addGeometryToWorkingCells(const std::shared_ptr<Rectangle>& t_target, Container* t_container, const bool& t_scale = true);
 
-    static void addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, const std::string& t_pinName, Container* t_container);
+    static void addPinToWorkingCells(const std::vector<std::shared_ptr<Rectangle>>& t_target, const std::string& t_pinName, Container* t_container, const bool& t_scale = true);
 
     // Def callbacks
     // ======================================================================================
-
-    static int defDesignCallback(defrCallbackType_e t_type, const char* t_design, void* t_userData);
 
     static int defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void* t_userData);
 
