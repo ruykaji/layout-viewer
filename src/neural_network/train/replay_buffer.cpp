@@ -9,25 +9,20 @@ std::size_t ReplayBuffer::size() noexcept
 
 void ReplayBuffer::add(const ReplayBuffer::Data& t_data)
 {
+    if (m_data.size() + 1 > m_maxSize) {
+        m_data.erase(m_data.begin());
+    };
+
     m_data.emplace_back(t_data);
+
+    std::shuffle(m_data.begin(), m_data.end(), std::default_random_engine(std::chrono::system_clock::now().time_since_epoch().count()));
 }
 
 ReplayBuffer::Data ReplayBuffer::get()
 {
-    if (m_iter == m_order.size() || m_iter == 0) {
-        randomOrder();
+    if (m_iter == m_data.size()) {
         m_iter = 0;
     }
 
-    return m_data[m_order[m_iter++]];
-}
-
-void ReplayBuffer::randomOrder()
-{
-    std::vector<std::size_t> indexes(m_data.size());
-
-    std::iota(indexes.begin(), indexes.end(), 0);
-    std::shuffle(indexes.begin(), indexes.end(), std::default_random_engine(std::chrono::system_clock::now().time_since_epoch().count()));
-
-    m_order = indexes;
+    return m_data[m_iter++];
 }

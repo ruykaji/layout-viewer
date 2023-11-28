@@ -7,8 +7,8 @@
 #include "replay_buffer.hpp"
 
 class Agent {
-    TRLM m_QPredictionModel { nullptr };
-    TRLM m_QTargetModel { nullptr };
+    DQN m_QPredictionModel { nullptr };
+    DQN m_QTargetModel { nullptr };
 
     std::size_t m_trainSteps {};
 
@@ -16,13 +16,15 @@ public:
     Agent();
     ~Agent() = default;
 
-    torch::Tensor replayAction(torch::Tensor t_env, torch::Tensor t_state);
+    torch::Tensor replayAction(std::array<torch::Tensor, 3> t_env, std::array<torch::Tensor, 3> t_state);
 
     std::pair<torch::Tensor, torch::Tensor> trainAction(const ReplayBuffer::Data& t_replay);
 
     std::vector<at::Tensor, std::allocator<at::Tensor>> getModelParameters();
 
     void updateTargetModel();
+
+    void softUpdateTargetModel(const double& t_tau);
 
     void eval();
 

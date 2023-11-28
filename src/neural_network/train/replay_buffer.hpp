@@ -1,6 +1,7 @@
 #ifndef __REPLAY_BUFFER_H__
 #define __REPLAY_BUFFER_H__
 
+#include <array>
 #include <vector>
 
 #include "torch_include.hpp"
@@ -8,20 +9,22 @@
 class ReplayBuffer {
 public:
     struct Data {
-        torch::Tensor env {};
-        torch::Tensor state {};
+        std::array<torch::Tensor, 3> env {};
+        std::array<torch::Tensor, 3> state {};
 
-        torch::Tensor nextEnv {};
-        torch::Tensor nextState {};
+        std::array<torch::Tensor, 3> nextEnv {};
+        std::array<torch::Tensor, 3> nextState {};
 
         torch::Tensor actions {};
         torch::Tensor rewards {};
+        torch::Tensor terminals {};
 
         Data() = default;
         ~Data() = default;
     };
 
-    ReplayBuffer() = default;
+    ReplayBuffer(const std::size_t& t_maxSize)
+        : m_maxSize(t_maxSize) {};
     ~ReplayBuffer() = default;
 
     std::size_t size() noexcept;
@@ -31,11 +34,9 @@ public:
     Data get();
 
 private:
+    std::size_t m_maxSize {};
     std::vector<ReplayBuffer::Data> m_data {};
-    std::vector<std::size_t> m_order {};
     std::size_t m_iter {};
-
-    void randomOrder();
 };
 
 #endif
