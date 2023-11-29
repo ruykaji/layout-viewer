@@ -181,12 +181,12 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 std::string connectionsSavePath = designPath + "/connections_" + std::to_string(j) + "_" + std::to_string(i) + ".pt";
 
                 s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name) {
-                    torch::Tensor source = torch::zeros({ 5, config->getCellSize(), config->getCellSize() }).fill_(0.5);
+                    torch::Tensor source = torch::zeros({ 2, config->getCellSize(), config->getCellSize() });
 
                     for (const auto& geom : cell->geometries) {
                         uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
 
-                        if (layerIndex % 2 == 0 || geom->type == RectangleType::DIEAREA) {
+                        if ((layerIndex % 2 == 0 && layerIndex <= 4)) {
                             std::array<Point, 4> vertexes = geom->vertex;
 
                             for (auto& vertex : vertexes) {
@@ -194,16 +194,12 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                             }
 
                             switch (geom->type) {
-                            case RectangleType::DIEAREA: {
-                                source.slice(1, vertexes[0].y, vertexes[2].y).slice(2, vertexes[0].x, vertexes[2].x) = 0.5;
-                                break;
-                            }
                             case RectangleType::TRACK: {
-                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.0;
+                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
                                 break;
                             }
                             default: {
-                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
+                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.0;
                                 break;
                             }
                             }
@@ -407,8 +403,8 @@ int Encoder::defDieAreaCallback(defrCallbackType_e t_type, defiBox* t_box, void*
     double height = (rightBottom.y - leftTop.y) / container->pdk->scale;
 
     container->data->cellSize = container->config->getCellSize();
-    container->data->numCellX = std::ceil((width + container->config->getBorderSize()) / container->data->cellSize);
-    container->data->numCellY = std::ceil((height + container->config->getBorderSize()) / container->data->cellSize);
+    container->data->numCellX = std::ceil((width + container->config->getBorderSize()) / container->data->cellSize) + 1;
+    container->data->numCellY = std::ceil((height + container->config->getBorderSize()) / container->data->cellSize) + 1;
     container->data->cellOffsetX = leftTop.x - container->config->getBorderSize();
     container->data->cellOffsetY = leftTop.y - container->config->getBorderSize();
     container->data->cells = std::vector<std::vector<std::shared_ptr<WorkingCell>>>(container->data->numCellY, std::vector<std::shared_ptr<WorkingCell>>(container->data->numCellX, nullptr));
@@ -653,8 +649,6 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                 Point start((pinRect->vertex[1].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
                 int32_t startZ = static_cast<int32_t>(pinRect->layer) / 2;
 
-                addTracksToPoint(container, start, startZ);
-
                 for (std::size_t j = 0; j < pinsNames.size(); ++j) {
                     if (j != i) {
                         pinRect = container->data->pins[pinsNames[j]];
@@ -665,14 +659,17 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
                             Point end((pinRect->vertex[2].x + pinRect->vertex[0].x) / 2, (pinRect->vertex[3].y + pinRect->vertex[1].y) / 2);
                             int32_t endZ = static_cast<int32_t>(pinRect->layer) / 2;
 
-                            addTracksToPoint(container, end, endZ);
+                            if (startZ < 2 && endZ < 2) {
+                                addTracksToPoint(container, end, endZ);
 
-                            connections.emplace_back(WorkingCell::Connection { static_cast<int32_t>(isOutOfCell), start, startZ, end, endZ });
+                                connections.emplace_back(WorkingCell::Connection { static_cast<int32_t>(isOutOfCell), start, startZ, end, endZ });
+                            }
                         }
                     }
                 }
 
                 if (!connections.empty()) {
+                    addTracksToPoint(container, start, startZ);
                     cell->nets[netName] = connections;
                 }
             }

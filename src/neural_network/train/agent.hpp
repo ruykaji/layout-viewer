@@ -16,19 +16,15 @@ public:
     Agent();
     ~Agent() = default;
 
-    torch::Tensor replayAction(std::array<torch::Tensor, 3> t_env, std::array<torch::Tensor, 3> t_state);
+    torch::Tensor replayAction(std::vector<torch::Tensor> t_env, std::vector<torch::Tensor> t_state);
 
     std::pair<torch::Tensor, torch::Tensor> trainAction(const ReplayBuffer::Data& t_replay);
 
-    std::vector<at::Tensor, std::allocator<at::Tensor>> getModelParameters();
+    std::vector<torch::Tensor>  getModelParameters();
 
     void updateTargetModel();
 
     void softUpdateTargetModel(const double& t_tau);
-
-    void eval();
-
-    void train();
 };
 
 #endif

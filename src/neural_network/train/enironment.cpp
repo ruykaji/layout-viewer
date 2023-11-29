@@ -4,33 +4,39 @@
 
 void Environment::set(const torch::Tensor& t_env, const torch::Tensor& t_state)
 {
-    m_env[0] = torch::zeros(t_env.sizes());
-    m_env[1] = torch::zeros(t_env.sizes());
-    m_env[2] = t_env.clone();
+    std::size_t frames = 4;
 
-    m_state[0] = torch::zeros(t_state.sizes());
-    m_state[1] = torch::zeros(t_state.sizes());
-    m_state[2] = t_state.clone();
+    m_env = std::vector<torch::Tensor>(frames - 1);
+
+    for (std::size_t i = 0; i < frames - 1; ++i) {
+        m_env[i] = torch::zeros(t_env.sizes());
+    }
+
+    m_env.emplace_back(t_env.clone());
+
+    m_state = std::vector<torch::Tensor>(frames - 1);
+
+    for (std::size_t i = 0; i < frames - 1; ++i) {
+        m_state[i] = torch::zeros(t_state.sizes());
+    }
+
+    m_state.emplace_back(t_state.clone());
 
     m_totalActions = std::vector<int64_t>(t_state.size(0), 0);
-    m_terminals = std::vector<int8_t>(t_state.size(0), 0);
-    m_lastActions = std::vector<int8_t>(t_state.size(0), 0);
-    m_totalLength = std::vector<double>(t_state.size(0), 1.0);
+    m_totalRewards = std::vector<double>(t_state.size(0), 0.0);
 
     for (std::size_t i = 0; i < m_state.back().size(0); ++i) {
-        // m_env.back()[0][m_state.back()[i][2].item<int64_t>()][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 0.75;
-        // m_env.back()[0][m_state.back()[i][5].item<int64_t>()][m_state.back()[i][4].item<int64_t>()][m_state.back()[i][3].item<int64_t>()] = 1.0;
-        m_env.back()[0][0][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 0.35;
-        m_env.back()[0][0][m_state.back()[i][3].item<int64_t>()][m_state.back()[i][2].item<int64_t>()] = 1.0;
+        m_env.back()[0][m_state.back()[i][2].item<int64_t>()][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 1.0;
+        m_env.back()[0][m_state.back()[i][5].item<int64_t>()][m_state.back()[i][4].item<int64_t>()][m_state.back()[i][3].item<int64_t>()] = 1.0;
     }
 }
 
-std::array<torch::Tensor, 3> Environment::getEnv()
+std::vector<torch::Tensor> Environment::getEnv()
 {
     return m_env;
 }
 
-std::array<torch::Tensor, 3> Environment::getState()
+std::vector<torch::Tensor> Environment::getState()
 {
     return m_state;
 }
@@ -51,40 +57,35 @@ std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor&
     for (std::size_t i = 0; i < t_actions.size(0); ++i) {
         ++m_steps;
 
-        double epsTrh = m_epsEnd + (m_epsStart - m_epsEnd) * std::exp(-1.0 * m_steps / m_totalSteps);
-        // int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 6);
-        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 4);
+        double epsTrh = m_epsStart - (m_epsStart - m_epsEnd) * std::min(1.0, m_steps / m_totalSteps);
+        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 6);
         int32_t direction = action % 2 == 0 ? -1 : 1;
-        torch::Tensor newState = m_state[2][i].clone();
+        torch::Tensor oldState = m_state.back()[i].clone();
+        torch::Tensor newState = m_state.back()[i].clone();
 
         if (action == 0 || action == 1) {
             newState[0] += direction;
         } else if (action == 2 || action == 3) {
             newState[1] += direction;
+        } else if (action == 4 || action == 5) {
+            newState[2] += direction;
         }
-        // else if (action == 4 || action == 5) {
-        //     newState[2] += direction;
-        // }
 
-        auto pair = getRewardAndTerminal(newState, m_state.back()[i], m_totalLength[i]);
+        std::pair<double, int8_t> pair = getRewardAndTerminal(newState, oldState);
+
+        m_totalRewards[i] += std::pow(m_rewardDiscount, static_cast<double>(m_totalActions[i])) * pair.first;
+        m_totalActions[i] += 1;
+
+        if (pair.second != 1) {
+            m_env.back()[0][oldState[2].item<int64_t>()][oldState[1].item<int64_t>()][oldState[0].item<int64_t>()] = 0.25;
+            m_env.back()[0][newState[2].item<int64_t>()][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 1.0;
+
+            m_state.back()[i] = newState.clone();
+        }
 
         replay.terminals[i][0] = (pair.second == 2) ? 0.0 : 1.0;
         replay.actions[i][0] = action;
-        replay.rewards[i][0] += std::pow(m_rewardDiscount, m_totalActions[i]) * pair.first;
-
-        m_totalActions[i] += 1;
-
-        if (pair.second != 0) {
-            m_totalLength[i] += 1.0;
-        } else {
-            m_totalLength[i] = 0;
-        }
-
-        if (pair.second == 0) {
-            m_state.back()[i] = newState.clone();
-            // m_env.back()[0][newState[2].item<int64_t>()][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 0.75;
-            m_env.back()[0][0][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 0.35;
-        }
+        replay.rewards[i][0] = m_totalRewards[i];
     }
 
     copyTensors(replay.nextEnv, m_env);
@@ -97,33 +98,41 @@ std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor&
 
 double Environment::getExpToExpl()
 {
-    return (m_epsEnd + (m_epsStart - m_epsEnd) * std::exp(-1.0 * m_steps / m_totalSteps)) * 100.0;
+    return (m_epsStart - (m_epsStart - m_epsEnd) * std::min(1.0, m_steps / m_totalSteps)) * 100.0;
 };
 
 void Environment::shift(const torch::Tensor& t_env, const torch::Tensor& t_state)
 {
-    std::array<torch::Tensor, 3> newEnv {};
+    std::vector<torch::Tensor> newEnv(m_env.size() - 1);
 
-    newEnv[0] = m_env[1].clone();
-    newEnv[1] = m_env[2].clone();
-    newEnv[2] = t_env.clone();
+    for (std::size_t i = 0; i < newEnv.size(); ++i) {
+        newEnv[i] = m_env[i + 1].clone();
+    }
+
+    newEnv.emplace_back(t_env.clone());
+    m_env.clear();
     m_env = newEnv;
 
-    std::array<torch::Tensor, 3> newState {};
+    std::vector<torch::Tensor> newState(m_state.size() - 1);
 
-    newState[0] = m_state[1].clone();
-    newState[1] = m_state[2].clone();
-    newState[2] = t_state.clone();
+    for (std::size_t i = 0; i < newState.size(); ++i) {
+        newState[i] = m_state[i + 1].clone();
+    }
+
+    newState.emplace_back(t_state.clone());
+    m_state.clear();
     m_state = newState;
 }
 
-void Environment::copyTensors(std::array<torch::Tensor, 3>& t_lhs, const std::array<torch::Tensor, 3>& t_rhs)
+void Environment::copyTensors(std::vector<torch::Tensor>& t_lhs, const std::vector<torch::Tensor>& t_rhs)
 {
-    std::array<torch::Tensor, 3> newLhs {};
+    std::vector<torch::Tensor> newLhs(t_rhs.size());
 
-    newLhs[0] = t_rhs[0].clone();
-    newLhs[1] = t_rhs[1].clone();
-    newLhs[2] = t_rhs[2].clone();
+    for (std::size_t i = 0; i < newLhs.size(); ++i) {
+        newLhs[i] = t_rhs[i].clone();
+    }
+
+    t_lhs.clear();
     t_lhs = newLhs;
 }
 
@@ -154,14 +163,20 @@ int32_t Environment::epsilonGreedyAction(double t_epsilon, const torch::Tensor& 
     }
 }
 
-std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor& t_newState, const torch::Tensor& t_oldState, const double& t_totalLength)
+std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor& t_newState, const torch::Tensor& t_oldState)
 {
     double reward = 0;
     int32_t terminal = 0;
 
-    if (isOutOfBounds(t_newState)) {
+    if (isInvalidState(t_newState)) {
         reward = -0.75;
         terminal = 1;
+        return std::pair(reward, terminal);
+    }
+
+    if (isStuck(t_newState, t_oldState)) {
+        reward = -1.0;
+        terminal = 2;
         return std::pair(reward, terminal);
     }
 
@@ -171,23 +186,11 @@ std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor&
         return std::pair(reward, terminal);
     }
 
-    if (isInvalidState(t_newState)) {
-        if (isStuck(t_newState, t_totalLength)) {
-            reward = -1.0;
-            terminal = 1;
-            return std::pair(reward, terminal);
-        }
-
-        reward = -0.25;
-        terminal = 1;
-        return std::pair(reward, terminal);
-    } else {
-        reward -= 0.8 - 0.75 * std::exp(-M_PI * isMovingToTarget(t_newState, t_oldState));
-        return std::pair(reward, terminal);
-    }
+    reward -= 0.05;
+    return std::pair(reward, terminal);
 };
 
-bool Environment::isOutOfBounds(const torch::Tensor& t_state)
+bool Environment::isInvalidState(const torch::Tensor& t_state)
 {
     if (t_state[0].item<int32_t>() < 0) {
         return true;
@@ -197,9 +200,9 @@ bool Environment::isOutOfBounds(const torch::Tensor& t_state)
         return true;
     }
 
-    // if (t_state[2].item<int32_t>() < 0) {
-    //     return true;
-    // }
+    if (t_state[2].item<int32_t>() < 0) {
+        return true;
+    }
 
     if (t_state[0].item<int32_t>() > m_env.back().size(-1) - 1) {
         return true;
@@ -209,89 +212,82 @@ bool Environment::isOutOfBounds(const torch::Tensor& t_state)
         return true;
     }
 
-    // if (t_state[2].item<int32_t>() > m_env.back().size(-3) - 1) {
-    //     return true;
-    // }
+    if (t_state[2].item<int32_t>() > m_env.back().size(-3) - 1) {
+        return true;
+    }
 
-    if (m_env.back()[0][0][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.0) {
+    if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3) {
         return true;
     }
 
     return false;
-}
-
-bool Environment::isInvalidState(const torch::Tensor& t_state)
-{
-    // if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.25) {
-    //     return true;
-    // }
-
-    // if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.75) {
-    //     return true;
-    // }
-
-    // if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 1.0 && !isGoalState(t_state)) {
-    //     return true;
-    // }
-
-    // if (m_env.back()[0][0][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.0) {
-    //     return true;
-    // }
-
-    if (m_env.back()[0][0][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() > 0.25) {
-        return true;
-    }
-
-    return false;
-}
-
-double Environment::isMovingToTarget(const torch::Tensor& t_newState, const torch::Tensor& t_oldState)
-{
-    // double newXPow = std::pow(t_newState[0].item<int64_t>() - t_newState[3].item<int64_t>(), 2.0);
-    // double newYPow = std::pow(t_newState[1].item<int64_t>() - t_newState[4].item<int64_t>(), 2.0);
-
-    // double oldXPow = std::pow(t_oldState[0].item<int64_t>() - t_oldState[3].item<int64_t>(), 2.0);
-    // double oldYPow = std::pow(t_oldState[1].item<int64_t>() - t_oldState[4].item<int64_t>(), 2.0);
-
-    double newXPow = std::pow(t_newState[0].item<int64_t>() - t_newState[2].item<int64_t>(), 2.0);
-    double newYPow = std::pow(t_newState[1].item<int64_t>() - t_newState[3].item<int64_t>(), 2.0);
-
-    double oldXPow = std::pow(t_oldState[0].item<int64_t>() - t_oldState[2].item<int64_t>(), 2.0);
-    double oldYPow = std::pow(t_oldState[1].item<int64_t>() - t_oldState[3].item<int64_t>(), 2.0);
-
-    return std::abs((newXPow + newYPow) - (oldXPow + oldYPow));
 }
 
 bool Environment::isGoalState(const torch::Tensor& t_state)
 {
-    // if (t_state[2].item<int32_t>() != t_state[5].item<int32_t>()) {
-    //     return false;
-    // }
-
-    // if (t_state[1].item<int32_t>() != t_state[4].item<int32_t>()) {
-    //     return false;
-    // }
-
-    // if (t_state[0].item<int32_t>() != t_state[3].item<int32_t>()) {
-    //     return false;
-    // }
-
-    if (t_state[1].item<int32_t>() != t_state[3].item<int32_t>()) {
+    if (t_state[2].item<int32_t>() != t_state[5].item<int32_t>()) {
         return false;
     }
 
-    if (t_state[0].item<int32_t>() != t_state[2].item<int32_t>()) {
+    if (t_state[1].item<int32_t>() != t_state[4].item<int32_t>()) {
+        return false;
+    }
+
+    if (t_state[0].item<int32_t>() != t_state[3].item<int32_t>()) {
         return false;
     }
 
     return true;
 }
 
-bool Environment::isStuck(const torch::Tensor& t_state, const double& t_length)
+bool Environment::isStuck(const torch::Tensor& t_state, const torch::Tensor& t_oldState)
 {
-    if (t_length > 50) {
-        return true;
+    bool left = true;
+    bool right = true;
+    bool backward = true;
+    bool forward = true;
+    bool up = true;
+    bool down = true;
+
+    if (t_state[0].item<int32_t>() == 0) {
+        left = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() - 1].item<double>() < 0.3 || t_state[0].item<int64_t>() - 1 == t_oldState[0].item<int64_t>()) {
+        left = false;
     }
 
-    return false;
+    if (t_state[1].item<int32_t>() == 0) {
+        backward = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() - 1][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[1].item<int64_t>() - 1 == t_oldState[1].item<int64_t>()) {
+        backward = false;
+    }
+
+    if (t_state[2].item<int32_t>() == 0) {
+        down = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>() - 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[2].item<int64_t>() - 1 == t_oldState[2].item<int64_t>()) {
+        down = false;
+    }
+
+    if (t_state[0].item<int32_t>() == m_env.back().size(-1) - 1) {
+        right = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() + 1].item<double>() < 0.3 || t_state[0].item<int64_t>() + 1 == t_oldState[0].item<int64_t>()) {
+        right = false;
+    }
+
+    if (t_state[1].item<int32_t>() == m_env.back().size(-1) - 1) {
+        forward = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() + 1][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[1].item<int64_t>() + 1 == t_oldState[1].item<int64_t>()) {
+        forward = false;
+    }
+
+    if (t_state[2].item<int32_t>() == m_env.back().size(-3) - 1) {
+        up = false;
+    } else if (m_env.back()[0][t_state[2].item<int32_t>() + 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[2].item<int64_t>() + 1 == t_oldState[2].item<int64_t>()) {
+        up = false;
+    }
+
+    if (left || right || backward || forward || down || up) {
+        return false;
+    }
+
+    return true;
 }

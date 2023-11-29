@@ -14,15 +14,14 @@ void ReplayBuffer::add(const ReplayBuffer::Data& t_data)
     };
 
     m_data.emplace_back(t_data);
-
-    std::shuffle(m_data.begin(), m_data.end(), std::default_random_engine(std::chrono::system_clock::now().time_since_epoch().count()));
 }
 
 ReplayBuffer::Data ReplayBuffer::get()
 {
-    if (m_iter == m_data.size()) {
-        m_iter = 0;
-    }
+    static std::random_device rd;
+    static std::mt19937 eng(rd());
 
-    return m_data[m_iter++];
+    std::uniform_int_distribution<> distr(0, m_data.size() - 1);
+
+    return m_data[distr(eng)];
 }

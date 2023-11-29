@@ -2,8 +2,8 @@
 
 Agent::Agent()
 {
-    m_QPredictionModel = DQN(12, 4);
-    m_QTargetModel = DQN(12, 4);
+    m_QPredictionModel = DQN(24, 6);
+    m_QTargetModel = DQN(24, 6);
 
     updateTargetModel();
 
@@ -14,35 +14,87 @@ Agent::Agent()
     m_QTargetModel->to(torch::Device("cuda:0"));
 }
 
-torch::Tensor Agent::replayAction(std::array<torch::Tensor, 3> t_env, std::array<torch::Tensor, 3> t_state)
+torch::Tensor Agent::replayAction(std::vector<torch::Tensor> t_env, std::vector<torch::Tensor> t_state)
 {
-    auto stakedEnv = torch::cat({ torch::sum(t_env[0], 1, true), torch::sum(t_env[1], 1, true), torch::sum(t_env[2], 1, true) }, 1);
-    auto stakedState = torch::cat({ t_state[0], t_state[1], t_state[2] }, 1);
+    torch::Tensor stakedEnv {};
 
-    return m_QPredictionModel->forward(stakedEnv.to(torch::Device("cuda:0")), stakedState.to(torch::Device("cuda:0")), true).detach().to(torch::Device("cpu"));
+    for (std::size_t i = 0; i < t_env.size(); ++i) {
+        if (i == 0) {
+            stakedEnv = torch::sum(t_env[i].clone(), 1, true);
+        } else {
+            stakedEnv = torch::cat({ stakedEnv, torch::sum(t_env[i].clone(), 1, true) }, 1);
+        }
+    }
+
+    torch::Tensor stakedState {};
+
+    for (std::size_t i = 0; i < t_state.size(); ++i) {
+        if (i == 0) {
+            stakedState = t_state[i].clone();
+        } else {
+            stakedState = torch::cat({ stakedState, t_state[i] }, -1);
+        }
+    }
+
+    return m_QPredictionModel->forward(stakedEnv.to(torch::Device("cuda:0")), stakedState.to(torch::Device("cuda:0"))).detach().to(torch::Device("cpu"));
 }
 
 std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::Data& t_replay)
 {
-    auto stakedEnv = torch::cat({ torch::sum(t_replay.env[0], 1, true), torch::sum(t_replay.env[1], 1, true), torch::sum(t_replay.env[2], 1, true) }, 1);
-    auto stakedState = torch::cat({ t_replay.state[0], t_replay.state[1], t_replay.state[2] }, 1);
+    torch::Tensor stakedEnv {};
+
+    for (std::size_t i = 0; i < t_replay.env.size(); ++i) {
+        if (i == 0) {
+            stakedEnv = torch::sum(t_replay.env[i].clone(), 1, true);
+        } else {
+            stakedEnv = torch::cat({ stakedEnv, torch::sum(t_replay.env[i].clone(), 1, true) }, 1);
+        }
+    }
+
+    torch::Tensor stakedState {};
+
+    for (std::size_t i = 0; i < t_replay.state.size(); ++i) {
+        if (i == 0) {
+            stakedState = t_replay.state[i].clone();
+        } else {
+            stakedState = torch::cat({ stakedState, t_replay.state[i].clone() }, -1);
+        }
+    }
+
     auto w1 = m_QPredictionModel->forward(stakedEnv.to(torch::Device("cuda:0")), stakedState.to(torch::Device("cuda:0"))).to(torch::Device("cpu"));
 
-    auto stakedNextEnv = torch::cat({ torch::sum(t_replay.nextEnv[0], 1, true), torch::sum(t_replay.nextEnv[1], 1, true), torch::sum(t_replay.nextEnv[2], 1, true) }, 1);
-    auto stakedNextState = torch::cat({ t_replay.nextState[0], t_replay.nextState[1], t_replay.nextState[2] }, 1);
+    torch::Tensor stakedNextEnv {};
+
+    for (std::size_t i = 0; i < t_replay.nextEnv.size(); ++i) {
+        if (i == 0) {
+            stakedNextEnv = torch::sum(t_replay.nextEnv[i].clone(), 1, true);
+        } else {
+            stakedNextEnv = torch::cat({ stakedNextEnv, torch::sum(t_replay.nextEnv[i].clone(), 1, true) }, 1);
+        }
+    }
+
+    torch::Tensor stakedNextState {};
+
+    for (std::size_t i = 0; i < t_replay.nextState.size(); ++i) {
+        if (i == 0) {
+            stakedNextState = t_replay.nextState[i].clone();
+        } else {
+            stakedNextState = torch::cat({ stakedNextState, t_replay.nextState[i].clone() }, -1);
+        }
+    }
+
     auto w2 = m_QTargetModel->forward(stakedNextEnv.to(torch::Device("cuda:0")), stakedNextState.to(torch::Device("cuda:0"))).to(torch::Device("cpu"));
+    auto w3 = m_QPredictionModel->forward(stakedNextEnv.to(torch::Device("cuda:0")), stakedNextState.to(torch::Device("cuda:0"))).to(torch::Device("cpu"));
 
     auto qPredicted = w1.gather(1, t_replay.actions);
-    auto td = std::get<0>(w2.max(1, true)) * t_replay.terminals;
-
-    auto qTarget = t_replay.rewards + 0.99 * td;
+    auto qTarget = t_replay.rewards + 0.9 * w2.gather(1, w3.argmax(1, true)) * t_replay.terminals;
 
     return std::pair(qPredicted, qTarget);
 }
 
-std::vector<at::Tensor, std::allocator<at::Tensor>> Agent::getModelParameters()
+std::vector<torch::Tensor> Agent::getModelParameters()
 {
-    return m_QPredictionModel->parameters();
+    return m_QPredictionModel->parameters(true);
 };
 
 void Agent::updateTargetModel()
@@ -77,13 +129,3 @@ void Agent::softUpdateTargetModel(const double& t_tau)
         }
     }
 };
-
-void Agent::eval()
-{
-    m_QPredictionModel->eval();
-}
-
-void Agent::train()
-{
-    m_QPredictionModel->train();
-}

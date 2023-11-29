@@ -9,11 +9,11 @@
 class ReplayBuffer {
 public:
     struct Data {
-        std::array<torch::Tensor, 3> env {};
-        std::array<torch::Tensor, 3> state {};
+        std::vector<torch::Tensor> env {};
+        std::vector<torch::Tensor> state {};
 
-        std::array<torch::Tensor, 3> nextEnv {};
-        std::array<torch::Tensor, 3> nextState {};
+        std::vector<torch::Tensor> nextEnv {};
+        std::vector<torch::Tensor> nextState {};
 
         torch::Tensor actions {};
         torch::Tensor rewards {};
@@ -36,7 +36,6 @@ public:
 private:
     std::size_t m_maxSize {};
     std::vector<ReplayBuffer::Data> m_data {};
-    std::size_t m_iter {};
 };
 
 #endif

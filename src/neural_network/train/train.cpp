@@ -1,3 +1,4 @@
+#include <matplotlibcpp.h>
 #include <opencv2/opencv.hpp>
 
 #include "agent.hpp"
@@ -24,18 +25,21 @@ inline static void displayProgressBar(const int32_t& t_current, const int32_t& t
     std::cout.flush();
 }
 
-inline static void createHeatMap(const std::array<torch::Tensor, 3>& t_tensor)
+inline static void createHeatMap(const std::vector<torch::Tensor>& t_tensor)
 {
     for (std::size_t i = 0; i < t_tensor.back().size(-3); ++i) {
-        auto tensor1 = t_tensor[0].detach().to(torch::kCPU).squeeze(0).to(torch::kFloat32)[i];
-        auto tensor2 = t_tensor[1].detach().to(torch::kCPU).squeeze(0).to(torch::kFloat32)[i];
-        auto tensor3 = t_tensor[2].detach().to(torch::kCPU).squeeze(0).to(torch::kFloat32)[i];
+        auto tensor = t_tensor.back().detach().to(torch::kCPU).squeeze(0).to(torch::kFloat32)[i];
+        auto tensorObst = (tensor != 0.5).toType(torch::kFloat);
+        auto tensorTracks = (tensor == 0.25).toType(torch::kFloat);
+        auto tensorTargets = (tensor == 1.0).toType(torch::kFloat);
 
-        auto tensorObst = torch::logical_or(torch::logical_or(tensor1 != 0.2, tensor2 != 0.2), tensor3 != 0.2).toType(torch::kFloat);
-        auto tensorTracks = (tensor1 == 0.35).toType(torch::kFloat) + (tensor2 == 0.35).toType(torch::kFloat) + (tensor3 == 0.35).toType(torch::kFloat);
-        auto tensorTargets = (tensor1 == 1.0).toType(torch::kFloat) + (tensor2 == 1.0).toType(torch::kFloat) + (tensor3 == 1.0).toType(torch::kFloat);
+        for (std::size_t j = 0; j < t_tensor.size() - 1; ++j) {
+            auto __tensor = t_tensor[j].detach().to(torch::kCPU).squeeze(0).to(torch::kFloat32)[i];
 
-        auto tensor = tensorObst + tensorTracks + tensorTargets;
+            tensorTargets += (__tensor == 1.0).toType(torch::kFloat) * static_cast<double>(t_tensor.size() - j - 1.0);
+        }
+
+        tensor = tensorObst + tensorTracks + tensorTargets;
         tensor = tensor / tensor.max();
 
         cv::Mat matrix(cv::Size(tensor.size(0), tensor.size(1)), CV_32FC1, tensor.data_ptr<float>());
@@ -44,90 +48,88 @@ inline static void createHeatMap(const std::array<torch::Tensor, 3>& t_tensor)
         matrix.convertTo(normalized, CV_8UC1, 255.0);
 
         cv::Mat heatmap;
-        cv::applyColorMap(normalized, heatmap, cv::COLORMAP_JET);
+        cv::applyColorMap(normalized, heatmap, cv::COLORMAP_VIRIDIS);
 
         cv::imwrite("./images/layer_" + std::to_string(i + 1) + ".png", heatmap);
+    }
+}
+
+inline static void plot(const std::vector<double>& t_y, const std::vector<double>& t_x, const std::string& t_name)
+{
+    matplotlibcpp::plot(t_x, t_y);
+    matplotlibcpp::xlabel("Steps");
+    matplotlibcpp::ylabel(t_name);
+    matplotlibcpp::title(t_name);
+    matplotlibcpp::grid(true);
+    matplotlibcpp::save("./images/loss_" + t_name + ".png");
+    matplotlibcpp::close();
+};
+
+inline static void clip_grad_norm(std::vector<torch::Tensor> parameters, double max_norm)
+{
+    double total_norm = 0;
+
+    for (const auto& param : parameters) {
+        if (param.grad().defined()) {
+            total_norm += param.grad().data().norm(2).item<double>();
+        }
+    }
+
+    total_norm = std::sqrt(total_norm);
+
+    if (total_norm > max_norm) {
+        double clip_coef = max_norm / (total_norm + 1e-6);
+
+        for (auto& param : parameters) {
+            if (param.grad().defined()) {
+                param.grad().data().mul_(clip_coef);
+            }
+        }
     }
 }
 
 void Train::train(TrainTopologyDataset& t_trainDataset)
 {
     std::size_t nEpisodes = 1000;
-    std::size_t nSteps = 100;
+    std::size_t maxEpisodeSteps = 50000;
     std::size_t batchSize = 32;
-    std::size_t updateSteps = 3000;
-    std::size_t updateCounter = 0;
+    std::size_t replayBufferSize = 20000;
+    std::size_t stepsToUpdateTargetModel = 10000;
+    std::size_t updateTargetModelStep = 0;
 
-    std::size_t stepsToPrintInfo = 0;
     double totalLoss {};
     double totalReward {};
 
+    std::vector<double> plotLoss {};
+    std::vector<double> plotRewards {};
+    std::vector<double> plotEpisodes {};
+
     Agent agent {};
     Environment environment {};
-    ReplayBuffer replayBuffer(100000);
-    torch::optim::AdamW optimizer(agent.getModelParameters(), torch::optim::AdamWOptions(1e-3));
-
-    agent.train();
+    ReplayBuffer replayBuffer(replayBufferSize);
+    torch::optim::Adam optimizer(agent.getModelParameters(), torch::optim::AdamOptions(0.00025));
 
     for (std::size_t epoch = 0; epoch < t_trainDataset.size(); ++epoch) {
-        // std::pair<at::Tensor, at::Tensor> pair = t_trainDataset.get();
-
-        torch::Tensor source = torch::tensor({
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                                 { 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2, 0.00, 0.2 },
-                                                 { 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2 },
-                                             })
-                                   .unsqueeze(0)
-                                   .unsqueeze(0);
-
-        torch::Tensor connections = torch::tensor({ 2.0, 2.0, 12.0, 20.0 }).unsqueeze(0);
-
-        std::pair<at::Tensor, at::Tensor> pair = std::pair(source, connections);
+        std::pair<at::Tensor, at::Tensor> pair = t_trainDataset.get();
 
         for (std::size_t episode = 0; episode < nEpisodes; ++episode) {
             environment.set(pair.first, pair.second);
 
-            for (std::size_t step = 0; step < nSteps; ++step) {
+            for (std::size_t i = 0; i < maxEpisodeSteps; ++i) {
+                ++updateTargetModelStep;
+
                 torch::Tensor qValues = agent.replayAction(environment.getEnv(), environment.getState());
                 std::pair<ReplayBuffer::Data, bool> replay = environment.replayStep(qValues);
 
                 replayBuffer.add(replay.first);
 
-                if (step % 1 == 0) {
-                    createHeatMap(replay.first.nextEnv);
-                }
+                createHeatMap(replay.first.nextEnv);
 
-                if (replayBuffer.size() >= batchSize) {
+                if (replayBuffer.size() % 4 == 0 && replayBuffer.size() >= batchSize) {
+                    std::vector<at::Tensor> parameters = agent.getModelParameters();
                     torch::Tensor loss {};
+
+                    optimizer.zero_grad();
 
                     for (std::size_t j = 0; j < batchSize; ++j) {
                         ReplayBuffer::Data replay = replayBuffer.get();
@@ -140,34 +142,38 @@ void Train::train(TrainTopologyDataset& t_trainDataset)
                         }
                     }
 
-                    optimizer.zero_grad();
                     loss.backward();
+                    clip_grad_norm(parameters, 1.0);
                     optimizer.step();
 
                     totalLoss += loss.item<double>() / batchSize;
                     totalReward += replay.first.rewards.mean().item<double>();
 
-                    ++updateCounter;
-                    ++stepsToPrintInfo;
+                    displayProgressBar(updateTargetModelStep, stepsToUpdateTargetModel, 50, "Experience steps: ");
 
-                    displayProgressBar(stepsToPrintInfo, 200, 50, "Steps: ");
+                    if (stepsToUpdateTargetModel == updateTargetModelStep) {
+                        agent.updateTargetModel();
 
-                    if (stepsToPrintInfo == 200) {
-                        std::cout << "\n\n"
-                                  << "Epoch - " << epoch + 1 << "/" << t_trainDataset.size() << '\n'
-                                  << "Episode - " << episode + 1 << "/" << nEpisodes << '\n'
-                                  << "Huber Loss: " << totalLoss / stepsToPrintInfo << '\n'
-                                  << "Mean Reward: " << totalReward / stepsToPrintInfo << '\n'
-                                  << "Exp to Expl: " << environment.getExpToExpl() << "%\n\n"
-                                  << std::flush;
+                        plotLoss.emplace_back(totalLoss / stepsToUpdateTargetModel);
+                        plotRewards.emplace_back(totalReward / stepsToUpdateTargetModel);
+                        plotEpisodes.emplace_back(plotEpisodes.size());
+
+                        plot(plotLoss, plotEpisodes, "Loss");
+                        plot(plotRewards, plotEpisodes, "Reward");
 
                         totalLoss = 0.0;
                         totalReward = 0.0;
-                        stepsToPrintInfo = 0;
+                        updateTargetModelStep = 0;
+
+                        std::cout << "\n\n"
+                                  << "Epoch - " << epoch + 1 << "/" << t_trainDataset.size() << '\n'
+                                  << "Episode - " << episode + 1 << "/" << nEpisodes << '\n'
+                                  << "Huber Loss: " << plotLoss.back() << '\n'
+                                  << "Mean Reward: " << plotRewards.back() << '\n'
+                                  << "Exp to Expl: " << environment.getExpToExpl() << "%\n\n"
+                                  << std::flush;
                     }
                 }
-
-                agent.softUpdateTargetModel(0.05);
 
                 if (replay.second) {
                     break;
