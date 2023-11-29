@@ -4,8 +4,6 @@
 #include <opencv2/opencv.hpp>
 
 #include "data.hpp"
-#include "encoders/efficientnetb3.hpp"
-#include "encoders/resnet50.hpp"
 
 inline static void displayConv(const torch::Tensor& t_tensor, const double& t_inRow, const std::string& t_name)
 {
@@ -22,10 +20,13 @@ inline static void displayConv(const torch::Tensor& t_tensor, const double& t_in
             cv::Mat matrix(cv::Size(tensor.size(1), tensor.size(2)), CV_32FC1, channel.data_ptr<float>());
 
             cv::Mat normalized;
-            cv::normalize(matrix, normalized, 0, 255, cv::NORM_MINMAX, CV_8UC1);
+            matrix.convertTo(normalized, CV_8UC1, 255.0);
+
+            cv::Mat heatmap;
+            cv::applyColorMap(normalized, heatmap, cv::COLORMAP_VIRIDIS);
 
             cv::Mat imageWithBorder;
-            cv::copyMakeBorder(normalized, imageWithBorder, 2, 2, 2, 2, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
+            cv::copyMakeBorder(heatmap, imageWithBorder, 2, 2, 2, 2, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
             colImages.push_back(imageWithBorder);
         }
 
@@ -78,48 +79,24 @@ private:
 
 TORCH_MODULE(SelfAttention);
 
-struct QModelImpl : torch::nn::Module {
-    std::vector<torch::nn::Sequential> blocks {};
-
-    QModelImpl(const int64_t& t_inputSize, const int64_t& t_midSize, const int64_t& t_outputSize, const int64_t t_numBlocks)
-    {
-        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_inputSize, t_midSize), torch::nn::ReLU(torch::nn::ReLUOptions(true))));
-        register_module("blockStart", blocks.back());
-
-        for (std::size_t i = 0; i < t_numBlocks; ++i) {
-            blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_midSize), torch::nn::ReLU(torch::nn::ReLUOptions(true))));
-            register_module("block" + std::to_string(i), blocks.back());
-        }
-
-        blocks.emplace_back(torch::nn::Sequential(torch::nn::Linear(t_midSize, t_outputSize)));
-        register_module("blockEnd", blocks.back());
-    };
-
-    torch::Tensor forward(torch::Tensor x)
-    {
-        for (auto& block : blocks) {
-            x = block->forward(x);
-        }
-
-        return x;
-    }
-};
-
-TORCH_MODULE(QModel);
-
 struct DQNImpl : torch::nn::Module {
     DQNImpl(int64_t t_states, int64_t t_numActions)
     {
-        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(3, 16, 3).stride(1)));
-        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(16, 32, 3).stride(1)));
+        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(4, 32, 8).stride(4)));
+        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 64, 4).stride(2)));
+        conv3 = register_module("conv3", torch::nn::Conv2d(torch::nn::Conv2dOptions(64, 64, 3).stride(1)));
 
-        fc1 = register_module("fc1", torch::nn::Linear(25088, 256));
-        fc2 = register_module("fc2", torch::nn::Linear(t_states, 64));
-        fc3 = register_module("fc3", torch::nn::Linear(320, t_numActions));
+        // fc1 = register_module("fc1", torch::nn::Sequential(torch::nn::Linear(t_states, 64)));
+        // fc2 = register_module("fc2", torch::nn::Sequential(torch::nn::Linear(32 * 9 * 9, 64)));
+
+        fcAdvantage = register_module("fcAdvantage", torch::nn::Sequential(torch::nn::Linear(64 * 7 * 7, 512), torch::nn::ReLU(torch::nn::ReLUOptions(true)), torch::nn::Linear(512, t_numActions)));
+        fcValue = register_module("fcValue", torch::nn::Sequential(torch::nn::Linear(64 * 7 * 7, 512), torch::nn::ReLU(torch::nn::ReLUOptions(true)), torch::nn::Linear(512, 1)));
     }
 
     torch::Tensor forward(torch::Tensor t_environment, torch::Tensor t_state, bool t_showConv = false)
     {
+        // t_state = fc1->forward(t_state / static_cast<double>(t_environment.size(-1)));
+
         t_environment = torch::relu(conv1->forward(t_environment));
 
         if (t_showConv) {
@@ -132,67 +109,31 @@ struct DQNImpl : torch::nn::Module {
             displayConv(t_environment, 8, "conv2");
         }
 
-        t_environment = t_environment.flatten();
-        t_environment = torch::relu(fc1->forward(t_environment)).unsqueeze(0).repeat({ t_state.size(0), 1 });
+        t_environment = torch::relu(conv3->forward(t_environment));
 
-        t_state /= static_cast<double>(t_environment.size(-1));
-        t_state = fc2->forward(t_state);
+        if (t_showConv) {
+            displayConv(t_environment, 8, "conv3");
+        }
 
-        return fc3->forward(torch::cat({ t_state, t_environment }, -1));
-    }
+        t_environment = t_environment.flatten().unsqueeze(0);
+        t_environment = t_environment.repeat({ t_state.size(0), 1 });
 
-    torch::nn::Conv2d conv1 { nullptr }, conv2 { nullptr };
-    torch::nn::Linear fc1 { nullptr }, fc2 { nullptr }, fc3 { nullptr };
-};
-
-TORCH_MODULE(DQN);
-
-struct TRLMImpl : torch::nn::Module {
-    // EfficientNetB3 environmentEncoder { nullptr };
-    ResNet50 environmentEncoder { nullptr };
-    torch::nn::Sequential stateEncoder { nullptr };
-    SelfAttention attention { nullptr };
-    QModel qModelAdvantage { nullptr };
-    QModel qModelValue { nullptr };
-
-    TRLMImpl(const int64_t t_states)
-    {
-        environmentEncoder = ResNet50(256);
-        // environmentEncoder = EfficientNetB3(256);
-        register_module("environmentEncoder", environmentEncoder);
-
-        stateEncoder = torch::nn::Sequential(torch::nn::Linear(t_states, 64));
-        register_module("stateEncoder", stateEncoder);
-
-        attention = SelfAttention(2048 + 64);
-        register_module("attention", attention);
-
-        qModelValue = QModel(2048 + 64, 256, 1, 0);
-        register_module("qModelValue", qModelValue);
-
-        qModelAdvantage = QModel(2048 + 64, 256, 6, 0);
-        register_module("qModelAdvantage", qModelAdvantage);
-    }
-
-    torch::Tensor forward(torch::Tensor environment, torch::Tensor state)
-    {
-        state /= static_cast<double>(environment.size(-1));
-        environment /= environment.max();
-
-        state = stateEncoder->forward(state);
-        environment = environmentEncoder->forward(environment).unsqueeze(0).repeat({ state.size(0), 1 });
-
-        torch::Tensor statedEnvironment = torch::cat({ state, environment }, -1);
-
-        statedEnvironment = attention->forward(statedEnvironment);
-
-        auto advantage = qModelAdvantage->forward(statedEnvironment);
-        auto value = qModelValue->forward(statedEnvironment);
+        auto advantage = fcAdvantage->forward(t_environment);
+        auto value = fcValue->forward(t_environment);
 
         return value + advantage - advantage.mean(1, true);
     }
+
+    torch::nn::Conv2d conv1 { nullptr };
+    torch::nn::Conv2d conv2 { nullptr };
+    torch::nn::Conv2d conv3 { nullptr };
+
+    // torch::nn::Sequential fc1 { nullptr };
+    // torch::nn::Sequential fc2 { nullptr };
+    torch::nn::Sequential fcAdvantage;
+    torch::nn::Sequential fcValue { nullptr };
 };
 
-TORCH_MODULE(TRLM);
+TORCH_MODULE(DQN);
 
 #endif
