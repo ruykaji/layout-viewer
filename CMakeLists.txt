@@ -13,6 +13,12 @@ set(CMAKE_CUDA_ARCHITECTURES 86)
 find_library(DEF NAMES libdef.a PATHS ${CMAKE_SOURCE_DIR}/external/def/lib)
 find_library(LEF NAMES liblef.a PATHS ${CMAKE_SOURCE_DIR}/external/lef/lib)
 
+# MATPLOTLIB
+find_package(PythonLibs 3 REQUIRED)
+include_directories(${PYTHON_INCLUDE_DIRS})
+find_package(PythonLibs REQUIRED)
+# -----------------------------------------------
+
 find_package(OpenCV REQUIRED)
 find_package(Torch REQUIRED)
 find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
@@ -20,8 +26,10 @@ find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS})
 
 include_directories(
+    /home/alaie/.local/lib/python3.10/site-packages/numpy/core/include
     ${CMAKE_SOURCE_DIR}/external/def/include
     ${CMAKE_SOURCE_DIR}/external/lef/include
+    ${CMAKE_SOURCE_DIR}/external/matplotlib
     ${CMAKE_SOURCE_DIR}/src
 )
 
@@ -39,4 +47,4 @@ target_link_libraries(desktop PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} Qt6::Core
 # Console Version
 set(CONSOLE ${GLOBAL} ${ENCODER} ${PDK} ${NEURAL_NETWORK})
 add_executable(console console.cpp ${CONSOLE})
-target_link_libraries(console PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(console PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} ${OpenCV_LIBS} ${PYTHON_LIBRARIES})
