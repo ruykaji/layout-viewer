@@ -59,7 +59,7 @@ private:
     // Parser config
     // =================================================================================
 
-    int32_t m_cellSize { 480 };
+    int32_t m_cellSize { 84 };
     int32_t m_borderSize { 0 };
 
     // Train config

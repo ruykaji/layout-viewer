@@ -181,7 +181,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
                 std::string connectionsSavePath = designPath + "/connections_" + std::to_string(j) + "_" + std::to_string(i) + ".pt";
 
                 s_threadPool.enqueue([](std::shared_ptr<Config>& config, std::shared_ptr<WorkingCell>& cell, Point& moveBy, std::string& name) {
-                    torch::Tensor source = torch::zeros({ 2, config->getCellSize(), config->getCellSize() });
+                    torch::Tensor source = torch::zeros({ 2, config->getCellSize(), config->getCellSize() }).fill_(0.0);
 
                     for (const auto& geom : cell->geometries) {
                         uint8_t layerIndex = static_cast<uint8_t>(geom->layer);
@@ -195,7 +195,7 @@ void Encoder::readDef(const std::string_view& t_fileName, const std::shared_ptr<
 
                             switch (geom->type) {
                             case RectangleType::TRACK: {
-                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 0.5;
+                                source[layerIndex / 2 - 1].slice(0, vertexes[0].y, vertexes[2].y).slice(1, vertexes[0].x, vertexes[2].x) = 1.0 / 8.0;
                                 break;
                             }
                             default: {
@@ -520,6 +520,16 @@ int Encoder::defNetCallback(defrCallbackType_e t_type, defiNet* t_net, void* t_u
 
         int32_t topTrackY = ((t_point.y - tracksY[0]) / tracksY[2]);
         topTrackY = topTrackY * tracksY[2] + tracksY[0];
+
+        // if (std::abs(topTrackY - t_point.y) > 1 && std::abs(topTrackY + tracksY[2] - t_point.y) > 1) {
+        //     addGeometryToWorkingCells(std::make_shared<Rectangle>(leftTrackX - tracksX[1], t_point.y, t_point.x + tracksX[1], t_point.y, static_cast<MetalLayer>((t_layer + 1) * 2), RectangleType::TRACK), t_container, false);
+        //     addGeometryToWorkingCells(std::make_shared<Rectangle>(t_point.x - tracksX[1], t_point.y, leftTrackX + tracksX[2] + tracksX[1], t_point.y, static_cast<MetalLayer>((t_layer + 1) * 2), RectangleType::TRACK), t_container, false);
+        // }
+
+        // if (std::abs(leftTrackX - t_point.x) > 1 && std::abs(leftTrackX + tracksX[2] - t_point.x) > 1) {
+        //     addGeometryToWorkingCells(std::make_shared<Rectangle>(t_point.x, topTrackY - tracksY[1], t_point.x, t_point.y + tracksY[1], static_cast<MetalLayer>((t_layer + 1) * 2), RectangleType::TRACK), t_container, false);
+        //     addGeometryToWorkingCells(std::make_shared<Rectangle>(t_point.x, t_point.y - tracksY[1], t_point.x, topTrackY + tracksY[2] + tracksY[1], static_cast<MetalLayer>((t_layer + 1) * 2), RectangleType::TRACK), t_container, false);
+        // }
 
         if (std::abs(topTrackY - t_point.y) > 1 && std::abs(topTrackY + tracksY[2] - t_point.y) > 1) {
             addGeometryToWorkingCells(std::make_shared<Rectangle>(leftTrackX, t_point.y, t_point.x, t_point.y, static_cast<MetalLayer>((t_layer + 1) * 2), RectangleType::TRACK), t_container, false);
@@ -859,15 +869,17 @@ int Encoder::defTrackCallback(defrCallbackType_e t_type, defiTrack* t_track, voi
         double step = t_track->xStep();
 
         if (strcmp(t_track->macro(), "X") == 0) {
-            container->data->tracksX[static_cast<int32_t>(layer.metal) / 2 - 1] = { offset / container->pdk->scale, number, step / container->pdk->scale, static_cast<double>(container->data->dieArea[2].y) };
+            container->data->tracksX[static_cast<int32_t>(layer.metal) / 2 - 1] = { offset / container->pdk->scale, layer.width / 2.0, step / container->pdk->scale, static_cast<double>(container->data->dieArea[2].y) };
 
             for (double x = offset; x < number * step; x += step) {
+                // addGeometryToWorkingCells(std::make_shared<Rectangle>(x - layer.width / 2.0, 0, x + layer.width / 2.0, container->data->dieArea[2].y, layer.metal, RectangleType::TRACK), container);
                 addGeometryToWorkingCells(std::make_shared<Rectangle>(x, 0, x, container->data->dieArea[2].y, layer.metal, RectangleType::TRACK), container);
             }
         } else if (strcmp(t_track->macro(), "Y") == 0) {
-            container->data->tracksY[static_cast<int32_t>(layer.metal) / 2 - 1] = { offset / container->pdk->scale, number, step / container->pdk->scale, static_cast<double>(container->data->dieArea[2].x) };
+            container->data->tracksY[static_cast<int32_t>(layer.metal) / 2 - 1] = { offset / container->pdk->scale, layer.width / 2.0, step / container->pdk->scale, static_cast<double>(container->data->dieArea[2].x) };
 
             for (double y = offset; y < number * step; y += step) {
+                // addGeometryToWorkingCells(std::make_shared<Rectangle>(0, y - layer.width / 2.0, container->data->dieArea[2].x, y + layer.width / 2.0, layer.metal, RectangleType::TRACK), container);
                 addGeometryToWorkingCells(std::make_shared<Rectangle>(0, y, container->data->dieArea[2].x, y, layer.metal, RectangleType::TRACK), container);
             }
         }

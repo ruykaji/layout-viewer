@@ -10,10 +10,10 @@ std::size_t ReplayBuffer::size() noexcept
 void ReplayBuffer::add(const ReplayBuffer::Data& t_data)
 {
     if (m_data.size() + 1 > m_maxSize) {
-        m_data.erase(m_data.begin());
+        m_data.pop_front();
     };
 
-    m_data.emplace_back(t_data);
+    m_data.emplace_front(t_data);
 }
 
 ReplayBuffer::Data ReplayBuffer::get()
@@ -23,5 +23,5 @@ ReplayBuffer::Data ReplayBuffer::get()
 
     std::uniform_int_distribution<> distr(0, m_data.size() - 1);
 
-    return m_data[distr(eng)];
+    return m_data.front();
 }

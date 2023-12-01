@@ -26,8 +26,8 @@ void Environment::set(const torch::Tensor& t_env, const torch::Tensor& t_state)
     m_totalRewards = std::vector<double>(t_state.size(0), 0.0);
 
     for (std::size_t i = 0; i < m_state.back().size(0); ++i) {
-        m_env.back()[0][m_state.back()[i][2].item<int64_t>()][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 1.0;
-        m_env.back()[0][m_state.back()[i][5].item<int64_t>()][m_state.back()[i][4].item<int64_t>()][m_state.back()[i][3].item<int64_t>()] = 1.0;
+        m_env.back()[0][m_state.back()[i][2].item<int64_t>()][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 1.0 / 2.0;
+        m_env.back()[0][m_state.back()[i][5].item<int64_t>()][m_state.back()[i][4].item<int64_t>()][m_state.back()[i][3].item<int64_t>()] = 1.0 / 2.0;
     }
 }
 
@@ -41,7 +41,7 @@ std::vector<torch::Tensor> Environment::getState()
     return m_state;
 }
 
-std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor& t_actions)
+std::tuple<ReplayBuffer::Data, bool, bool> Environment::replayStep(const torch::Tensor& t_actions)
 {
     ReplayBuffer::Data replay {};
 
@@ -54,11 +54,13 @@ std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor&
     replay.rewards = torch::zeros({ m_state.back().size(0), 1 });
     replay.terminals = torch::zeros({ m_state.back().size(0), 1 });
 
-    for (std::size_t i = 0; i < t_actions.size(0); ++i) {
-        ++m_steps;
+    bool anyWin = false;
 
-        double epsTrh = m_epsStart - (m_epsStart - m_epsEnd) * std::min(1.0, m_steps / m_totalSteps);
-        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 6);
+    for (std::size_t i = 0; i < t_actions.size(0); ++i) {
+        ++m_frames;
+
+        double epsTrh = std::max(std::min(1.0, m_maxFrames / (m_frames + 1)), 0.01);
+        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 4);
         int32_t direction = action % 2 == 0 ? -1 : 1;
         torch::Tensor oldState = m_state.back()[i].clone();
         torch::Tensor newState = m_state.back()[i].clone();
@@ -67,25 +69,36 @@ std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor&
             newState[0] += direction;
         } else if (action == 2 || action == 3) {
             newState[1] += direction;
-        } else if (action == 4 || action == 5) {
-            newState[2] += direction;
         }
+        // else if (action == 4 || action == 5) {
+        //     newState[2] += direction;
+        // }
 
         std::pair<double, int8_t> pair = getRewardAndTerminal(newState, oldState);
 
-        m_totalRewards[i] += std::pow(m_rewardDiscount, static_cast<double>(m_totalActions[i])) * pair.first;
         m_totalActions[i] += 1;
 
-        if (pair.second != 1) {
-            m_env.back()[0][oldState[2].item<int64_t>()][oldState[1].item<int64_t>()][oldState[0].item<int64_t>()] = 0.25;
-            m_env.back()[0][newState[2].item<int64_t>()][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 1.0;
+        if (m_totalActions[i] < m_env.back().size(-1) * m_env.back().size(-1)) {
+            if (pair.second != 1) {
+                m_env.back()[0][oldState[2].item<int64_t>()][oldState[1].item<int64_t>()][oldState[0].item<int64_t>()] = 0.25;
+                m_env.back()[0][newState[2].item<int64_t>()][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 0.5;
 
-            m_state.back()[i] = newState.clone();
+                m_state.back()[i] = newState.clone();
+            }
+        } else {
+            if (pair.second != 2) {
+                pair.second = 2;
+                pair.first = -1.05;
+            }
         }
 
-        replay.terminals[i][0] = (pair.second == 2) ? 0.0 : 1.0;
+        replay.terminals[i][0] = (pair.second >= 2) ? 0.0 : 1.0;
         replay.actions[i][0] = action;
-        replay.rewards[i][0] = m_totalRewards[i];
+        replay.rewards[i][0] = (pair.first - (-1.05)) / (0.95 - (-1.05));
+
+        if (!anyWin) {
+            anyWin = pair.second == 3;
+        }
     }
 
     copyTensors(replay.nextEnv, m_env);
@@ -93,12 +106,12 @@ std::pair<ReplayBuffer::Data, bool> Environment::replayStep(const torch::Tensor&
 
     bool isDone = replay.terminals.mean().item<double>() == 0.0;
 
-    return std::pair(replay, isDone);
+    return std::tuple(replay, isDone, anyWin);
 }
 
 double Environment::getExpToExpl()
 {
-    return (m_epsStart - (m_epsStart - m_epsEnd) * std::min(1.0, m_steps / m_totalSteps)) * 100.0;
+    return (std::max(std::min(1.0, m_maxFrames / (m_frames + 1)), 0.01)) * 100.0;
 };
 
 void Environment::shift(const torch::Tensor& t_env, const torch::Tensor& t_state)
@@ -156,10 +169,10 @@ int32_t Environment::epsilonGreedyAction(double t_epsilon, const torch::Tensor& 
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
 
-    if (dis(gen) < t_epsilon) {
-        return selectRandomAction(t_actionSpace);
-    } else {
+    if (dis(gen) < 1 - t_epsilon) {
         return selectBestAction(t_predictions);
+    } else {
+        return selectRandomAction(t_actionSpace);
     }
 }
 
@@ -168,25 +181,26 @@ std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor&
     double reward = 0;
     int32_t terminal = 0;
 
+    reward -= 0.05;
+
     if (isInvalidState(t_newState)) {
-        reward = -0.75;
+        reward -= 0.5;
         terminal = 1;
         return std::pair(reward, terminal);
     }
 
-    if (isStuck(t_newState, t_oldState)) {
-        reward = -1.0;
-        terminal = 2;
-        return std::pair(reward, terminal);
-    }
-
     if (isGoalState(t_newState)) {
-        reward = 1.0;
+        reward += 1.0;
+        terminal = 3;
+        return std::pair(reward, terminal);
+    }
+
+    if (isStuck(t_newState, t_oldState)) {
+        reward -= 1.0;
         terminal = 2;
         return std::pair(reward, terminal);
     }
 
-    reward -= 0.05;
     return std::pair(reward, terminal);
 };
 
@@ -216,7 +230,11 @@ bool Environment::isInvalidState(const torch::Tensor& t_state)
         return true;
     }
 
-    if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3) {
+    if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.0) {
+        return true;
+    }
+
+    if (m_env.back()[0][t_state[2].item<int64_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.25) {
         return true;
     }
 
@@ -251,37 +269,49 @@ bool Environment::isStuck(const torch::Tensor& t_state, const torch::Tensor& t_o
 
     if (t_state[0].item<int32_t>() == 0) {
         left = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() - 1].item<double>() < 0.3 || t_state[0].item<int64_t>() - 1 == t_oldState[0].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() - 1].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() - 1].item<double>() == 0.25
+        || t_state[0].item<int64_t>() - 1 == t_oldState[0].item<int64_t>()) {
         left = false;
     }
 
     if (t_state[1].item<int32_t>() == 0) {
         backward = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() - 1][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[1].item<int64_t>() - 1 == t_oldState[1].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() - 1][t_state[0].item<int64_t>()].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() - 1][t_state[0].item<int64_t>()].item<double>() == 0.25
+        || t_state[1].item<int64_t>() - 1 == t_oldState[1].item<int64_t>()) {
         backward = false;
     }
 
     if (t_state[2].item<int32_t>() == 0) {
         down = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>() - 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[2].item<int64_t>() - 1 == t_oldState[2].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>() - 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>() - 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.25
+        || t_state[2].item<int64_t>() - 1 == t_oldState[2].item<int64_t>()) {
         down = false;
     }
 
     if (t_state[0].item<int32_t>() == m_env.back().size(-1) - 1) {
         right = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() + 1].item<double>() < 0.3 || t_state[0].item<int64_t>() + 1 == t_oldState[0].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() + 1].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>()][t_state[0].item<int64_t>() + 1].item<double>() == 0.25
+        || t_state[0].item<int64_t>() + 1 == t_oldState[0].item<int64_t>()) {
         right = false;
     }
 
     if (t_state[1].item<int32_t>() == m_env.back().size(-1) - 1) {
         forward = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() + 1][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[1].item<int64_t>() + 1 == t_oldState[1].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() + 1][t_state[0].item<int64_t>()].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>()][t_state[1].item<int64_t>() + 1][t_state[0].item<int64_t>()].item<double>() == 0.25
+        || t_state[1].item<int64_t>() + 1 == t_oldState[1].item<int64_t>()) {
         forward = false;
     }
 
     if (t_state[2].item<int32_t>() == m_env.back().size(-3) - 1) {
         up = false;
-    } else if (m_env.back()[0][t_state[2].item<int32_t>() + 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() < 0.3 || t_state[2].item<int64_t>() + 1 == t_oldState[2].item<int64_t>()) {
+    } else if (m_env.back()[0][t_state[2].item<int32_t>() + 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.0
+        || m_env.back()[0][t_state[2].item<int32_t>() + 1][t_state[1].item<int64_t>()][t_state[0].item<int64_t>()].item<double>() == 0.25
+        || t_state[2].item<int64_t>() + 1 == t_oldState[2].item<int64_t>()) {
         up = false;
     }
 

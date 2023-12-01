@@ -47,11 +47,11 @@ int main(int argc, char const* argv[])
             }
         };
 
-        // for (auto& file : trainFiles) {
-        //     std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
+        for (auto& file : trainFiles) {
+            std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
 
-        //     encoder.readDef(file, dataPtr, pdkPtr, configPtr);
-        // }
+            encoder.readDef(file, dataPtr, pdkPtr, configPtr);
+        }
 
         TrainTopologyDataset trainDataset {};
         Train train {};
@@ -71,7 +71,7 @@ int main(int argc, char const* argv[])
         std::shared_ptr<PDK> pdkPtr = std::make_shared<PDK>(pdk);
         std::shared_ptr<Config> configPtr = std::make_shared<Config>(config);
 
-        encoder.readDef("/home/alaie/stuff/circuits/aes.def", dataPtr, pdkPtr, configPtr);
+        encoder.readDef("/home/alaie/stuff/circuits/spm.def", dataPtr, pdkPtr, configPtr);
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);

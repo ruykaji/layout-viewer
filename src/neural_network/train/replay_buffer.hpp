@@ -1,8 +1,8 @@
 #ifndef __REPLAY_BUFFER_H__
 #define __REPLAY_BUFFER_H__
 
-#include <array>
 #include <vector>
+#include <deque>
 
 #include "torch_include.hpp"
 
@@ -35,7 +35,7 @@ public:
 
 private:
     std::size_t m_maxSize {};
-    std::vector<ReplayBuffer::Data> m_data {};
+    std::deque<ReplayBuffer::Data> m_data {};
 };
 
 #endif

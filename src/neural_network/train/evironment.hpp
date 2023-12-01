@@ -13,11 +13,8 @@ class Environment {
     std::vector<int64_t> m_totalActions {};
     std::vector<double> m_totalRewards {};
 
-    double m_rewardDiscount { 0.99 };
-    double m_epsStart { 1.0 };
-    double m_epsEnd { 0.1 };
-    double m_totalSteps { 1e6 };
-    double m_steps {};
+    double m_maxFrames { 5e3 };
+    double m_frames {};
 
 public:
     Environment() = default;
@@ -29,7 +26,7 @@ public:
 
     std::vector<torch::Tensor> getState();
 
-    std::pair<ReplayBuffer::Data, bool> replayStep(const torch::Tensor& t_actions);
+    std::tuple<ReplayBuffer::Data, bool, bool> replayStep(const torch::Tensor& t_actions);
 
     double getExpToExpl();
 

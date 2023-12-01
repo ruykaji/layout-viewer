@@ -1,9 +1,35 @@
+#include <opencv2/opencv.hpp>
+
 #include "agent.hpp"
+
+inline static torch::Tensor sumWithDepth(torch::Tensor t_tensor)
+{
+    auto newTensor = torch::zeros({ 1, 4, 64, 64 });
+
+    for (int i = 0; i < t_tensor.size(1); ++i) {
+        int32_t n = t_tensor.size(1) - 1 - i;
+
+        auto tensor = t_tensor[0][i] / std::pow(2, n - 1);
+
+        cv::Mat matrix(cv::Size(tensor.size(-2), tensor.size(-1)), CV_32FC1, tensor.squeeze(0).data_ptr<float>());
+        cv::resize(matrix, matrix, cv::Size(), 4, 4, cv::INTER_AREA);
+
+        newTensor[0][i] = torch::from_blob(matrix.data, { matrix.rows, matrix.cols, 1 }, torch::kFloat32).squeeze();
+    }
+
+    newTensor = torch::sum(newTensor, 1, true);
+
+    if (newTensor.max().item<double>() != 0.0) {
+        newTensor /= newTensor.max();
+    }
+
+    return newTensor;
+}
 
 Agent::Agent()
 {
-    m_QPredictionModel = DQN(24, 6);
-    m_QTargetModel = DQN(24, 6);
+    m_QPredictionModel = DQN(16, 4);
+    m_QTargetModel = DQN(16, 4);
 
     updateTargetModel();
 
@@ -20,9 +46,9 @@ torch::Tensor Agent::replayAction(std::vector<torch::Tensor> t_env, std::vector<
 
     for (std::size_t i = 0; i < t_env.size(); ++i) {
         if (i == 0) {
-            stakedEnv = torch::sum(t_env[i].clone(), 1, true);
+            stakedEnv = sumWithDepth(t_env[i].clone());
         } else {
-            stakedEnv = torch::cat({ stakedEnv, torch::sum(t_env[i].clone(), 1, true) }, 1);
+            stakedEnv = torch::cat({ stakedEnv, sumWithDepth(t_env[i].clone()) }, 1);
         }
     }
 
@@ -36,7 +62,7 @@ torch::Tensor Agent::replayAction(std::vector<torch::Tensor> t_env, std::vector<
         }
     }
 
-    return m_QPredictionModel->forward(stakedEnv.to(torch::Device("cuda:0")), stakedState.to(torch::Device("cuda:0"))).detach().to(torch::Device("cpu"));
+    return m_QPredictionModel->forward(stakedEnv.to(torch::Device("cuda:0")), stakedState.to(torch::Device("cuda:0")), true).detach().to(torch::Device("cpu"));
 }
 
 std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::Data& t_replay)
@@ -45,9 +71,9 @@ std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::D
 
     for (std::size_t i = 0; i < t_replay.env.size(); ++i) {
         if (i == 0) {
-            stakedEnv = torch::sum(t_replay.env[i].clone(), 1, true);
+            stakedEnv = sumWithDepth(t_replay.env[i].clone());
         } else {
-            stakedEnv = torch::cat({ stakedEnv, torch::sum(t_replay.env[i].clone(), 1, true) }, 1);
+            stakedEnv = torch::cat({ stakedEnv, sumWithDepth(t_replay.env[i].clone()) }, 1);
         }
     }
 
@@ -67,9 +93,9 @@ std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::D
 
     for (std::size_t i = 0; i < t_replay.nextEnv.size(); ++i) {
         if (i == 0) {
-            stakedNextEnv = torch::sum(t_replay.nextEnv[i].clone(), 1, true);
+            stakedNextEnv = sumWithDepth(t_replay.nextEnv[i].clone());
         } else {
-            stakedNextEnv = torch::cat({ stakedNextEnv, torch::sum(t_replay.nextEnv[i].clone(), 1, true) }, 1);
+            stakedNextEnv = torch::cat({ stakedNextEnv, sumWithDepth(t_replay.nextEnv[i].clone()) }, 1);
         }
     }
 
@@ -84,10 +110,10 @@ std::pair<torch::Tensor, torch::Tensor> Agent::trainAction(const ReplayBuffer::D
     }
 
     auto w2 = m_QTargetModel->forward(stakedNextEnv.to(torch::Device("cuda:0")), stakedNextState.to(torch::Device("cuda:0"))).to(torch::Device("cpu"));
-    auto w3 = m_QPredictionModel->forward(stakedNextEnv.to(torch::Device("cuda:0")), stakedNextState.to(torch::Device("cuda:0"))).to(torch::Device("cpu"));
+    auto w3 = m_QPredictionModel->forward(stakedNextEnv.to(torch::Device("cuda:0")), stakedNextState.to(torch::Device("cuda:0"))).to(torch::Device("cpu")).detach();
 
     auto qPredicted = w1.gather(1, t_replay.actions);
-    auto qTarget = t_replay.rewards + 0.9 * w2.gather(1, w3.argmax(1, true)) * t_replay.terminals;
+    auto qTarget = t_replay.rewards + 0.99 * w2.gather(1, w3.argmax(1, true)) * t_replay.terminals;
 
     return std::pair(qPredicted, qTarget);
 }
