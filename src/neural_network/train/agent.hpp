@@ -4,27 +4,20 @@
 #include <vector>
 
 #include "neural_network/model.hpp"
-#include "replay_buffer.hpp"
+#include "frame.hpp"
 
 class Agent {
-    DQN m_QPredictionModel { nullptr };
-    DQN m_QTargetModel { nullptr };
-
-    std::size_t m_trainSteps {};
+    DQN m_ActorCritics { nullptr };
 
 public:
     Agent();
     ~Agent() = default;
 
-    torch::Tensor replayAction(std::vector<torch::Tensor> t_env, std::vector<torch::Tensor> t_state);
+    std::pair<torch::Tensor, torch::Tensor> action(std::vector<torch::Tensor> t_env, std::vector<torch::Tensor> t_state);
 
-    std::pair<torch::Tensor, torch::Tensor> trainAction(const ReplayBuffer::Data& t_replay);
+    torch::Tensor learn(const std::vector<Frame>& t_frames);
 
-    std::vector<torch::Tensor>  getModelParameters();
-
-    void updateTargetModel();
-
-    void softUpdateTargetModel(const double& t_tau);
+    std::vector<torch::Tensor> parameters();
 };
 
 #endif

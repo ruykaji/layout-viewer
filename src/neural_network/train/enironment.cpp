@@ -23,7 +23,6 @@ void Environment::set(const torch::Tensor& t_env, const torch::Tensor& t_state)
     m_state.emplace_back(t_state.clone());
 
     m_totalActions = std::vector<int64_t>(t_state.size(0), 0);
-    m_totalRewards = std::vector<double>(t_state.size(0), 0.0);
 
     for (std::size_t i = 0; i < m_state.back().size(0); ++i) {
         m_env.back()[0][m_state.back()[i][2].item<int64_t>()][m_state.back()[i][1].item<int64_t>()][m_state.back()[i][0].item<int64_t>()] = 1.0 / 2.0;
@@ -41,78 +40,72 @@ std::vector<torch::Tensor> Environment::getState()
     return m_state;
 }
 
-std::tuple<ReplayBuffer::Data, bool, bool> Environment::replayStep(const torch::Tensor& t_actions)
+std::tuple<Frame, bool, bool> Environment::step(const torch::Tensor& t_actionLogits)
 {
-    ReplayBuffer::Data replay {};
-
-    copyTensors(replay.env, m_env);
-    copyTensors(replay.state, m_state);
+    Frame frame {};
+    bool anyWin = false;
 
     shift(m_env.back(), m_state.back());
 
-    replay.actions = torch::zeros({ m_state.back().size(0), 1 }, torch::kLong);
-    replay.rewards = torch::zeros({ m_state.back().size(0), 1 });
-    replay.terminals = torch::zeros({ m_state.back().size(0), 1 });
+    frame.actionProbs = torch::zeros({ m_state.back().size(0), 1 });
+    frame.rewards = torch::zeros({ m_state.back().size(0), 1 });
+    frame.terminals = torch::zeros({ m_state.back().size(0), 1 });
 
-    bool anyWin = false;
+    for (std::size_t i = 0; i < t_actionLogits.size(0); ++i) {
+        int32_t action = categoricalSample(t_actionLogits[i].detach().unsqueeze(0), 1).item<int32_t>();
 
-    for (std::size_t i = 0; i < t_actions.size(0); ++i) {
-        ++m_frames;
-
-        double epsTrh = std::max(std::min(1.0, m_maxFrames / (m_frames + 1)), 0.01);
-        int32_t action = epsilonGreedyAction(epsTrh, t_actions[i], 4);
-        int32_t direction = action % 2 == 0 ? -1 : 1;
         torch::Tensor oldState = m_state.back()[i].clone();
         torch::Tensor newState = m_state.back()[i].clone();
 
         if (action == 0 || action == 1) {
-            newState[0] += direction;
+            newState[0] += action % 2 == 0 ? -1 : 1;
         } else if (action == 2 || action == 3) {
-            newState[1] += direction;
+            newState[1] += action % 2 == 0 ? -1 : 1;
+        } else if (action == 4 || action == 5) {
+            newState[2] += action % 2 == 0 ? -1 : 1;
         }
-        // else if (action == 4 || action == 5) {
-        //     newState[2] += direction;
-        // }
 
-        std::pair<double, int8_t> pair = getRewardAndTerminal(newState, oldState);
+        std::pair<double, int8_t> rewardTerminalPair = getRewardAndTerminal(newState, oldState);
 
         m_totalActions[i] += 1;
 
-        if (m_totalActions[i] < m_env.back().size(-1) * m_env.back().size(-1)) {
-            if (pair.second != 1) {
+        if (m_totalActions[i] < 300) {
+            if (rewardTerminalPair.second == 0 || rewardTerminalPair.second == 3) {
                 m_env.back()[0][oldState[2].item<int64_t>()][oldState[1].item<int64_t>()][oldState[0].item<int64_t>()] = 0.25;
                 m_env.back()[0][newState[2].item<int64_t>()][newState[1].item<int64_t>()][newState[0].item<int64_t>()] = 0.5;
 
                 m_state.back()[i] = newState.clone();
             }
         } else {
-            if (pair.second != 2) {
-                pair.second = 2;
-                pair.first = -1.05;
+            if (rewardTerminalPair.second == 0 || rewardTerminalPair.second == 1) {
+                rewardTerminalPair.first -= 10.0;
+                rewardTerminalPair.second = 2;
             }
         }
 
-        replay.terminals[i][0] = (pair.second >= 2) ? 0.0 : 1.0;
-        replay.actions[i][0] = action;
-        replay.rewards[i][0] = (pair.first - (-1.05)) / (0.95 - (-1.05));
+        frame.actionProbs[i][0] = torch::softmax(t_actionLogits[i], 0)[action];
+        frame.rewards[i][0] = rewardTerminalPair.first;
+        frame.terminals[i][0] = (rewardTerminalPair.second >= 2) ? 0.0 : 1.0;
 
         if (!anyWin) {
-            anyWin = pair.second == 3;
+            anyWin = rewardTerminalPair.second == 3;
         }
     }
 
-    copyTensors(replay.nextEnv, m_env);
-    copyTensors(replay.nextState, m_state);
+    bool isDone = frame.terminals.mean().item<double>() == 0.0;
 
-    bool isDone = replay.terminals.mean().item<double>() == 0.0;
-
-    return std::tuple(replay, isDone, anyWin);
+    return std::tuple(frame, isDone, anyWin);
 }
 
-double Environment::getExpToExpl()
+torch::Tensor Environment::categoricalSample(const torch::Tensor& t_logits, const int32_t& t_numSamples)
 {
-    return (std::max(std::min(1.0, m_maxFrames / (m_frames + 1)), 0.01)) * 100.0;
-};
+    torch::Tensor probabilities = torch::softmax(t_logits, -1);
+    torch::Tensor cumulativeDistribution = probabilities.cumsum(-1);
+    torch::Tensor randomNumbers = torch::rand({ t_numSamples, t_logits.size(0) });
+    torch::Tensor samples = (cumulativeDistribution.unsqueeze(0) > randomNumbers.unsqueeze(-1)).to(torch::kInt64).argmax(-1);
+
+    return samples;
+}
 
 void Environment::shift(const torch::Tensor& t_env, const torch::Tensor& t_state)
 {
@@ -137,45 +130,6 @@ void Environment::shift(const torch::Tensor& t_env, const torch::Tensor& t_state
     m_state = newState;
 }
 
-void Environment::copyTensors(std::vector<torch::Tensor>& t_lhs, const std::vector<torch::Tensor>& t_rhs)
-{
-    std::vector<torch::Tensor> newLhs(t_rhs.size());
-
-    for (std::size_t i = 0; i < newLhs.size(); ++i) {
-        newLhs[i] = t_rhs[i].clone();
-    }
-
-    t_lhs.clear();
-    t_lhs = newLhs;
-}
-
-int32_t Environment::selectRandomAction(const int32_t& t_actionSpace)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, t_actionSpace - 1);
-    return dis(gen);
-}
-
-int32_t Environment::selectBestAction(const torch::Tensor& t_predictions)
-{
-    torch::Tensor max = t_predictions.argmax(0);
-    return max.item<int32_t>();
-}
-
-int32_t Environment::epsilonGreedyAction(double t_epsilon, const torch::Tensor& t_predictions, const int32_t& t_actionSpace)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(0.0, 1.0);
-
-    if (dis(gen) < 1 - t_epsilon) {
-        return selectBestAction(t_predictions);
-    } else {
-        return selectRandomAction(t_actionSpace);
-    }
-}
-
 std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor& t_newState, const torch::Tensor& t_oldState)
 {
     double reward = 0;
@@ -184,19 +138,19 @@ std::pair<double, int8_t> Environment::getRewardAndTerminal(const torch::Tensor&
     reward -= 0.05;
 
     if (isInvalidState(t_newState)) {
-        reward -= 0.5;
+        reward -= 0.75;
         terminal = 1;
         return std::pair(reward, terminal);
     }
 
     if (isGoalState(t_newState)) {
-        reward += 1.0;
+        reward += 10.0;
         terminal = 3;
         return std::pair(reward, terminal);
     }
 
     if (isStuck(t_newState, t_oldState)) {
-        reward -= 1.0;
+        reward -= 10.0;
         terminal = 2;
         return std::pair(reward, terminal);
     }

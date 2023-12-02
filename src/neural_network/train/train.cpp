@@ -76,17 +76,15 @@ inline static void plot(const std::vector<double>& t_y, const std::vector<double
 
 void Train::train(TrainTopologyDataset& t_trainDataset)
 {
+    torch::manual_seed(42);
+
     cv::namedWindow("Layers", cv::WINDOW_AUTOSIZE);
     cv::namedWindow("conv1", cv::WINDOW_AUTOSIZE);
     cv::namedWindow("conv2", cv::WINDOW_AUTOSIZE);
 
     std::size_t nEpisodes = 100000;
-    std::size_t maxEpisodeSteps = 5000;
+    std::size_t maxEpisodeSteps = 500;
     std::size_t batchSize = 32;
-    std::size_t replayBufferSize = 10000;
-    std::size_t stepsToUpdateTargetModel = 1000;
-    std::size_t updateTargetModelStep = 0;
-    std::size_t totalUpdates = 0;
     std::size_t totalFrames = 0;
 
     double totalLoss {};
@@ -98,9 +96,8 @@ void Train::train(TrainTopologyDataset& t_trainDataset)
     std::vector<double> plotEpisodes {};
 
     Agent agent {};
-    ReplayBuffer replayBuffer(replayBufferSize);
-    torch::optim::Adam optimizer(agent.getModelParameters(), torch::optim::AdamOptions(0.0001));
-    torch::optim::StepLR lrScheduler(optimizer, 15, 0.95);
+    torch::optim::Adam optimizer(agent.parameters(), torch::optim::AdamOptions(0.001));
+    torch::optim::StepLR lrScheduler(optimizer, 5, 0.95);
 
     std::size_t totalCells = 1;
     std::vector<Environment> environments {};
@@ -138,81 +135,60 @@ void Train::train(TrainTopologyDataset& t_trainDataset)
 
             environments[e].set(env, state);
 
+            std::vector<Frame> frames {};
+
             for (std::size_t i = 0; i < maxEpisodeSteps; ++i) {
-                ++updateTargetModelStep;
                 ++totalFrames;
 
-                torch::Tensor qValues = agent.replayAction(environments[e].getEnv(), environments[e].getState());
-                std::tuple<ReplayBuffer::Data, bool, bool> replay = environments[e].replayStep(qValues);
-                ReplayBuffer::Data replayData = std::get<0>(replay);
+                auto [actionLogits, values] = agent.action(environments[e].getEnv(), environments[e].getState());
+                auto [frame, done, win] = environments[e].step(actionLogits);
 
-                replayBuffer.add(replayData);
+                frame.values = values;
+                frames.emplace_back(frame);
 
-                createHeatMap(replayData.nextEnv);
+                totalReward += frame.rewards.mean().item<double>();
 
-                if (replayBuffer.size() % 4 == 0 && replayBuffer.size() >= batchSize) {
-                    std::vector<at::Tensor> parameters = agent.getModelParameters();
-                    torch::Tensor loss {};
+                createHeatMap(environments[e].getEnv());
 
-                    optimizer.zero_grad();
-
-                    for (std::size_t j = 0; j < batchSize; ++j) {
-                        ReplayBuffer::Data replay = replayBuffer.get();
-                        std::pair<at::Tensor, at::Tensor> pair = agent.trainAction(replay);
-
-                        if (loss.defined()) {
-                            loss += torch::nn::functional::mse_loss(pair.first, pair.second);
-                        } else {
-                            loss = torch::nn::functional::mse_loss(pair.first, pair.second);
-                        }
-                    }
-
-                    loss = loss / static_cast<double>(batchSize);
-
-                    loss.backward();
-                    optimizer.step();
-
-                    totalLoss += loss.item<double>();
-                    totalReward += replayData.rewards.mean().item<double>();
-
-                    displayProgressBar(updateTargetModelStep, stepsToUpdateTargetModel, 50, "Experience steps: ");
-
-                    if (stepsToUpdateTargetModel == updateTargetModelStep) {
-                        // agent.softUpdateTargetModel(0.001);
-                        agent.updateTargetModel();
-
-                        plotLoss.emplace_back(totalLoss / stepsToUpdateTargetModel);
-                        plotRewards.emplace_back(totalReward / stepsToUpdateTargetModel);
-                        plotEpisodes.emplace_back(plotEpisodes.size());
-
-                        plot(plotLoss, plotEpisodes, "Loss");
-                        plot(plotRewards, plotEpisodes, "Reward");
-
-                        totalLoss = 0.0;
-                        totalReward = 0.0;
-                        updateTargetModelStep = 0;
-
-                        std::cout << "\n\n"
-                                  << "Episode - " << episode + 1 << "/" << nEpisodes << '\n'
-                                  << "Huber Loss: " << plotLoss.back() << '\n'
-                                  << "Mean Reward: " << plotRewards.back() << '\n'
-                                  << "Total wins: " << totalWins << '\n'
-                                  << "Total frames: " << totalFrames << '\n'
-                                  << "Exp to Expl: " << environments[e].getExpToExpl() << "%\n\n"
-                                  << std::flush;
-                    }
-                }
-
-                if (std::get<2>(replay)) {
+                if (win) {
                     ++totalWins;
                 }
 
-                if (std::get<1>(replay)) {
+                if (done) {
                     break;
                 }
+
+                displayProgressBar(i, maxEpisodeSteps, 50, "Experience steps: ");
             }
 
-            lrScheduler.step();
+            optimizer.zero_grad();
+
+            auto loss = agent.learn(frames);
+
+            loss.backward();
+            optimizer.step();
+
+            totalLoss += loss.item<double>();
+
+            plotLoss.emplace_back(totalLoss);
+            plotRewards.emplace_back(totalReward);
+            plotEpisodes.emplace_back(plotEpisodes.size());
+
+            plot(plotLoss, plotEpisodes, "Loss");
+            plot(plotRewards, plotEpisodes, "Reward");
+
+            totalLoss = 0.0;
+            totalReward = 0.0;
+
+            std::cout << "\n\n"
+                      << "Episode - " << episode + 1 << "/" << nEpisodes << '\n'
+                      << "Huber Loss: " << plotLoss.back() << '\n'
+                      << "Mean Reward: " << plotRewards.back() << '\n'
+                      << "Total wins: " << totalWins << '\n'
+                      << "Total frames: " << totalFrames << '\n'
+                      << std::flush;
         }
+
+        lrScheduler.step();
     }
 }
