@@ -82,44 +82,45 @@ private:
 
 TORCH_MODULE(ConvSelfAttention);
 
-struct DQNImpl : torch::nn::Module {
-    DQNImpl(int64_t t_states, int64_t t_numActions)
+struct ActorCriticImpl : torch::nn::Module {
+    ActorCriticImpl(int64_t t_states, int64_t t_numActions)
     {
-        conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(4, 16, 3)));
-        conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(16, 64, 3)));
+        // conv1 = register_module("conv1", torch::nn::Conv2d(torch::nn::Conv2dOptions(1, 32, 4).stride(4)));
+        // conv2 = register_module("conv2", torch::nn::Conv2d(torch::nn::Conv2dOptions(32, 64, 4).stride(2)));
 
-        actor = register_module("actor", torch::nn::Sequential(torch::nn::Linear(64 * 14 * 14, t_numActions)));
-        critics = register_module("critics", torch::nn::Sequential(torch::nn::Linear(64 * 14 * 14, 1)));
+        fc = register_module("fc", torch::nn::Sequential(torch::nn::Linear(10 * 10, 128)));
+
+        actor = register_module("actor", torch::nn::Sequential(torch::nn::Linear(128, t_numActions)));
+        critics = register_module("critics", torch::nn::Sequential(torch::nn::Linear(128, 1)));
     }
 
     std::pair<torch::Tensor, torch::Tensor> forward(torch::Tensor t_environment, bool t_showConv = false)
     {
-        t_environment = torch::nn::functional::max_pool2d(torch::relu(conv1->forward(t_environment)), torch::nn::functional::MaxPool2dFuncOptions(2));
+        // t_environment = torch::relu(conv1->forward(t_environment));
 
-        if (t_showConv) {
-            displayConv(t_environment, 4, "conv1");
-        }
+        // if (t_showConv) {
+        //     displayConv(t_environment, 4, "conv1");
+        // }
 
-        t_environment = torch::nn::functional::max_pool2d(torch::relu(conv2->forward(t_environment)), torch::nn::functional::MaxPool2dFuncOptions(2));
+        // t_environment = torch::relu(conv2->forward(t_environment));
 
-        if (t_showConv) {
-            displayConv(t_environment, 8, "conv2");
-        }
+        // if (t_showConv) {
+        //     displayConv(t_environment, 8, "conv2");
+        // }
 
-        t_environment = t_environment.flatten().unsqueeze(0);
-        t_environment = t_environment.repeat({ 1, 1 });
+        t_environment = torch::relu(fc->forward(t_environment.flatten().unsqueeze(0)));
 
-        return std::make_pair(actor->forward(t_environment), critics->forward(t_environment));
+        return std::make_pair(torch::softmax(actor->forward(t_environment), -1), critics->forward(t_environment));
     }
 
     torch::nn::Conv2d conv1 { nullptr };
     torch::nn::Conv2d conv2 { nullptr };
-    torch::nn::Conv2d conv3 { nullptr };
 
+    torch::nn::Sequential fc { nullptr };
     torch::nn::Sequential actor { nullptr };
     torch::nn::Sequential critics { nullptr };
 };
 
-TORCH_MODULE(DQN);
+TORCH_MODULE(ActorCritic);
 
 #endif

@@ -3,11 +3,11 @@
 
 #include <vector>
 
-#include "neural_network/model.hpp"
 #include "frame.hpp"
+#include "neural_network/model.hpp"
 
 class Agent {
-    DQN m_ActorCritics { nullptr };
+    ActorCritic m_ActorCritic { nullptr };
 
 public:
     Agent();
@@ -15,7 +15,7 @@ public:
 
     std::pair<torch::Tensor, torch::Tensor> action(std::vector<torch::Tensor> t_env, std::vector<torch::Tensor> t_state);
 
-    torch::Tensor learn(const std::vector<Frame>& t_frames);
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> learn(const std::vector<Frame>& t_frames);
 
     std::vector<torch::Tensor> parameters();
 };

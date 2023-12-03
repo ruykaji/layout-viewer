@@ -10,7 +10,7 @@ class Environment {
     std::vector<torch::Tensor> m_env {};
     std::vector<torch::Tensor> m_state {};
 
-    std::vector<int64_t> m_totalActions {};
+    std::vector<double> m_totalRewards {};
 
 public:
     Environment() = default;
@@ -22,7 +22,7 @@ public:
 
     std::vector<torch::Tensor> getState();
 
-    std::tuple<Frame, bool, bool> step(const torch::Tensor& t_actionLogits);
+    std::tuple<Frame, bool, bool> step(torch::Tensor t_actionLogits);
 
 private:
     torch::Tensor categoricalSample(const torch::Tensor& t_logits, const int32_t& t_numSamples = 1);

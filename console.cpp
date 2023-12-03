@@ -47,11 +47,11 @@ int main(int argc, char const* argv[])
             }
         };
 
-        for (auto& file : trainFiles) {
-            std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
+        // for (auto& file : trainFiles) {
+        //     std::shared_ptr<Data> dataPtr = std::make_shared<Data>();
 
-            encoder.readDef(file, dataPtr, pdkPtr, configPtr);
-        }
+        //     encoder.readDef(file, dataPtr, pdkPtr, configPtr);
+        // }
 
         TrainTopologyDataset trainDataset {};
         Train train {};
