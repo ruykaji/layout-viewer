@@ -1,50 +1,46 @@
 cmake_minimum_required(VERSION 3.19)
-project(main LANGUAGES C CXX)
+project(FastLink LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+option(EnableTests "EnableTests" OFF)
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTORCC ON)
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-set(CMAKE_CUDA_ARCHITECTURES 86)
+set(OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/Output)
 
-find_library(DEF NAMES libdef.a PATHS ${CMAKE_SOURCE_DIR}/external/def/lib)
-find_library(LEF NAMES liblef.a PATHS ${CMAKE_SOURCE_DIR}/external/lef/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${OUTPUT_DIRECTORY}/Debug/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${OUTPUT_DIRECTORY}/Release/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG ${OUTPUT_DIRECTORY}/Debug/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE ${OUTPUT_DIRECTORY}/Release/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG ${OUTPUT_DIRECTORY}/Debug/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${OUTPUT_DIRECTORY}/Release/lib)
 
-# MATPLOTLIB
-find_package(PythonLibs 3 REQUIRED)
-include_directories(${PYTHON_INCLUDE_DIRS})
-find_package(PythonLibs REQUIRED)
-# -----------------------------------------------
+include_directories(Src)
+add_subdirectory(Src)
 
-find_package(OpenCV REQUIRED)
-find_package(Torch REQUIRED)
-find_package(Qt6 COMPONENTS Core Gui Widgets REQUIRED)
+find_library(DEF NAMES libdef.a PATHS ${CMAKE_CURRENT_LIST_DIR}/External/def/lib)
+find_library(LEF NAMES liblef.a PATHS ${CMAKE_CURRENT_LIST_DIR}/External/lef/lib)
 
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS})
+message(STATUS "===================================================")
+message(STATUS "Project Name: ${PROJECT_NAME}")
+message(STATUS "CMake Version: ${CMAKE_VERSION}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Enable Tests: ${EnableTests}")
+message(STATUS "Debug Flags: ${CMAKE_CXX_FLAGS_DEBUG}")
+message(STATUS "Release Flags: ${CMAKE_CXX_FLAGS_RELEASE}")
+message(STATUS "Output Directories:")
+message(STATUS "    Runtime (Debug): ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}")
+message(STATUS "    Runtime (Release): ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}")
+message(STATUS "    Library (Debug): ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}")
+message(STATUS "    Library (Release): ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}")
+message(STATUS "    Archive (Debug): ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG}")
+message(STATUS "    Archive (Release): ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE}")
+message(STATUS "===================================================\n")
 
-include_directories(
-    /home/alaie/.local/lib/python3.10/site-packages/numpy/core/include
-    ${CMAKE_SOURCE_DIR}/external/def/include
-    ${CMAKE_SOURCE_DIR}/external/lef/include
-    ${CMAKE_SOURCE_DIR}/external/matplotlib
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-file(GLOB GLOBAL ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.hpp)
-file(GLOB ENCODER ${CMAKE_SOURCE_DIR}/src/encoder/*.cpp ${CMAKE_SOURCE_DIR}/src/encoder/*.hpp)
-file(GLOB PDK ${CMAKE_SOURCE_DIR}/src/pdk/*.cpp ${CMAKE_SOURCE_DIR}/src/pdk/*.hpp)
-file(GLOB_RECURSE NEURAL_NETWORK ${CMAKE_SOURCE_DIR}/src/neural_network/*.cpp ${CMAKE_SOURCE_DIR}/src/neural_network/*.hpp)
-file(GLOB VIEWER ${CMAKE_SOURCE_DIR}/src/viewer/*.cpp ${CMAKE_SOURCE_DIR}/src/viewer/*.hpp)
-
-# Desktop Version
-set(DESKTOP ${GLOBAL} ${ENCODER} ${PDK} ${VIEWER})
-add_executable(desktop desktop.cpp ${DESKTOP})
-target_link_libraries(desktop PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} Qt6::Core Qt6::Gui Qt6::Widgets)
-
-# Console Version
-set(CONSOLE ${GLOBAL} ${ENCODER} ${PDK} ${NEURAL_NETWORK})
-add_executable(console console.cpp ${CONSOLE})
-target_link_libraries(console PRIVATE ${DEF} ${LEF} ${TORCH_LIBRARIES} ${OpenCV_LIBS} ${PYTHON_LIBRARIES})
+if(EnableTests)
+   add_subdirectory(Test)
+endif()

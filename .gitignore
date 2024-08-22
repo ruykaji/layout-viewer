@@ -1,2 +1,6 @@
+# vs code
 .vscode
-**/build
+
+# build folders
+build
+Output
