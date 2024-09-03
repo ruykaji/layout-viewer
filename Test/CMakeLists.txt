@@ -8,7 +8,7 @@ enable_testing()
 include(GoogleTest)
 
 add_executable(LoggerTest logger.test.cpp)
-target_link_libraries(LoggerTest GTest::gtest_main pthread)
+target_link_libraries(LoggerTest Logger GTest::gtest_main pthread)
 gtest_discover_tests(LoggerTest)
 
 add_executable(IniTest ini.test.cpp)
