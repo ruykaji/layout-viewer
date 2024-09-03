@@ -10,3 +10,7 @@ include(GoogleTest)
 add_executable(LoggerTest logger.test.cpp)
 target_link_libraries(LoggerTest GTest::gtest_main pthread)
 gtest_discover_tests(LoggerTest)
+
+add_executable(IniTest ini.test.cpp)
+target_link_libraries(IniTest GTest::gtest_main pthread)
+gtest_discover_tests(IniTest)
