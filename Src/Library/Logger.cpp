@@ -5,6 +5,8 @@
 
 namespace logger {
 
+/** =============================== CONSTRUCTORS ================================= */
+
 Logger::Logger(std::filesystem::path file_name, Options options)
     : m_options(options)
 {
@@ -25,6 +27,8 @@ Logger::~Logger()
         m_file_stream.close();
     }
 }
+
+/** =============================== PUBLIC METHODS =============================== */
 
 void Logger::log(const std::string_view message, Level level)
 {

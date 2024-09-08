@@ -36,7 +36,7 @@ TEST_F(IniTest, ParseWithNoExceptions)
     this->m_config_stream << "BooleanKey = true\n";
     this->m_config_stream << std::flush;
 
-    ini::Config config = ini::Parse(this->m_config_path);
+    ini::Config config = ini::parse(this->m_config_path);
 
     EXPECT_EQ(config.count("Section1"), 1);
     EXPECT_EQ(config.at("Section1").get_as<std::string>("StringKey"), "value");
@@ -51,7 +51,7 @@ TEST_F(IniTest, NoFileFoundException)
 {
     EXPECT_THROW({
         try {
-            ini::Parse("./no_existing_config.ini");
+            ini::parse("./no_existing_config.ini");
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Failed to locate config file. Path \"./no_existing_config.ini\" does not exists");
             throw;
@@ -66,7 +66,7 @@ TEST_F(IniTest, NoKeyValuePairException)
 
     EXPECT_THROW({
         try {
-            ini::Parse(this->m_config_path);
+            ini::parse(this->m_config_path);
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Expected key value pair but found nothing:\n\"StringKey\"");
             throw;
@@ -81,7 +81,7 @@ TEST_F(IniTest, NoKeyException)
 
     EXPECT_THROW({
         try {
-            ini::Parse(this->m_config_path);
+            ini::parse(this->m_config_path);
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Expected key but found nothing:\n\"= value\"");
             throw;
@@ -96,7 +96,7 @@ TEST_F(IniTest, NoValueException)
 
     EXPECT_THROW({
         try {
-            ini::Parse(this->m_config_path);
+            ini::parse(this->m_config_path);
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Expected value but found nothing:\n\"StringKey =\"");
             throw;
@@ -111,7 +111,7 @@ TEST_F(IniTest, UnsupportedFormatException)
 
     EXPECT_THROW({
         try {
-            ini::Parse(this->m_config_path);
+            ini::parse(this->m_config_path);
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Unsupported format:\n\"StringKey=value\"");
             throw;
@@ -126,7 +126,7 @@ TEST_F(IniTest, NoKeyExistsException)
 
     EXPECT_THROW({
         try {
-            ini::Config config = ini::Parse(this->m_config_path);
+            ini::Config config = ini::parse(this->m_config_path);
             config.at("Section1").get_as<std::string>("NumberKey");
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Key \"NumberKey\" doesn't exists");
@@ -142,7 +142,7 @@ TEST_F(IniTest, InvalidValueForBooleanTypeException)
 
     EXPECT_THROW({
         try {
-            ini::Config config = ini::Parse(this->m_config_path);
+            ini::Config config = ini::parse(this->m_config_path);
             config.at("Section1").get_as<bool>("StringKey");
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Invalid value for key \"StringKey\" and boolean type");
@@ -158,7 +158,7 @@ TEST_F(IniTest, InvalidValueForArithmeticTypeException)
 
     EXPECT_THROW({
         try {
-            ini::Config config = ini::Parse(this->m_config_path);
+            ini::Config config = ini::parse(this->m_config_path);
             config.at("Section1").get_as<int32_t>("StringKey");
         } catch (const std::exception& e) {
             EXPECT_STREQ(e.what(), "Invalid value for key \"StringKey\" and arithmetic type");

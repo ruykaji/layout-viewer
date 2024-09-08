@@ -34,6 +34,11 @@ enum class Level {
 
 class Logger {
 public:
+    NON_COPYABLE(Logger)
+    NON_MOVABLE(Logger)
+
+    /** =============================== CONSTRUCTORS ================================= */
+
     /**
      * @brief Construct a new Logger object.
      *
@@ -44,8 +49,8 @@ public:
 
     ~Logger();
 
-    NON_COPYABLE(Logger)
-    NON_MOVABLE(Logger)
+public:
+    /** =============================== PUBLIC METHODS =============================== */
 
     /**
      * @brief Write log message.
