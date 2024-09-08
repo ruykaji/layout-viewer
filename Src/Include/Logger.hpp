@@ -7,62 +7,69 @@
 
 #include "Include/Macro.hpp"
 
-namespace logger {
+namespace logger
+{
 
-enum class Options : uint8_t {
-    NONE = 0,
-    CONSOLE_PRINT = 1 << 0
+enum class Options : uint8_t
+{
+  NONE          = 0,
+  CONSOLE_PRINT = 1 << 0
 };
 
-inline constexpr Options operator|(const Options& lhs, const Options& rhs)
+inline constexpr Options
+operator|(const Options& lhs, const Options& rhs)
 {
-    return static_cast<Options>(static_cast<std::underlying_type_t<Options>>(lhs) | static_cast<std::underlying_type_t<Options>>(rhs));
+  return static_cast<Options>(static_cast<std::underlying_type_t<Options>>(lhs) | static_cast<std::underlying_type_t<Options>>(rhs));
 }
 
-inline constexpr Options operator&(const Options& lhs, const Options& rhs)
+inline constexpr Options
+operator&(const Options& lhs, const Options& rhs)
 {
-    return static_cast<Options>(static_cast<std::underlying_type_t<Options>>(lhs) & static_cast<std::underlying_type_t<Options>>(rhs));
+  return static_cast<Options>(static_cast<std::underlying_type_t<Options>>(lhs) & static_cast<std::underlying_type_t<Options>>(rhs));
 }
 
-enum class Level {
-    INFO = 0,
-    DEBUG,
-    SUCCESS,
-    WARNING,
-    ERROR
+enum class Level
+{
+  INFO = 0,
+  DEBUG,
+  SUCCESS,
+  WARNING,
+  ERROR
 };
 
-class Logger {
+class Logger
+{
 public:
-    NON_COPYABLE(Logger)
-    NON_MOVABLE(Logger)
+  NON_COPYABLE(Logger)
+  NON_MOVABLE(Logger)
 
-    /** =============================== CONSTRUCTORS ================================= */
+  /** =============================== CONSTRUCTORS ================================= */
 
-    /**
-     * @brief Construct a new Logger object.
-     *
-     * @param file_name Logger file name.
-     * @param options Logger options.
-     */
-    Logger(std::filesystem::path file_name, Options options = Options::NONE);
+  /**
+   * @brief Constructs a new Logger object.
+   *
+   * @param file_name File name.
+   * @param options Options.
+   */
+  Logger(std::filesystem::path file_name, Options options = Options::NONE);
 
-    ~Logger();
+  ~Logger();
 
 public:
-    /** =============================== PUBLIC METHODS =============================== */
+  /** =============================== PUBLIC METHODS =============================== */
 
-    /**
-     * @brief Write log message.
-     *
-     * @param message Message.
-     * @param level Log level.
-     */
-    void log(const std::string_view message, Level level);
+  /**
+   * @brief Writes log message.
+   *
+   * @param message Message.
+   * @param level Log level.
+   */
+  void
+  log(const std::string_view message, Level level);
 
 private:
-    std::ofstream m_file_stream;
-    Options m_options;
+  std::ofstream m_file_stream; ///> File stream.
+  Options       m_options;     ///> Holds the option of the logger.
 };
 
 } // namespace logger

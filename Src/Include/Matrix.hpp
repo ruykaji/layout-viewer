@@ -5,113 +5,123 @@
 #include <cstdlib>
 #include <stdexcept>
 
-namespace matrix {
+namespace matrix
+{
 
-struct Shape {
-    uint8_t m_x = 0;
-    uint8_t m_y = 0;
-    uint8_t m_z = 0;
+struct Shape
+{
+  uint8_t m_x = 0;
+  uint8_t m_y = 0;
+  uint8_t m_z = 0;
 };
 
-class Matrix {
+class Matrix
+{
 public:
-    /** =============================== CONSTRUCTORS ================================= */
+  /** =============================== CONSTRUCTORS ================================= */
 
-    /**
-     * @brief Default constructor
-     *
-     * @param shape Shape of the matrix
-     */
-    Matrix(const Shape& shape = {});
+  /**
+   * @brief Constructs a Matrix with the specified shape
+   *
+   * @param shape Shape structure containing the dimensions of the matrix
+   */
+  Matrix(const Shape& shape = {});
 
-    ~Matrix();
+  /**
+   * @brief Destructor.
+   *
+   */
+  ~Matrix();
 
-    /**
-     * @brief Copy constructor
-     *
-     * @param matrix Matrix that about to be copied
-     */
-    Matrix(const Matrix& matrix);
+  /**
+   * @brief Copy constructor.
+   *
+   * @param matrix The matrix to be copied.
+   */
+  Matrix(const Matrix& matrix);
 
-    /**
-     * @brief Move constructor
-     *
-     * @param matrix Matrix that about to be moved
-     */
-    Matrix(Matrix&& matrix);
-
-public:
-    /** =============================== OPERATORS ==================================== */
-
-    /**
-     * @brief Copy assignment
-     *
-     * @param matrix Matrix that about to be copied
-     * @return Matrix&
-     */
-    Matrix& operator=(const Matrix& matrix);
-
-    /**
-     * @brief Move operator
-     *
-     * @param matrix Matrix that about to be moved
-     * @return Matrix&
-     */
-    Matrix& operator=(Matrix&& matrix);
+  /**
+   * @brief Move constructor.
+   *
+   * @param matrix The matrix to be moved.
+   */
+  Matrix(Matrix&& matrix);
 
 public:
-    /** =============================== PUBLIC METHODS =============================== */
+  /** =============================== OPERATORS ==================================== */
 
-    /**
-     * @brief Get matrix shape
-     *
-     * @return const Shape&
-     */
-    const Shape& shape()
-    {
-        return m_shape;
-    }
+  /**
+   * @brief Copy assignment operator.
+   *
+   * @param matrix The matrix to copy from.
+   * @return Matrix&
+   */
+  Matrix&
+  operator=(const Matrix& matrix);
 
-    /**
-     * @brief Get the value at the (Z,Y,X) position
-     *
-     * @param z
-     * @param y
-     * @param x
-     * @return uint8_t
-     */
-    uint8_t get_at(const uint8_t x, const uint8_t y, const uint8_t z) const;
+  /**
+   * @brief Move assignment operator.
+   *
+   * @param matrix The matrix to be moved.
+   * @return Matrix&
+   */
+  Matrix&
+  operator=(Matrix&& matrix);
 
-    /**
-     * @brief Set a value at the (Z,Y,X) position
-     *
-     * @param value
-     * @param z
-     * @param y
-     * @param x
-     * @return uint8_t
-     */
-    void set_at(const uint8_t value, const uint8_t x, const uint8_t y, const uint8_t z);
+public:
+  /** =============================== PUBLIC METHODS =============================== */
 
-    /**
-     * @brief Clears matrix
-     *
-     */
-    void clear() noexcept(true);
+  /**
+   * @brief Returns the shape of the matrix.
+   *
+   * @return const Shape&
+   */
+  const Shape&
+  shape();
+
+  /**
+   * @brief Retrieves the value stored at the given (x, y, z) coordinates.
+   *
+   * @param x X-coordinate (width).
+   * @param y Y-coordinate (height).
+   * @param z Z-coordinate (depth).
+   * @return uint8_t
+   */
+  uint8_t
+  get_at(const uint8_t x, const uint8_t y, const uint8_t z) const;
+
+  /**
+   * @brief Sets the value at the given (x, y, z) coordinates.
+   *
+   * @param value The value to set at the given coordinates.
+   * @param x X-coordinate (width).
+   * @param y Y-coordinate (height).
+   * @param z Z-coordinate (depth).
+   */
+  void
+  set_at(const uint8_t value, const uint8_t x, const uint8_t y, const uint8_t z);
+
+  /**
+   * @brief Clears the matrix data.
+   *
+   */
+  void
+  clear() noexcept(true);
 
 private:
-    /** =============================== PRIVATE METHODS ============================== */
+  /** =============================== PRIVATE METHODS ============================== */
 
-    /**
-     * @brief Allocates memory and returns number of allocated elements
-     *
-     * @return std::size_t
-     */
-    std::size_t allocate();
+  /**
+   * @brief Allocates memory for matrix elements.
+   *
+   * @return std::size_t
+   */
+  std::size_t
+  allocate();
 
 private:
-    Shape m_shape;
-    uint8_t* m_data;
+  Shape    m_shape; ///< Holds the dimensions of the matrix.
+  uint8_t* m_data;  ///< Pointer to the dynamically allocated matrix data.
 };
 
 } // namespace matrix
