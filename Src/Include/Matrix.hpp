@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
+#include <vector>
 
 namespace matrix
 {
@@ -70,6 +71,14 @@ public:
 
 public:
   /** =============================== PUBLIC METHODS =============================== */
+
+  /**
+   * @brief Returns pointer to the underlying data.
+   *
+   * @return uint8_t*
+   */
+  uint8_t*
+  data();
 
   /**
    * @brief Returns the shape of the matrix.

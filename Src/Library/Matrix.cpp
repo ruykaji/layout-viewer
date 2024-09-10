@@ -70,6 +70,12 @@ Matrix::operator=(Matrix&& matrix)
 
 /** =============================== PUBLIC METHODS =============================== */
 
+uint8_t*
+Matrix::data()
+{
+  return m_data;
+}
+
 const Shape&
 Matrix::shape()
 {
@@ -84,7 +90,7 @@ Matrix::get_at(const uint8_t x, const uint8_t y, const uint8_t z) const
       throw std::out_of_range("Out of range");
     }
 
-  const std::size_t index = (x * m_shape.m_y + y) * m_shape.m_z + z;
+  const std::size_t index = y * m_shape.m_y * m_shape.m_z + x * m_shape.m_z + (m_shape.m_z - z - 1);
   return m_data[index];
 }
 
@@ -96,7 +102,7 @@ Matrix::set_at(const uint8_t value, const uint8_t x, const uint8_t y, const uint
       throw std::out_of_range("Out of range");
     }
 
-  const std::size_t index = (x * m_shape.m_y + y) * m_shape.m_z + z;
+  const std::size_t index = y * m_shape.m_y * m_shape.m_z + x * m_shape.m_z + (m_shape.m_z - z - 1);
   m_data[index]           = value;
 }
 
