@@ -16,10 +16,7 @@ Matrix::Matrix(const Shape& shape) : m_shape(shape), m_data(nullptr)
 
 Matrix::~Matrix()
 {
-  if(m_data != nullptr)
-    {
-      std::free(m_data);
-    }
+  delete[] m_data;
 }
 
 Matrix::Matrix(const Matrix& matrix) : m_shape(matrix.m_shape), m_data(nullptr)
@@ -110,12 +107,7 @@ void
 Matrix::clear() noexcept(true)
 {
   m_shape = Shape{ 0, 0, 0 };
-
-  if(m_data != nullptr)
-    {
-      std::free(m_data);
-      m_data = nullptr;
-    }
+  delete[] m_data;
 }
 
 /** =============================== PRIVATE METHODS ============================== */
@@ -127,7 +119,7 @@ Matrix::allocate()
 
   if(length != 0)
     {
-      m_data = static_cast<uint8_t*>(std::malloc(sizeof(uint8_t) * length));
+      m_data = new uint8_t[length];
 
       if(m_data == nullptr)
         {
