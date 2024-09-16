@@ -26,9 +26,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE ${OUTPUT_DIRECTORY}/Release/lib)
 include_directories(Src)
 add_subdirectory(Src)
 
-find_library(DEF NAMES libdef.a PATHS ${CMAKE_CURRENT_LIST_DIR}/External/def/lib)
-find_library(LEF NAMES liblef.a PATHS ${CMAKE_CURRENT_LIST_DIR}/External/lef/lib)
-
 message(STATUS "===================================================")
 message(STATUS "Project Name: ${PROJECT_NAME}")
 message(STATUS "CMake Version: ${CMAKE_VERSION}")

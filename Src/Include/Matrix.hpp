@@ -29,7 +29,7 @@ public:
   Matrix(const Shape& shape = {});
 
   /**
-   * @brief Destructor.
+   * @brief  Destroys the Matrix object.
    *
    */
   ~Matrix();

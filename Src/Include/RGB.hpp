@@ -50,6 +50,14 @@ struct IEND
   uint8_t  m_crc32[4] = { 0xAE, 0x42, 0x60, 0x82 };
 };
 
+/**
+ * @brief Makes image from provided data.
+ *
+ * @param data The data to build an image from.
+ * @param width The width of an image.
+ * @param height The height of an image.
+ * @param save_path The path to save an image.
+ */
 void
 make_and_save_image(const uint8_t* data, const uint32_t width, const uint32_t height, const std::filesystem::path& save_path);
 

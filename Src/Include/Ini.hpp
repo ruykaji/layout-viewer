@@ -13,7 +13,7 @@ namespace ini
 {
 
 /**
- * @brief Section with setting in ini file.
+ * @brief Section with parameters in ini file.
  *
  */
 class Section
@@ -25,11 +25,11 @@ public:
   /** =============================== PUBLIC METHODS =============================== */
 
   /**
-   * @brief Gets the section setting as object of some exact type.
+   * @brief Gets the section parameter as object of some type.
    *
    * @tparam Tp Type.
    * @param key Key.
-   * @return Tp
+   * @return A value of a `Tp` type
    */
   template <typename Tp>
   Tp
@@ -103,7 +103,7 @@ using Config = std::unordered_map<std::string, Section>;
  * @brief Parses config file.
  *
  * @param file_path Path to the configuration ini file.
- * @return Config
+ * @return A `Config` object.
  */
 Config
 parse(const std::filesystem::path& file_path);

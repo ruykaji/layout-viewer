@@ -48,11 +48,15 @@ public:
   /**
    * @brief Constructs a new Logger object.
    *
-   * @param file_name File name.
+   * @param file_name The to the logger file.
    * @param options Options.
    */
   Logger(std::filesystem::path file_name, Options options = Options::NONE);
 
+  /**
+   * @brief Destroys the Logger object.
+   *
+   */
   ~Logger();
 
 public:
@@ -61,7 +65,7 @@ public:
   /**
    * @brief Writes log message.
    *
-   * @param message Message.
+   * @param message The message to be written.
    * @param level Log level.
    */
   void
