@@ -22,3 +22,7 @@ gtest_discover_tests(MatrixTest)
 add_executable(RGBTest rgb.test.cpp)
 target_link_libraries(RGBTest RGB GTest::gtest_main pthread)
 gtest_discover_tests(RGBTest)
+
+add_executable(UtilsTest utils.test.cpp)
+target_link_libraries(UtilsTest Utils GTest::gtest_main pthread)
+gtest_discover_tests(UtilsTest)

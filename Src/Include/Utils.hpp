@@ -1,14 +1,13 @@
 #ifndef __UTILS_HPP__
 #define __UTILS_HPP__
 
-#include <cstdint>
-#include <vector>
+#include "Include/Types.hpp"
 
 namespace utils
 {
 
-std::vector<int32_t>
-make_rectangle();
+types::Rectangle
+make_clockwise_rectangle(const std::array<int32_t, 4> vertices);
 
 } // namespace utils
 
