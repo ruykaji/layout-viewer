@@ -33,7 +33,7 @@ public:
    */
   template <typename Tp>
   Tp
-  get_as(const std::string key)
+  get_as(const std::string key) const
   {
     static_assert(std::is_same_v<Tp, bool> || std::is_arithmetic_v<Tp> || std::is_same_v<Tp, std::string>,
                   "No conversions exists for this type");
