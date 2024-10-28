@@ -1,6 +1,8 @@
 #ifndef __UTILS_HPP__
 #define __UTILS_HPP__
 
+#include <string_view>
+
 #include "Include/Types.hpp"
 
 namespace utils
@@ -19,7 +21,16 @@ namespace utils
  * @return A `types::Rectangle` object representing the rectangle.
  */
 types::Rectangle
-make_clockwise_rectangle(const std::array<int32_t, 4> vertices);
+make_clockwise_rectangle(const std::array<double, 4> vertices);
+
+/**
+ * @brief Gets metal type according to SkyWater130 library's naming of metal layers.
+ *
+ * @param str Metal layer as string.
+ * @return types::Metal
+ */
+types::Metal
+get_skywater130_metal(const std::string_view str);
 
 } // namespace utils
 

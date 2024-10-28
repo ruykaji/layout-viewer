@@ -30,6 +30,16 @@ rtrim(std::string& line)
 
 } // namespace details
 
+/** =============================== PUBLIC METHODS =============================== */
+
+bool
+Section::check_key(const std::string& key) const
+{
+  return m_config.count(key) != 0;
+}
+
+/** =============================== GLOBAL FUNCTIONS ============================= */
+
 Config
 parse(const std::filesystem::path& file_path)
 {

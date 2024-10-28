@@ -9,7 +9,7 @@ main(int argc, char const* argv[])
   const std::string pdk_folder = config.at("PDK").get_as<std::string>("PATH");
 
   const pdk::Reader pdk_reader;
-  pdk_reader.compress(pdk_folder);
+  pdk_reader.compile(pdk_folder);
 
   return 0;
 }

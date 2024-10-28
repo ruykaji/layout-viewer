@@ -73,13 +73,19 @@ Matrix::data()
   return m_data;
 }
 
+const uint8_t*
+Matrix::data() const
+{
+  return m_data;
+}
+
 const Shape&
-Matrix::shape()
+Matrix::shape() const
 {
   return m_shape;
 }
 
-uint8_t
+const uint8_t&
 Matrix::get_at(const uint8_t x, const uint8_t y, const uint8_t z) const
 {
   if(x >= m_shape.m_x || y >= m_shape.m_y || z >= m_shape.m_z)

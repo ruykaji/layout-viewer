@@ -2,6 +2,7 @@
 #define __INI_HPP__
 
 #include <algorithm>
+#include <cinttypes>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -23,6 +24,16 @@ class Section
 
 public:
   /** =============================== PUBLIC METHODS =============================== */
+
+  /**
+   * @brief Checks if key presents in section.
+   *
+   * @param key The key to check
+   * @return true
+   * @return false
+   */
+  bool
+  check_key(const std::string& key) const;
 
   /**
    * @brief Gets the section parameter as object of some type.
@@ -64,7 +75,7 @@ public:
       {
         try
           {
-            Tp number = static_cast<Tp>(std::stoi(value.data()));
+            Tp number = static_cast<Tp>(std::stoll(value.data()));
             return number;
           }
         catch(...)
@@ -77,7 +88,7 @@ public:
       {
         try
           {
-            Tp number = static_cast<Tp>(std::stod(value.data()));
+            Tp number = static_cast<Tp>(std::stold(value.data()));
             return number;
           }
         catch(...)
@@ -110,4 +121,4 @@ parse(const std::filesystem::path& file_path);
 
 } // namespace ini
 
-#endif
+#endif  

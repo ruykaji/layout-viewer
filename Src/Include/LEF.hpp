@@ -65,7 +65,7 @@ protected:
    * @param data Pointer to the user defined data.
    */
   virtual void
-  macro_callback(const char* param, void* data) const {};
+  macro_begin_callback(const char* param, void* data) const {};
 
   /**
    * @brief Callback function invoked when the size of a macro is parsed.
@@ -98,6 +98,14 @@ private:
   /** =============================== PRIVATE STATIC METHODS =================================== */
 
   /**
+   * @brief Prints internal lefrRead function error.
+   *
+   * @param msg Error message.
+   */
+  static void
+  error_callback(const char* msg);
+
+  /**
    * @brief Static callback function for units parsing.
    *
    * @param type The type of callback.
@@ -128,7 +136,7 @@ private:
    * @return Status code (0 for success or 2 for error).
    */
   static int32_t
-  d_macro_callback(lefrCallbackType_e type, const char* param, void* instance);
+  d_macro_begin_callback(lefrCallbackType_e type, const char* param, void* instance);
 
   /**
    * @brief Static callback function for macro size parsing.

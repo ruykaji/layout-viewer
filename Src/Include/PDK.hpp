@@ -2,20 +2,12 @@
 #define __PDK_HPP__
 
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "LEF.hpp"
 #include "Types.hpp"
-
-#define GET_PDK()                                                                                                                          \
-  if(data == nullptr)                                                                                                                      \
-    {                                                                                                                                      \
-      throw std::runtime_error("PDK Error: Loss of context.");                                                                             \
-    }                                                                                                                                      \
-  PDK* pdk = reinterpret_cast<PDK*>(data)
 
 namespace pdk
 {
@@ -26,35 +18,82 @@ struct Layer
   {
     ROUTING = 0,
     CUT,
-  };
+  } m_type;
 
-  Type     m_type;
-  uint32_t m_width;
-  uint32_t m_pitch;
+  enum class Direction
+  {
+    HORIZONTAL = 0,
+    VERTICAL
+  } m_direction;
+
+  double m_width;
+  double m_pitch_x;
+  double m_pitch_y;
+  double m_offset;
+  double m_spacing;
 };
 
 struct Pin
 {
-  enum class Type
+  struct Port
   {
-    SIGNAL = 0,
+    types::Metal     m_metal;
+    types::Rectangle m_rect;
   };
 
-  Type                          type;
-  std::string                   m_name;
-  std::vector<types::Rectangle> m_geometry;
+  enum class Use
+  {
+    SIGNAL = 0,
+    ANALOG,
+    CLOCK,
+    GROUND,
+    POWER,
+    RESET,
+    SCAN,
+    TIEOFF
+  } m_use;
+
+  enum class Direction
+  {
+    FEEDTHRU = 0,
+    INPUT,
+    OUTPUT,
+    INOUT,
+  } m_direction;
+
+  std::string       m_name;
+  std::vector<Port> m_ports;
+
+  /**
+   * @brief Sets a direction to the pin.
+   *
+   * @param pin The Pin.
+   * @param direction The direction.
+   */
+  static void
+  set_direction(Pin& pin, const std::string_view direction);
+
+  /**
+   * @brief Sets a use to the pin.
+   *
+   * @param pin The pin.
+   * @param use The use.
+   */
+  static void
+  set_use(Pin& pin, const std::string_view use);
 };
 
 struct Macro
 {
-  std::size_t                   m_width;
-  std::size_t                   m_height;
+  double                        m_width;
+  double                        m_height;
   std::vector<Pin>              m_pins;
   std::vector<types::Rectangle> m_geometry;
 };
 
 struct PDK
 {
+  double                                  m_database_number;
   std::unordered_map<types::Metal, Layer> m_layers;
   std::unordered_map<std::string, Macro>  m_macros;
 };
@@ -62,69 +101,38 @@ struct PDK
 class Reader : public lef::LEF
 {
 public:
-  Reader() : lef::LEF() {};
+  Reader() : lef::LEF(), m_last_macro_name() {};
 
+  /**
+   * @brief Compiles all LEF files into single PDK.
+   *
+   * @param dir_path The path to LEF files.
+   * @return PDK
+   */
   PDK
-  compress(const std::filesystem::path& dir_path) const
-  {
-    if(!std::filesystem::exists(dir_path))
-      {
-        throw std::invalid_argument("Can't find directory with pdk by path - \"" + dir_path.string() + "\".");
-      }
-
-    PDK                                pdk;
-
-    std::vector<std::filesystem::path> lef_files;
-    std::vector<std::filesystem::path> tech_lef_files;
-
-    for(auto& itr : std::filesystem::recursive_directory_iterator(dir_path))
-      {
-        if(itr.is_regular_file())
-          {
-            const std::filesystem::path file_path      = itr.path();
-            const std::string_view      file_path_view = file_path.c_str();
-            const std::size_t           extension_pos  = file_path_view.find_first_of('.');
-
-            if(extension_pos != std::string::npos)
-              {
-                const std::string_view extension = file_path_view.substr(extension_pos);
-
-                if(extension == ".lef")
-                  {
-                    lef_files.emplace_back(std::move(file_path));
-                  }
-                else if(extension == ".tlef")
-                  {
-                    tech_lef_files.emplace_back(std::move(file_path));
-                  }
-              }
-          }
-      }
-
-    for(const auto& path : tech_lef_files)
-      {
-        parse(path, reinterpret_cast<void*>(&pdk));
-      }
-
-    for(const auto& path : lef_files)
-      {
-        parse(path, reinterpret_cast<void*>(&pdk));
-      }
-
-    return pdk;
-  }
-
-  PDK
-  load(const std::filesystem::path& file_path) const
-  {
-  }
+  compile(const std::filesystem::path& dir_path) const;
 
 protected:
   virtual void
-  layer_callback(lefiLayer* param, void* data) const override
-  {
-    GET_PDK();
-  }
+  units_callback(lefiUnits* param, void* data) const override;
+
+  virtual void
+  layer_callback(lefiLayer* param, void* data) const override;
+
+  virtual void
+  macro_begin_callback(const char* param, void* data) const override;
+
+  virtual void
+  macro_size_callback(lefiNum param, void* data) const override;
+
+  virtual void
+  pin_callback(lefiPin* param, void* data) const override;
+
+  virtual void
+  obstruction_callback(lefiObstruction* param, void* data) const override;
+
+private:
+  mutable std::string m_last_macro_name;
 };
 
 } // namespace pdk

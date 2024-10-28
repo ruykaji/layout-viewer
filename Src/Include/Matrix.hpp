@@ -81,12 +81,20 @@ public:
   data();
 
   /**
+   * @brief Returns pointer to the underlying data.
+   *
+   * @return const uint8_t*
+   */
+  const uint8_t*
+  data() const;
+
+  /**
    * @brief Returns the shape of the matrix.
    *
    * @return const Shape&
    */
   const Shape&
-  shape();
+  shape() const;
 
   /**
    * @brief Retrieves the value stored at the given (x, y, z) coordinates.
@@ -94,9 +102,9 @@ public:
    * @param x X-coordinate (width).
    * @param y Y-coordinate (height).
    * @param z Z-coordinate (depth).
-   * @return uint8_t
+   * @return const uint8_t&
    */
-  uint8_t
+  const uint8_t&
   get_at(const uint8_t x, const uint8_t y, const uint8_t z) const;
 
   /**
