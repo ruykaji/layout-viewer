@@ -7,6 +7,18 @@
 namespace types
 {
 
+enum class Orientation
+{
+  N = 0, /** 0 */
+  E,     /** 90 */
+  S,     /** 180 */
+  W,     /** 270 */
+  FN,    /** mirrored horizontally */
+  FE,    /** 90 with mirroring */
+  FS,    /** 180 with mirroring */
+  FW     /** 270 with mirroring */
+};
+
 enum class Metal
 {
   NONE = 0,
@@ -31,7 +43,7 @@ enum class Metal
   M9
 };
 
-using Rectangle = std::array<int32_t, 8>;
+using Rectangle = std::array<double, 8>;
 
 } // namespace types
 

@@ -32,6 +32,12 @@ make_clockwise_rectangle(const std::array<double, 4> vertices);
 types::Metal
 get_skywater130_metal(const std::string_view str);
 
+bool
+are_rectangle_intersects(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect);
+
+types::Rectangle
+get_rect_overlap(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect);
+
 } // namespace utils
 
 #endif
