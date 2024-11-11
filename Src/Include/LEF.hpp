@@ -43,10 +43,10 @@ struct OBSMetalGroup
 
 struct Macro
 {
-  double                     m_width;
-  double                     m_height;
-  std::vector<pin::Pin>      m_pins;
-  std::vector<OBSMetalGroup> m_obs;
+  double                                    m_width;
+  double                                    m_height;
+  std::vector<OBSMetalGroup>                m_obs;
+  std::unordered_map<std::string, pin::Pin> m_pins;
 };
 
 struct Data
@@ -140,6 +140,7 @@ protected:
    */
   void
   obstruction_callback(lefiObstruction* param, Data& data);
+
 private:
   /** =============================== PRIVATE STATIC METHODS =================================== */
 
@@ -218,8 +219,8 @@ private:
   d_obstruction_callback(lefrCallbackType_e type, lefiObstruction* param, void* instance);
 
 protected:
-  Data                      m_data;            ///> Data
-  std::string               m_last_macro_name; ///> Last macro name
+  Data        m_data;            ///> Data
+  std::string m_last_macro_name; ///> Last macro name
 };
 
 } // namespace lef

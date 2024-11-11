@@ -1,3 +1,6 @@
+#include <iostream>
+#include <unordered_set>
+
 #include "Include/Process.hpp"
 
 namespace process
@@ -96,83 +99,175 @@ place_at(types::Rectangle& rect, double x, double y, double height)
 } // namespace details
 
 void
-fill_gcells(def::Data& def_data, const lef::Data& lef_data)
+fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
 {
-  /** Add global pins to gcells */
-  for(auto& [name, pin] : def_data.m_pins)
-    {
-      for(auto& port : pin->m_ports)
-        {
-          auto gcells_with_overlap = def::GCell::find_overlaps(port.m_rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
-
-          for(auto& [gcell, _] : gcells_with_overlap)
-            {
-              if(!gcell->m_pins.count(name))
-                {
-                  gcell->m_pins.emplace(name, pin);
-                }
-            }
-        }
-    }
+  using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, types::Rectangle>>;
 
   /** Add global obstacles to gcells */
   for(auto& [rect, metal] : def_data.m_obstacles)
     {
-      auto gcells_with_overlap = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+      GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
-      for(auto& [gcell, overlap] : gcells_with_overlap)
+      for(auto& [gcell, overlap] : gwo)
         {
           gcell->m_obstacles.emplace_back(overlap, metal);
+        }
+    }
+
+  /** TODO: Try to replace with something less memory required data structures, or it will go away itself as i replace guide file with my own global routing */
+  std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<std::pair<types::Rectangle, types::Metal>>>> gcell_to_pins;
+  std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                                                         pin_to_gcells;
+
+  for(auto& [_, pin] : def_data.m_pins)
+    {
+      for(auto& [rect, metal] : pin->m_ports)
+        {
+          GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+
+          for(auto& [gcell, overlap] : gwo)
+            {
+              gcell_to_pins[gcell][pin].emplace_back(std::move(overlap), metal);
+              pin_to_gcells[pin].emplace(gcell);
+            }
         }
     }
 
   /** Add component's pins and obstacles to gcells */
   for(auto& component : def_data.m_components)
     {
-      if(!lef_data.m_macros.count(component.m_name))
+      if(lef_data.m_macros.count(component.m_name) == 0)
         {
-          continue;
+          throw std::runtime_error("Process Error: Couldn't find a macro with the name - \"" + component.m_name + "\".");
         }
 
       lef::Macro   macro  = lef_data.m_macros.at(component.m_name);
       const double width  = macro.m_width * lef_data.m_database_number;
       const double height = macro.m_height * lef_data.m_database_number;
 
-      for(auto& obs : macro.m_obs)
+      // for(auto& obs : macro.m_obs)
+      //   {
+      //     for(auto& rect : obs.m_rect)
+      //       {
+      //         details::scale_by(rect, lef_data.m_database_number);
+      //         details::apply_orientation(rect, component.m_orientation, width, height);
+      //         details::place_at(rect, component.m_x, component.m_y, height);
+
+      //         GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+
+      //         for(auto& [gcell, overlap] : gwo)
+      //           {
+      //             gcell->m_obstacles.emplace_back(rect, obs.m_metal);
+      //           }
+      //       }
+      //   }
+
+      for(auto& [name, pin] : macro.m_pins)
         {
-          for(auto& rect : obs.m_rect)
+          pin::Pin* new_pin = new pin::Pin(pin);
+
+          for(auto& [rect, metal] : new_pin->m_ports)
             {
               details::scale_by(rect, lef_data.m_database_number);
               details::apply_orientation(rect, component.m_orientation, width, height);
               details::place_at(rect, component.m_x, component.m_y, height);
 
-              auto gcells_with_overlap = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
-              for(auto& [gcell, overlap] : gcells_with_overlap)
+              for(auto& [gcell, overlap] : gwo)
                 {
-                  gcell->m_obstacles.emplace_back(rect, obs.m_metal);
+                  gcell_to_pins[gcell][new_pin].emplace_back(std::move(overlap), metal);
+                  pin_to_gcells[new_pin].emplace(gcell);
                 }
             }
+
+          def_data.m_pins[component.m_id + ":" + name] = new_pin;
+        }
+    }
+
+  /** Apply global routing to gcells and pins */
+  for(const auto& guide_net : nets)
+    {
+      if(def_data.m_nets.count(guide_net.m_name) == 0)
+        {
+          std::cout << "Process Warning: Couldn't find a net with the name - \"" << guide_net.m_name << "\"." << std::endl;
+          continue;
         }
 
-      for(auto& pin : macro.m_pins)
+      const def::Net& current_net = def_data.m_nets.at(guide_net.m_name);
+
+      for(const auto& [rect, metal] : guide_net.m_path)
         {
-          const std::string pin_name = component.m_id + ":" + pin.m_name;
-          def_data.m_pins[pin_name]  = new pin::Pin(pin);
+          GCellsWithOverlaps    gwo       = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+          lef::Layer::Direction direction = lef_data.m_layers.at(metal).m_direction;
 
-          for(auto& port : def_data.m_pins.at(pin_name)->m_ports)
+          for(std::size_t i = 0, end = gwo.size(); i < end; ++i)
             {
-              details::scale_by(port.m_rect, lef_data.m_database_number);
-              details::apply_orientation(port.m_rect, component.m_orientation, width, height);
-              details::place_at(port.m_rect, component.m_x, component.m_y, height);
+              def::GCell* gcell = gwo[i].first;
 
-              auto gcells_with_overlap = def::GCell::find_overlaps(port.m_rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
-
-              for(auto& [gcell, _] : gcells_with_overlap)
+              /** Add edge pins and assign them to tracks */
+              if(i > 0)
                 {
-                  if(!gcell->m_pins.count(pin_name))
+                  def::GCell*                     prev_gcell        = gwo[i - 1].first;
+
+                  std::vector<def::GCell::Track>& prev_gcell_tracks = direction == lef::Layer::Direction::HORIZONTAL ? prev_gcell->m_tracks_x : prev_gcell->m_tracks_y;
+                  std::vector<def::GCell::Track>& gcell_tracks      = direction == lef::Layer::Direction::HORIZONTAL ? gcell->m_tracks_x : gcell->m_tracks_y;
+
+                  for(std::size_t j = 0, end = prev_gcell_tracks.size(); j < end; ++j)
                     {
-                      gcell->m_pins.emplace(pin_name, def_data.m_pins.at(pin_name));
+                      if(prev_gcell_tracks[j].m_metal == metal && prev_gcell_tracks[j].m_rn == 0)
+                        {
+                          prev_gcell_tracks[j].m_rn = current_net.m_idx;
+                          break;
+                        }
+                    }
+
+                  for(std::size_t j = 0, end = gcell_tracks.size(); j < end; ++j)
+                    {
+                      if(gcell_tracks[j].m_metal == metal && gcell_tracks[j].m_ln == 0)
+                        {
+                          gcell_tracks[j].m_ln = current_net.m_idx;
+                          break;
+                        }
+                    }
+                }
+
+              if(gcell_to_pins.count(gcell) == 0)
+                {
+                  continue;
+                }
+
+              const auto& gcell_pins = gcell_to_pins.at(gcell);
+
+              for(const auto& name : current_net.m_pins)
+                {
+                  pin::Pin* pin = def_data.m_pins.at(name);
+
+                  if(pin->m_is_placed)
+                    {
+                      continue;
+                    }
+
+                  if(gcell_pins.count(pin))
+                    {
+                      const std::unordered_set<def::GCell*>& pins_gcells = pin_to_gcells.at(pin);
+
+                      for(auto& another_gcell : pins_gcells)
+                        {
+                          if(another_gcell != gcell)
+                            {
+                              /** For this cell current pin's geometry is an obstacle */
+                              // const std::vector<std::pair<types::Rectangle, types::Metal>>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
+                              // another_gcell->m_obstacles.insert(another_gcell->m_obstacles.end(), std::make_move_iterator(obstacles.begin()), std::make_move_iterator(obstacles.end()));
+                            }
+                        }
+
+                      /** Place current pin in a gcell */
+                      pin->m_is_placed                      = true;
+                      pin->m_ports                          = std::move(gcell_pins.at(pin));
+
+                      gcell->m_pins[name]                   = pin;
+                      gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
+                      gcell->m_nets[guide_net.m_name].m_pins.emplace_back(name);
                     }
                 }
             }

@@ -19,43 +19,43 @@ get_metal_color(types::Metal metal)
     {
     case types::Metal::L1:
       {
-        return { QColor(0, 0, 255), QColor(0, 0, 255, 25) };
+        return { QColor(0, 0, 255), QColor(0, 0, 255, 55) };
       }
     case types::Metal::M1:
       {
-        return { QColor(255, 0, 0), QColor(255, 0, 0, 25) };
+        return { QColor(255, 0, 0), QColor(255, 0, 0, 55) };
       }
     case types::Metal::M2:
       {
-        return { QColor(0, 255, 0), QColor(0, 255, 0, 25) };
+        return { QColor(0, 255, 0), QColor(0, 255, 0, 55) };
       }
     case types::Metal::M3:
       {
-        return { QColor(255, 255, 0), QColor(255, 255, 0, 25) };
+        return { QColor(255, 255, 0), QColor(255, 255, 0, 55) };
       }
     case types::Metal::M4:
       {
-        return { QColor(0, 255, 255), QColor(0, 255, 255, 25) };
+        return { QColor(0, 255, 255), QColor(0, 255, 255, 55) };
       }
     case types::Metal::M5:
       {
-        return { QColor(255, 0, 255), QColor(255, 0, 255, 25) };
+        return { QColor(255, 0, 255), QColor(255, 0, 255, 55) };
       }
     case types::Metal::M6:
       {
-        return { QColor(125, 125, 255), QColor(125, 125, 255, 25) };
+        return { QColor(125, 125, 255), QColor(125, 125, 255, 55) };
       }
     case types::Metal::M7:
       {
-        return { QColor(255, 125, 125), QColor(255, 125, 125, 25) };
+        return { QColor(255, 125, 125), QColor(255, 125, 125, 55) };
       }
     case types::Metal::M8:
       {
-        return { QColor(125, 255, 125), QColor(125, 255, 125, 25) };
+        return { QColor(125, 255, 125), QColor(125, 255, 125, 55) };
       }
     case types::Metal::M9:
       {
-        return { QColor(255, 75, 125), QColor(255, 75, 125, 25) };
+        return { QColor(255, 75, 125), QColor(255, 75, 125, 55) };
       }
     default:
       {

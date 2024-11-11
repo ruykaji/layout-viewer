@@ -48,15 +48,30 @@ struct ComponentTemplate
   types::Orientation m_orientation;
 };
 
+struct Net
+{
+  std::size_t              m_idx;
+  std::vector<std::string> m_pins;
+};
+
 struct GCell
 {
-  types::Rectangle                                          m_box;
-  std::vector<std::pair<types::Rectangle, types::Metal>>    m_tracks_x;
-  std::vector<std::pair<types::Rectangle, types::Metal>>    m_tracks_y;
-  std::vector<std::pair<types::Rectangle, types::Metal>>    m_obstacles;
+  struct Track
+  {
+    types::Rectangle m_box;
+    types::Metal     m_metal;
 
-  std::unordered_map<std::string, pin::Pin*>                m_pins;
-  std::unordered_map<std::string, std::vector<std::string>> m_nets;
+    std::size_t      m_ln = 0;
+    std::size_t      m_rn = 0;
+  };
+
+  types::Rectangle                                       m_box;
+  std::vector<Track>                                     m_tracks_x;
+  std::vector<Track>                                     m_tracks_y;
+  std::vector<std::pair<types::Rectangle, types::Metal>> m_obstacles;
+
+  std::unordered_map<std::string, pin::Pin*>             m_pins;
+  std::unordered_map<std::string, Net>                   m_nets;
 
   static std::vector<std::pair<GCell*, types::Rectangle>>
   find_overlaps(const types::Rectangle& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
@@ -64,16 +79,16 @@ struct GCell
 
 struct Data
 {
-  std::array<uint32_t, 4UL>                                 m_box;
-  std::vector<ComponentTemplate>                            m_components;
-  std::vector<std::pair<types::Rectangle, types::Metal>>    m_obstacles;
+  std::array<uint32_t, 4UL>                              m_box;
+  std::vector<ComponentTemplate>                         m_components;
+  std::vector<std::pair<types::Rectangle, types::Metal>> m_obstacles;
 
-  std::unordered_map<std::string, pin::Pin*>                m_pins;
-  std::unordered_map<std::string, std::vector<std::string>> m_nets;
+  std::unordered_map<std::string, pin::Pin*>             m_pins;
+  std::unordered_map<std::string, Net>                   m_nets;
 
-  std::size_t                                               m_max_gcell_x;
-  std::size_t                                               m_max_gcell_y;
-  std::vector<std::vector<GCell*>>                          m_gcells;
+  std::size_t                                            m_max_gcell_x;
+  std::size_t                                            m_max_gcell_y;
+  std::vector<std::vector<GCell*>>                       m_gcells;
 };
 
 class DEF

@@ -162,8 +162,14 @@ LEF::layer_callback(lefiLayer* param, Data& data)
       throw std::runtime_error("Layer TYPE not defined.");
     }
 
-  Layer                  layer;
+  types::Metal metal = utils::get_skywater130_metal(param->name());
 
+  if(metal == types::Metal::NONE)
+    {
+      return;
+    }
+
+  Layer                  layer;
   const std::string_view type = param->type();
 
   if(type == "ROUTING")
@@ -212,6 +218,8 @@ LEF::layer_callback(lefiLayer* param, Data& data)
 
       layer.m_width = param->width();
     }
+
+  data.m_layers[metal] = std::move(layer);
 }
 
 void
@@ -242,8 +250,9 @@ LEF::macro_size_callback(lefiNum param, Data& data)
 void
 LEF::pin_callback(lefiPin* param, Data& data)
 {
-  pin::Pin pin;
-  pin.m_name = param->name();
+  const std::string name = param->name();
+
+  pin::Pin          pin;
 
   if(param->hasDirection())
     {
@@ -280,7 +289,7 @@ LEF::pin_callback(lefiPin* param, Data& data)
         }
     }
 
-  data.m_macros[m_last_macro_name].m_pins.emplace_back(std::move(pin));
+  data.m_macros[m_last_macro_name].m_pins.emplace(std::move(name), std::move(pin));
 }
 
 void

@@ -27,13 +27,16 @@ add_library(DEF DEF.cpp)
 target_include_directories(DEF PUBLIC ${CMAKE_SOURCE_DIR}/External/def/include)
 target_link_libraries(DEF PUBLIC ${CMAKE_SOURCE_DIR}/External/def/lib/libdef.a Utils Pin)
 
+# Guide library
+add_library(Guide Guide.cpp)
+
 # Process library
 add_library(Process Process.cpp)
-target_link_libraries(Process PUBLIC LEF DEF)
+target_link_libraries(Process PUBLIC LEF DEF Guide)
 
 # Qt widgets
 add_library(ViewerWidget  ${CMAKE_SOURCE_DIR}/Src/Include/ViewerWidget.hpp)
 target_link_libraries(ViewerWidget PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets)
 
 add_library(MainWindow MainWindow.cpp ViewerWidget.cpp ${CMAKE_SOURCE_DIR}/Src/Include/MainWindow.hpp)
-target_link_libraries(MainWindow PUBLIC ViewerWidget Ini LEF DEF Process)
+target_link_libraries(MainWindow PUBLIC ViewerWidget Ini Process)

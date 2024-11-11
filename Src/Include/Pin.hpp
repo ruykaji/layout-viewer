@@ -29,18 +29,12 @@ enum class Direction
   INOUT,
 };
 
-struct Port
-{
-  types::Rectangle m_rect;
-  types::Metal     m_metal;
-};
-
 struct Pin
 {
-  Use               m_use;
-  Direction         m_direction;
-  std::string       m_name;
-  std::vector<Port> m_ports;
+  bool                                                   m_is_placed = false;
+  Use                                                    m_use;
+  Direction                                              m_direction;
+  std::vector<std::pair<types::Rectangle, types::Metal>> m_ports;
 };
 
 /**

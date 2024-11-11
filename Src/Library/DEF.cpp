@@ -44,7 +44,7 @@ namespace def
  *                                  GCELL STRUCTURE                                       *
  ******************************************************************************************/
 
-/** =============================== PUBLIC METHODS ==================================== */
+/** =============================== STATIC PUBLIC METHODS ==================================== */
 
 std::vector<std::pair<GCell*, types::Rectangle>>
 GCell::find_overlaps(const types::Rectangle& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
@@ -57,8 +57,8 @@ GCell::find_overlaps(const types::Rectangle& rect, const std::vector<std::vector
 
   std::size_t       left_most_gcell   = std::floor(rect[0] / step_col);
   std::size_t       top_most_gcell    = std::floor(rect[1] / step_row);
-  std::size_t       right_most_gcell  = std::floor(rect[2] / step_col);
-  std::size_t       bottom_most_gcell = std::floor(rect[5] / step_row);
+  std::size_t       right_most_gcell  = std::floor((rect[2] - 1) / step_col);
+  std::size_t       bottom_most_gcell = std::floor((rect[5] - 1) / step_row);
 
   /** Check top left gcell */
   while(true)
@@ -360,13 +360,18 @@ DEF::component_start_callback(int32_t param, Data& data)
           /** Add x tracks to the gcell */
           for(std::size_t i = 0, end_i = m_tracks_x.size(); i < end_i; ++i)
             {
-              double       left_edge  = std::ceil(gcell->m_box[0] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
-              const double right_edge = std::floor(gcell->m_box[2] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
+              double       left_edge  = std::ceil(gcell->m_box[1] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
+              const double right_edge = std::floor(gcell->m_box[5] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
+              const double start      = m_tracks_x[i].m_start;
               const double step       = m_tracks_x[i].m_spacing;
 
               while(left_edge < right_edge)
                 {
-                  gcell->m_tracks_x.emplace_back(utils::make_clockwise_rectangle({ left_edge, gcell->m_box[1], left_edge, gcell->m_box[3] }), m_tracks_x[i].m_metal);
+                  GCell::Track track;
+                  track.m_box   = utils::make_clockwise_rectangle({ gcell->m_box[0], left_edge + start, gcell->m_box[2], left_edge + start });
+                  track.m_metal = m_tracks_x[i].m_metal;
+
+                  gcell->m_tracks_x.emplace_back(std::move(track));
                   left_edge += step;
                 }
             }
@@ -374,13 +379,18 @@ DEF::component_start_callback(int32_t param, Data& data)
           /** Add y tracks to the gcell */
           for(std::size_t i = 0, end_i = m_tracks_y.size(); i < end_i; ++i)
             {
-              double       left_edge  = std::ceil(gcell->m_box[1] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
-              const double right_edge = std::floor(gcell->m_box[3] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
+              double       left_edge  = std::ceil(gcell->m_box[0] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
+              const double right_edge = std::floor(gcell->m_box[2] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
+              const double start      = m_tracks_y[i].m_start;
               const double step       = m_tracks_y[i].m_spacing;
 
               while(left_edge < right_edge)
                 {
-                  gcell->m_tracks_x.emplace_back(utils::make_clockwise_rectangle({ gcell->m_box[0], left_edge, gcell->m_box[2], left_edge }), m_tracks_y[i].m_metal);
+                  GCell::Track track;
+                  track.m_box   = utils::make_clockwise_rectangle({ left_edge + start, gcell->m_box[1], left_edge + start, gcell->m_box[5] });
+                  track.m_metal = m_tracks_y[i].m_metal;
+
+                  gcell->m_tracks_y.emplace_back(std::move(track));
                   left_edge += step;
                 }
             }
@@ -413,58 +423,42 @@ DEF::component_callback(defiComponent* param, Data& data)
 void
 DEF::pin_callback(defiPin* param, Data& data)
 {
+
+  std::vector<std::pair<types::Rectangle, types::Metal>> rects;
+
+  for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
+    {
+      defiPinPort* port = param->pinPort(i);
+      int32_t      x    = port->placementX();
+      int32_t      y    = port->placementY();
+
+      for(std::size_t j = 0, end_j = port->numLayer(); j < end_j; ++j)
+        {
+          int32_t xl;
+          int32_t yl;
+          int32_t xh;
+          int32_t yh;
+
+          port->bounds(j, &xl, &yl, &xh, &yh);
+
+          types::Rectangle rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
+          types::Metal     metal = utils::get_skywater130_metal(port->layer(j));
+
+          rects.emplace_back(std::move(rect), metal);
+        }
+    }
+
   if(std::strcmp(param->use(), "GROUND") != 0 && std::strcmp(param->use(), "POWER") != 0)
     {
-      pin::Pin* pin = new pin::Pin();
-      pin->m_name   = param->pinName();
+      pin::Pin* pin              = new pin::Pin();
+      pin->m_ports               = std::move(rects);
 
-      for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
-        {
-          defiPinPort* port = param->pinPort(i);
-          int32_t      x    = port->placementX();
-          int32_t      y    = port->placementY();
-
-          for(std::size_t j = 0, end_j = port->numLayer(); j < end_j; ++j)
-            {
-              int32_t xl;
-              int32_t yl;
-              int32_t xh;
-              int32_t yh;
-
-              port->bounds(j, &xl, &yl, &xh, &yh);
-
-              types::Rectangle rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
-              types::Metal     metal = utils::get_skywater130_metal(port->layer(j));
-
-              pin->m_ports.emplace_back(std::move(rect), metal);
-            }
-        }
-
-      data.m_pins["PIN:" + pin->m_name] = std::move(pin);
+      const std::string name     = param->pinName();
+      data.m_pins["PIN:" + name] = pin;
     }
   else
     {
-      for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
-        {
-          defiPinPort* port = param->pinPort(i);
-          int32_t      x    = port->placementX();
-          int32_t      y    = port->placementY();
-
-          for(std::size_t j = 0, end_j = port->numLayer(); j < end_j; ++j)
-            {
-              int32_t xl;
-              int32_t yl;
-              int32_t xh;
-              int32_t yh;
-
-              port->bounds(j, &xl, &yl, &xh, &yh);
-
-              types::Rectangle rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
-              types::Metal     metal = utils::get_skywater130_metal(port->layer(j));
-
-              data.m_obstacles.emplace_back(std::move(rect), metal);
-            }
-        }
+      data.m_obstacles.insert(data.m_obstacles.end(), std::make_move_iterator(rects.begin()), std::make_move_iterator(rects.end()));
     }
 }
 
@@ -473,15 +467,21 @@ DEF::net_callback(defiNet* param, Data& data)
 {
   if(std::strcmp(param->use(), "SIGNAL") == 0)
     {
+      const std::string net_name = param->name();
+
+      Net               net;
+      net.m_idx = data.m_nets.size() + 1;
+
       for(std::size_t i = 0, end = param->numConnections(); i < end; ++i)
         {
           const std::string instance_name = param->instance(i);
           const std::string pin_name      = param->pin(i);
-          const std::string net_name      = param->name();
 
-          data.m_nets[net_name].emplace_back(std::move(instance_name + ":" + pin_name));
+          net.m_pins.emplace_back(std::move(instance_name + ":" + pin_name));
         }
-      return;
+
+      data.m_nets[net_name] = std::move(net);
+      // return;
     }
 
   defiPath* path;
@@ -544,8 +544,8 @@ DEF::net_callback(defiNet* param, Data& data)
                             y += width / 2;
                           }
 
-                        types::Rectangle rect                = utils::make_clockwise_rectangle({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x), static_cast<double>(y) });
-                        auto             gcell_with_overlaps = GCell::find_overlaps(rect, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
+                        const types::Rectangle rect                = utils::make_clockwise_rectangle({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x), static_cast<double>(y) });
+                        auto                   gcell_with_overlaps = GCell::find_overlaps(rect, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
 
                         for(auto& [gcell, overlap] : gcell_with_overlaps)
                           {
