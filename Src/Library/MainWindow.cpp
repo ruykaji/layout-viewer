@@ -9,7 +9,7 @@ namespace details
 {
 
 void
-line_to_left_point(types::Rectangle& rect, const double width)
+line_to_left_point(types::Polygon& rect, const double width)
 {
   rect[2] = rect[0];
   rect[3] = rect[1];
@@ -32,7 +32,7 @@ line_to_left_point(types::Rectangle& rect, const double width)
 }
 
 void
-line_to_right_point(types::Rectangle& rect, const double width)
+line_to_right_point(types::Polygon& rect, const double width)
 {
   rect[0] = rect[4];
   rect[1] = rect[5];
@@ -92,6 +92,7 @@ MainWindow::MainWindow(QWidget* parent)
     const std::vector<guide::Net> guide_nets = guide::read(guide_path);
 
     process::fill_gcells(def_data, lef_data, guide_nets);
+    // process::merge_gcells(def_data);
 
     viewer::Data viewer_data;
     viewer_data.m_box = def_data.m_box;
@@ -121,14 +122,14 @@ MainWindow::MainWindow(QWidget* parent)
               {
                 if(track.m_ln != 0)
                   {
-                    types::Rectangle point = track.m_box;
+                    types::Polygon point = track.m_box;
                     details::line_to_left_point(point, lef_data.m_layers.at(track.m_metal).m_width / 2.0 * lef_data.m_database_number);
                     viewer_data.m_rects.emplace_back(point, track.m_metal);
                   }
 
                 if(track.m_rn != 0)
                   {
-                    types::Rectangle point = track.m_box;
+                    types::Polygon point = track.m_box;
                     details::line_to_right_point(point, lef_data.m_layers.at(track.m_metal).m_width / 2.0 * lef_data.m_database_number);
                     viewer_data.m_rects.emplace_back(point, track.m_metal);
                   }
@@ -138,14 +139,14 @@ MainWindow::MainWindow(QWidget* parent)
               {
                 if(track.m_ln != 0)
                   {
-                    types::Rectangle point = track.m_box;
+                    types::Polygon point = track.m_box;
                     details::line_to_left_point(point, lef_data.m_layers.at(track.m_metal).m_width / 2.0 * lef_data.m_database_number);
                     viewer_data.m_rects.emplace_back(point, track.m_metal);
                   }
 
                 if(track.m_rn != 0)
                   {
-                    types::Rectangle point = track.m_box;
+                    types::Polygon point = track.m_box;
                     details::line_to_right_point(point, lef_data.m_layers.at(track.m_metal).m_width / 2.0 * lef_data.m_database_number);
                     viewer_data.m_rects.emplace_back(point, track.m_metal);
                   }

@@ -46,8 +46,8 @@ namespace def
 
 /** =============================== STATIC PUBLIC METHODS ==================================== */
 
-std::vector<std::pair<GCell*, types::Rectangle>>
-GCell::find_overlaps(const types::Rectangle& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
+std::vector<std::pair<GCell*, types::Polygon>>
+GCell::find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
 {
   const std::size_t num_rows          = gcells.size();
   const std::size_t num_cols          = gcells[0].size();
@@ -138,7 +138,7 @@ GCell::find_overlaps(const types::Rectangle& rect, const std::vector<std::vector
         }
     }
 
-  std::vector<std::pair<GCell*, types::Rectangle>> gcells_with_overlap;
+  std::vector<std::pair<GCell*, types::Polygon>> gcells_with_overlap;
 
   for(std::size_t y = top_most_gcell, end_y = std::min(num_rows - 1, bottom_most_gcell); y <= end_y; ++y)
     {
@@ -424,7 +424,7 @@ void
 DEF::pin_callback(defiPin* param, Data& data)
 {
 
-  std::vector<std::pair<types::Rectangle, types::Metal>> rects;
+  std::vector<std::pair<types::Polygon, types::Metal>> rects;
 
   for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
     {
@@ -441,8 +441,8 @@ DEF::pin_callback(defiPin* param, Data& data)
 
           port->bounds(j, &xl, &yl, &xh, &yh);
 
-          types::Rectangle rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
-          types::Metal     metal = utils::get_skywater130_metal(port->layer(j));
+          types::Polygon rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
+          types::Metal   metal = utils::get_skywater130_metal(port->layer(j));
 
           rects.emplace_back(std::move(rect), metal);
         }
@@ -544,8 +544,8 @@ DEF::net_callback(defiNet* param, Data& data)
                             y += width / 2;
                           }
 
-                        const types::Rectangle rect                = utils::make_clockwise_rectangle({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x), static_cast<double>(y) });
-                        auto                   gcell_with_overlaps = GCell::find_overlaps(rect, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
+                        const types::Polygon rect                = utils::make_clockwise_rectangle({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x), static_cast<double>(y) });
+                        auto                 gcell_with_overlaps = GCell::find_overlaps(rect, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
 
                         for(auto& [gcell, overlap] : gcell_with_overlaps)
                           {

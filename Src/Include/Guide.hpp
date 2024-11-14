@@ -12,8 +12,8 @@ namespace guide
 
 struct Net
 {
-  std::string                                            m_name;
-  std::vector<std::pair<types::Rectangle, types::Metal>> m_path;
+  std::string                                          m_name;
+  std::vector<std::pair<types::Polygon, types::Metal>> m_path;
 };
 
 std::vector<Net>

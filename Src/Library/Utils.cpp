@@ -1,11 +1,12 @@
 #include <algorithm>
+#include <cmath>
 
 #include "Include/Utils.hpp"
 
 namespace utils
 {
 
-types::Rectangle
+types::Polygon
 make_clockwise_rectangle(const std::array<double, 4> vertices)
 {
   double min_x = std::min(vertices[0], vertices[2]);
@@ -78,7 +79,7 @@ get_skywater130_metal(const std::string_view str)
 }
 
 bool
-are_rectangle_intersects(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect)
+are_rectangle_intersects(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect)
 {
   if(lhs_rect[0] > rhs_rect[4] || rhs_rect[0] > lhs_rect[4])
     {
@@ -93,8 +94,8 @@ are_rectangle_intersects(const types::Rectangle& lhs_rect, const types::Rectangl
   return true;
 }
 
-types::Rectangle
-get_rect_overlap(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect)
+types::Polygon
+get_rect_overlap(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect)
 {
   double left   = std::max(lhs_rect[0], rhs_rect[0]);
   double top    = std::max(lhs_rect[1], rhs_rect[1]);
@@ -103,6 +104,42 @@ get_rect_overlap(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_r
   double bottom = std::min(lhs_rect[5], rhs_rect[5]);
 
   return { left, top, right, top, right, bottom, left, bottom };
+}
+
+types::Polygon
+merge_polygons(const types::Polygon& lhs, const types::Polygon& rhs)
+{
+  types::Polygon merged = lhs;
+  merged.insert(merged.end(), rhs.begin(), rhs.end());
+
+  double cx = 0;
+  double cy = 0;
+
+  for(size_t i = 0, end = merged.size(); i < end; i += 2)
+    {
+      cx += merged[i];
+      cy += merged[i + 1];
+    }
+
+  cx /= merged.size() / 2.0;
+  cy /= merged.size() / 2.0;
+
+  std::vector<std::pair<double, double>> points;
+
+  for(size_t i = 0, end = merged.size(); i < end; i += 2)
+    {
+      points.emplace_back(merged[i], merged[i + 1]);
+    }
+
+  std::sort(points.begin(), points.end(), [cx, cy](const auto& a, const auto& b) { return std::atan2(a.second - cy, a.first - cx) < std::atan2(b.second - cy, b.first - cx); });
+
+  for(size_t i = 0, end = merged.size(); i < end; i += 2)
+    {
+      merged[i]     = points[i].first;
+      merged[i + 1] = points[i].second;
+    }
+
+  return merged;
 }
 
 } // namespace utils

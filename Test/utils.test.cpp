@@ -4,8 +4,8 @@
 
 TEST(UtilsTest, MakeRectangle)
 {
-  types::Rectangle rect = utils::make_clockwise_rectangle({ 10, 5, -1, -4 });
-  types::Rectangle expected_result{-1, 5, 10, 5, 10, -4, -1, -4};
+  types::Polygon rect = utils::make_clockwise_rectangle({ 10, 5, -1, -4 });
+  types::Polygon expected_result{ -1, 5, 10, 5, 10, -4, -1, -4 };
 
   EXPECT_EQ(rect, expected_result);
 }

@@ -1,7 +1,7 @@
 #ifndef __TYPES_HPP__
 #define __TYPES_HPP__
 
-#include <array>
+#include <vector>
 #include <cstdint>
 
 namespace types
@@ -43,7 +43,7 @@ enum class Metal
   M9
 };
 
-using Rectangle = std::array<double, 8>;
+using Polygon = std::vector<double>;
 
 } // namespace types
 

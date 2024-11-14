@@ -31,10 +31,10 @@ enum class Direction
 
 struct Pin
 {
-  bool                                                   m_is_placed = false;
-  Use                                                    m_use;
-  Direction                                              m_direction;
-  std::vector<std::pair<types::Rectangle, types::Metal>> m_ports;
+  bool                                                 m_is_placed = false;
+  Use                                                  m_use;
+  Direction                                            m_direction;
+  std::vector<std::pair<types::Polygon, types::Metal>> m_ports;
 };
 
 /**

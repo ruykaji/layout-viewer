@@ -1,7 +1,9 @@
 #include <iostream>
+#include <queue>
 #include <unordered_set>
 
 #include "Include/Process.hpp"
+#include "Include/Utils.hpp"
 
 namespace process
 {
@@ -10,7 +12,7 @@ namespace details
 {
 
 void
-apply_orientation(types::Rectangle& rect, types::Orientation orientation, double width, double height)
+apply_orientation(types::Polygon& rect, types::Orientation orientation, double width, double height)
 {
   for(size_t i = 0; i < rect.size(); i += 2)
     {
@@ -78,7 +80,7 @@ apply_orientation(types::Rectangle& rect, types::Orientation orientation, double
 }
 
 void
-scale_by(types::Rectangle& rect, double scale)
+scale_by(types::Polygon& rect, double scale)
 {
   for(auto& point : rect)
     {
@@ -87,7 +89,7 @@ scale_by(types::Rectangle& rect, double scale)
 }
 
 void
-place_at(types::Rectangle& rect, double x, double y, double height)
+place_at(types::Polygon& rect, double x, double y, double height)
 {
   for(std::size_t i = 0, end = rect.size(); i < end; i += 2)
     {
@@ -96,12 +98,28 @@ place_at(types::Rectangle& rect, double x, double y, double height)
     }
 }
 
+std::size_t
+number_of_metal1_tracks(const std::vector<def::GCell::Track>& tracks)
+{
+  std::size_t counter = 0;
+
+  for(const auto& track : tracks)
+    {
+      if(track.m_metal == types::Metal::M1)
+        {
+          ++counter;
+        }
+    }
+
+  return counter;
+}
+
 } // namespace details
 
 void
 fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
 {
-  using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, types::Rectangle>>;
+  using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, types::Polygon>>;
 
   /** Add global obstacles to gcells */
   for(auto& [rect, metal] : def_data.m_obstacles)
@@ -115,8 +133,8 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
     }
 
   /** TODO: Try to replace with something less memory required data structures, or it will go away itself as i replace guide file with my own global routing */
-  std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<std::pair<types::Rectangle, types::Metal>>>> gcell_to_pins;
-  std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                                                         pin_to_gcells;
+  std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<std::pair<types::Polygon, types::Metal>>>> gcell_to_pins;
+  std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                                                       pin_to_gcells;
 
   for(auto& [_, pin] : def_data.m_pins)
     {
@@ -144,22 +162,22 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
       const double width  = macro.m_width * lef_data.m_database_number;
       const double height = macro.m_height * lef_data.m_database_number;
 
-      // for(auto& obs : macro.m_obs)
-      //   {
-      //     for(auto& rect : obs.m_rect)
-      //       {
-      //         details::scale_by(rect, lef_data.m_database_number);
-      //         details::apply_orientation(rect, component.m_orientation, width, height);
-      //         details::place_at(rect, component.m_x, component.m_y, height);
+      for(auto& obs : macro.m_obs)
+        {
+          for(auto& rect : obs.m_rect)
+            {
+              details::scale_by(rect, lef_data.m_database_number);
+              details::apply_orientation(rect, component.m_orientation, width, height);
+              details::place_at(rect, component.m_x, component.m_y, height);
 
-      //         GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
-      //         for(auto& [gcell, overlap] : gwo)
-      //           {
-      //             gcell->m_obstacles.emplace_back(rect, obs.m_metal);
-      //           }
-      //       }
-      //   }
+              for(auto& [gcell, overlap] : gwo)
+                {
+                  gcell->m_obstacles.emplace_back(rect, obs.m_metal);
+                }
+            }
+        }
 
       for(auto& [name, pin] : macro.m_pins)
         {
@@ -217,7 +235,7 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                       if(prev_gcell_tracks[j].m_metal == metal && prev_gcell_tracks[j].m_rn == 0)
                         {
                           prev_gcell_tracks[j].m_rn = current_net.m_idx;
-                          break;
+                          // break;
                         }
                     }
 
@@ -226,7 +244,7 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                       if(gcell_tracks[j].m_metal == metal && gcell_tracks[j].m_ln == 0)
                         {
                           gcell_tracks[j].m_ln = current_net.m_idx;
-                          break;
+                          // break;
                         }
                     }
                 }
@@ -256,8 +274,8 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                           if(another_gcell != gcell)
                             {
                               /** For this cell current pin's geometry is an obstacle */
-                              // const std::vector<std::pair<types::Rectangle, types::Metal>>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
-                              // another_gcell->m_obstacles.insert(another_gcell->m_obstacles.end(), std::make_move_iterator(obstacles.begin()), std::make_move_iterator(obstacles.end()));
+                              const std::vector<std::pair<types::Polygon, types::Metal>>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
+                              another_gcell->m_obstacles.insert(another_gcell->m_obstacles.end(), std::make_move_iterator(obstacles.begin()), std::make_move_iterator(obstacles.end()));
                             }
                         }
 
@@ -272,6 +290,154 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                 }
             }
         }
+    }
+}
+
+void
+merge_gcells(def::Data& def_data)
+{
+  std::vector<std::pair<std::size_t, std::size_t>>              remove;
+
+  std::queue<std::tuple<def::GCell*, std::size_t, std::size_t>> queue;
+  queue.emplace(def_data.m_gcells[0][0], 0, 0);
+
+  std::size_t num_rows  = def_data.m_gcells.size();
+  std::size_t num_cols  = def_data.m_gcells[0].size();
+
+  std::size_t x         = 0;
+  std::size_t y         = 0;
+  def::GCell* gcell     = nullptr;
+
+  bool        is_merged = false; ///> Indicates that last gcell was merged
+
+  while(!queue.empty() && (x < num_cols || y < num_rows))
+    {
+      if(!is_merged)
+        {
+          auto tuple = std::move(queue.front());
+          queue.pop();
+
+          gcell = std::get<0>(tuple);
+          x     = std::get<1>(tuple);
+          y     = std::get<2>(tuple);
+        }
+
+      if(gcell->m_is_merged)
+        {
+          continue;
+        }
+
+      /** Check next gcell by x */
+      def::GCell* next_x_gcell = def_data.m_gcells[y][x + 1];
+
+      if(x + 1 < num_cols && !next_x_gcell->m_is_merged)
+        {
+          if(details::number_of_metal1_tracks(next_x_gcell->m_tracks_y) + details::number_of_metal1_tracks(gcell->m_tracks_y) <= 32)
+            {
+              ++x;
+              is_merged                 = true;
+              next_x_gcell->m_is_merged = true;
+              remove.emplace_back(x, y);
+
+              /** Merge */
+              gcell->m_box = utils::merge_polygons(gcell->m_box, next_x_gcell->m_box);
+              gcell->m_tracks_x.insert(gcell->m_tracks_x.end(), std::make_move_iterator(next_x_gcell->m_tracks_x.begin()), std::make_move_iterator(next_x_gcell->m_tracks_x.end()));
+              gcell->m_obstacles.insert(gcell->m_obstacles.end(), std::make_move_iterator(next_x_gcell->m_obstacles.begin()), std::make_move_iterator(next_x_gcell->m_obstacles.end()));
+
+              for(std::size_t i = 0, end = gcell->m_tracks_y.size(); i < end; ++i)
+                {
+                  gcell->m_tracks_y[i].m_box = utils::make_clockwise_rectangle({
+                      gcell->m_tracks_y[i].m_box[0],
+                      gcell->m_tracks_y[i].m_box[1],
+                      next_x_gcell->m_tracks_y[i].m_box[4],
+                      next_x_gcell->m_tracks_y[i].m_box[5],
+                  });
+
+                  gcell->m_tracks_y[i].m_rn  = next_x_gcell->m_tracks_y[i].m_rn;
+                }
+
+              for(const auto& [key, value] : next_x_gcell->m_nets)
+                {
+                  if(gcell->m_nets.count(key) == 0)
+                    {
+                      gcell->m_nets[key] = std::move(value);
+                    }
+                }
+
+              for(const auto& [key, value] : next_x_gcell->m_pins)
+                {
+                  if(gcell->m_pins.count(key) == 0)
+                    {
+                      gcell->m_pins[key] = std::move(value);
+                    }
+                }
+            }
+          else
+            {
+              is_merged = false;
+              queue.emplace(next_x_gcell, x + 1, y);
+            }
+        }
+
+      /** Check next gcell by y */
+      def::GCell* next_y_gcell = def_data.m_gcells[y + 1][x];
+
+      if(y + 1 < num_rows && !next_y_gcell->m_is_merged)
+        {
+          if(details::number_of_metal1_tracks(next_y_gcell->m_tracks_x) + details::number_of_metal1_tracks(gcell->m_tracks_x) <= 32)
+            {
+              ++y;
+              is_merged                 = true;
+              next_y_gcell->m_is_merged = true;
+              remove.emplace_back(x, y);
+
+              /** Merge */
+              gcell->m_box = utils::merge_polygons(gcell->m_box, next_y_gcell->m_box);
+              gcell->m_tracks_y.insert(gcell->m_tracks_y.end(), std::make_move_iterator(next_y_gcell->m_tracks_y.begin()), std::make_move_iterator(next_y_gcell->m_tracks_y.end()));
+              gcell->m_obstacles.insert(gcell->m_obstacles.end(), std::make_move_iterator(next_y_gcell->m_obstacles.begin()), std::make_move_iterator(next_y_gcell->m_obstacles.end()));
+
+              for(std::size_t i = 0, end = gcell->m_tracks_x.size(); i < end; ++i)
+                {
+                  gcell->m_tracks_x[i].m_box = utils::make_clockwise_rectangle({
+                      gcell->m_tracks_x[i].m_box[0],
+                      gcell->m_tracks_x[i].m_box[1],
+                      next_y_gcell->m_tracks_x[i].m_box[4],
+                      next_y_gcell->m_tracks_x[i].m_box[5],
+                  });
+
+                  gcell->m_tracks_x[i].m_rn  = next_y_gcell->m_tracks_x[i].m_rn;
+                }
+
+              for(const auto& [key, value] : next_y_gcell->m_nets)
+                {
+                  if(gcell->m_nets.count(key) == 0)
+                    {
+                      gcell->m_nets[key] = std::move(value);
+                    }
+                }
+
+              for(const auto& [key, value] : next_y_gcell->m_pins)
+                {
+                  if(gcell->m_pins.count(key) == 0)
+                    {
+                      gcell->m_pins[key] = std::move(value);
+                    }
+                }
+            }
+          else
+            {
+              is_merged = false;
+              queue.emplace(next_y_gcell, x, y + 1);
+            }
+        }
+
+      gcell->m_is_merged = true;
+    }
+
+  for(const auto& [x, y] : remove)
+    {
+      delete def_data.m_gcells[y][x];
+      def_data.m_gcells[y].erase(def_data.m_gcells[y].begin() + x);
     }
 }
 

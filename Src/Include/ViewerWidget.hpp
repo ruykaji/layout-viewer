@@ -13,8 +13,8 @@ namespace gui::viewer
 
 struct Data
 {
-  std::array<uint32_t, 4UL>                              m_box;
-  std::vector<std::pair<types::Rectangle, types::Metal>> m_rects;
+  std::array<uint32_t, 4UL>                            m_box;
+  std::vector<std::pair<types::Polygon, types::Metal>> m_rects;
 };
 
 class Widget : public QWidget

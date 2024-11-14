@@ -58,37 +58,38 @@ struct GCell
 {
   struct Track
   {
-    types::Rectangle m_box;
-    types::Metal     m_metal;
+    types::Polygon m_box;
+    types::Metal   m_metal;
 
-    std::size_t      m_ln = 0;
-    std::size_t      m_rn = 0;
+    std::size_t    m_ln = 0;
+    std::size_t    m_rn = 0;
   };
 
-  types::Rectangle                                       m_box;
-  std::vector<Track>                                     m_tracks_x;
-  std::vector<Track>                                     m_tracks_y;
-  std::vector<std::pair<types::Rectangle, types::Metal>> m_obstacles;
+  bool                                                 m_is_merged = false;
+  types::Polygon                                       m_box;
+  std::vector<Track>                                   m_tracks_x;
+  std::vector<Track>                                   m_tracks_y;
+  std::vector<std::pair<types::Polygon, types::Metal>> m_obstacles;
 
-  std::unordered_map<std::string, pin::Pin*>             m_pins;
-  std::unordered_map<std::string, Net>                   m_nets;
+  std::unordered_map<std::string, pin::Pin*>           m_pins;
+  std::unordered_map<std::string, Net>                 m_nets;
 
-  static std::vector<std::pair<GCell*, types::Rectangle>>
-  find_overlaps(const types::Rectangle& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
+  static std::vector<std::pair<GCell*, types::Polygon>>
+  find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
 };
 
 struct Data
 {
-  std::array<uint32_t, 4UL>                              m_box;
-  std::vector<ComponentTemplate>                         m_components;
-  std::vector<std::pair<types::Rectangle, types::Metal>> m_obstacles;
+  std::array<uint32_t, 4UL>                            m_box;
+  std::vector<ComponentTemplate>                       m_components;
+  std::vector<std::pair<types::Polygon, types::Metal>> m_obstacles;
 
-  std::unordered_map<std::string, pin::Pin*>             m_pins;
-  std::unordered_map<std::string, Net>                   m_nets;
+  std::unordered_map<std::string, pin::Pin*>           m_pins;
+  std::unordered_map<std::string, Net>                 m_nets;
 
-  std::size_t                                            m_max_gcell_x;
-  std::size_t                                            m_max_gcell_y;
-  std::vector<std::vector<GCell*>>                       m_gcells;
+  std::size_t                                          m_max_gcell_x;
+  std::size_t                                          m_max_gcell_y;
+  std::vector<std::vector<GCell*>>                     m_gcells;
 };
 
 class DEF

@@ -18,9 +18,9 @@ namespace utils
  * the top-left corner.
  *
  * @param vertices An array containing four integers: {x0, y0, x1, y1}.
- * @return A `types::Rectangle` object representing the rectangle.
+ * @return A `types::Polygon` object representing the rectangle.
  */
-types::Rectangle
+types::Polygon
 make_clockwise_rectangle(const std::array<double, 4> vertices);
 
 /**
@@ -33,10 +33,13 @@ types::Metal
 get_skywater130_metal(const std::string_view str);
 
 bool
-are_rectangle_intersects(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect);
+are_rectangle_intersects(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect);
 
-types::Rectangle
-get_rect_overlap(const types::Rectangle& lhs_rect, const types::Rectangle& rhs_rect);
+types::Polygon
+get_rect_overlap(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect);
+
+types::Polygon
+merge_polygons(const types::Polygon& lhs, const types::Polygon& rhs);
 
 } // namespace utils
 

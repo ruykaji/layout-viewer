@@ -37,8 +37,8 @@ struct Layer
 
 struct OBSMetalGroup
 {
-  std::vector<types::Rectangle> m_rect;
-  types::Metal                  m_metal;
+  std::vector<types::Polygon> m_rect;
+  types::Metal                m_metal;
 };
 
 struct Macro

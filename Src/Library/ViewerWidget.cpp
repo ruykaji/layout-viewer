@@ -104,8 +104,8 @@ Widget::paintEvent(QPaintEvent* event)
 
   for(const auto& pair : m_data.m_rects)
     {
-      const types::Rectangle& rect  = pair.first;
-      const types::Metal      metal = pair.second;
+      const types::Polygon& rect    = pair.first;
+      const types::Metal    metal   = pair.second;
 
       auto [pen_color, brush_color] = details::get_metal_color(metal);
       painter.setPen(QPen(pen_color, 1.0 / m_scale_factor));

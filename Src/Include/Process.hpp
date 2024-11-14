@@ -11,6 +11,9 @@ namespace process
 void
 fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets);
 
+void
+merge_gcells(def::Data& def_data);
+
 } // namespace process
 
 #endif
