@@ -1,8 +1,8 @@
 #ifndef __TYPES_HPP__
 #define __TYPES_HPP__
 
-#include <vector>
 #include <cstdint>
+#include <vector>
 
 namespace types
 {
@@ -41,6 +41,15 @@ enum class Metal
   M8,
   M8M9_V,
   M9
+};
+
+enum class Cell : uint8_t
+{
+  PATH             = 1,
+  TRACE            = 1,
+  INTERSECTION     = 2,
+  INTERSECTION_VIA = 3,
+  TERMINAL         = 4
 };
 
 using Polygon = std::vector<double>;

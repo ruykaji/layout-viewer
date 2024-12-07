@@ -60,19 +60,17 @@ struct GCell
   {
     types::Polygon m_box;
     types::Metal   m_metal;
-
-    std::size_t    m_ln = 0;
-    std::size_t    m_rn = 0;
   };
 
-  bool                                                 m_is_merged = false;
-  types::Polygon                                       m_box;
-  std::vector<Track>                                   m_tracks_x;
-  std::vector<Track>                                   m_tracks_y;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_obstacles;
+  types::Polygon                                                        m_box;
+  std::vector<Track>                                                    m_tracks_x;
+  std::vector<Track>                                                    m_tracks_y;
+  std::vector<std::pair<types::Polygon, types::Metal>>                  m_obstacles;
 
-  std::unordered_map<std::string, pin::Pin*>           m_pins;
-  std::unordered_map<std::string, Net>                 m_nets;
+  std::unordered_multimap<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
+
+  std::unordered_map<std::string, pin::Pin*>                            m_pins;
+  std::unordered_map<std::string, Net>                                  m_nets;
 
   static std::vector<std::pair<GCell*, types::Polygon>>
   find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
@@ -80,13 +78,22 @@ struct GCell
 
 struct Data
 {
+  /** General */
   std::array<uint32_t, 4UL>                            m_box;
   std::vector<ComponentTemplate>                       m_components;
   std::vector<std::pair<types::Polygon, types::Metal>> m_obstacles;
 
+  /** Pins related */
   std::unordered_map<std::string, pin::Pin*>           m_pins;
+
+  /** Nets related */
+  /** TODO: remove from all nets maps std::string as key and replace it with net's index */
+  std::unordered_map<std::string, std::vector<GCell*>> m_nets_gcells;
   std::unordered_map<std::string, Net>                 m_nets;
 
+  /** Gcells related */
+  std::vector<TrackTemplate>                           m_tracks_x;
+  std::vector<TrackTemplate>                           m_tracks_y;
   std::size_t                                          m_max_gcell_x;
   std::size_t                                          m_max_gcell_y;
   std::vector<std::vector<GCell*>>                     m_gcells;
@@ -188,8 +195,6 @@ private:
 private:
   /** Temporary containers for data that used only while parsing and never after */
   std::vector<RowTemplate>       m_rows;
-  std::vector<TrackTemplate>     m_tracks_x;
-  std::vector<TrackTemplate>     m_tracks_y;
   std::vector<GCellGridTemplate> m_gcell_grid_x;
   std::vector<GCellGridTemplate> m_gcell_grid_y;
 

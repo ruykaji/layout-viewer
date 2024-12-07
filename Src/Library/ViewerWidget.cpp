@@ -21,6 +21,10 @@ get_metal_color(types::Metal metal)
       {
         return { QColor(0, 0, 255), QColor(0, 0, 255, 55) };
       }
+    case types::Metal::L1M1_V:
+      {
+        return { QColor(255, 0, 0, 50), QColor(255, 0, 0, 25) };
+      }
     case types::Metal::M1:
       {
         return { QColor(255, 0, 0), QColor(255, 0, 0, 55) };
@@ -81,13 +85,20 @@ Widget::Widget(QWidget* parent)
 void
 Widget::set_viewer_data(const Data& data)
 {
-  m_data = data;
-  update();
+  m_data                    = data;
+  QResizeEvent* resizeEvent = new QResizeEvent(this->size(), QSize(0, 0));
+
+  QCoreApplication::postEvent(this, resizeEvent);
 }
 
 void
 Widget::paintEvent(QPaintEvent* event)
 {
+  if(m_data.m_box[2] == 0 || m_data.m_box[3] == 0)
+    {
+      return;
+    }
+
   QTransform transform;
   transform.translate(m_transition_offset.x(), m_transition_offset.y());
   transform.scale(m_scale_factor, m_scale_factor);
@@ -132,6 +143,11 @@ Widget::paintEvent(QPaintEvent* event)
 void
 Widget::resizeEvent(QResizeEvent* event)
 {
+  if(m_data.m_box[2] == 0 || m_data.m_box[3] == 0)
+    {
+      return;
+    }
+
   QSize new_size = event->size();
   QSize old_size = event->oldSize();
 

@@ -18,7 +18,7 @@ main(int argc, char const* argv[])
 
   const std::vector<guide::Net> guide_nets = guide::read(guide_path);
 
-  process::fill_gcells(def_data, lef_data, guide_nets);
+  process::apply_global_routing(def_data, lef_data, guide_nets);
 
   return 0;
 }

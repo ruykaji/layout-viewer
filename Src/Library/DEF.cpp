@@ -273,6 +273,14 @@ DEF::row_callback(defiRow* param, Data& data)
 void
 DEF::track_callback(defiTrack* param, Data& data)
 {
+  types::Metal metal = utils::get_skywater130_metal(param->layer(0));
+
+  if(metal == types::Metal::L1)
+    {
+      /** L1 is not used for routing */
+      return;
+    }
+
   TrackTemplate track;
   track.m_start   = param->x();
   track.m_num     = param->xNum();
@@ -282,11 +290,11 @@ DEF::track_callback(defiTrack* param, Data& data)
 
   if(std::strcmp(param->macro(), "X") == 0)
     {
-      m_tracks_x.emplace_back(std::move(track));
+      data.m_tracks_x.emplace_back(std::move(track));
     }
   else
     {
-      m_tracks_y.emplace_back(std::move(track));
+      data.m_tracks_y.emplace_back(std::move(track));
     }
 }
 
@@ -358,18 +366,19 @@ DEF::component_start_callback(int32_t param, Data& data)
           gcell->m_box = utils::make_clockwise_rectangle({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
 
           /** Add x tracks to the gcell */
-          for(std::size_t i = 0, end_i = m_tracks_x.size(); i < end_i; ++i)
+          for(std::size_t i = 0, end_i = data.m_tracks_x.size(); i < end_i; ++i)
             {
-              double       left_edge  = std::ceil(gcell->m_box[1] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
-              const double right_edge = std::floor(gcell->m_box[5] / m_tracks_x[i].m_spacing) * m_tracks_x[i].m_spacing;
-              const double start      = m_tracks_x[i].m_start;
-              const double step       = m_tracks_x[i].m_spacing;
+              const double start      = data.m_tracks_x[i].m_start;
+              const double step       = data.m_tracks_x[i].m_spacing;
 
-              while(left_edge < right_edge)
+              double       left_edge  = start + std::ceil((gcell->m_box[1] - start) / step) * step;
+              const double right_edge = start + std::floor((gcell->m_box[5] - start) / step) * step;
+
+              while(left_edge <= right_edge)
                 {
                   GCell::Track track;
-                  track.m_box   = utils::make_clockwise_rectangle({ gcell->m_box[0], left_edge + start, gcell->m_box[2], left_edge + start });
-                  track.m_metal = m_tracks_x[i].m_metal;
+                  track.m_box   = utils::make_clockwise_rectangle({ gcell->m_box[0], left_edge, gcell->m_box[2], left_edge });
+                  track.m_metal = data.m_tracks_x[i].m_metal;
 
                   gcell->m_tracks_x.emplace_back(std::move(track));
                   left_edge += step;
@@ -377,18 +386,19 @@ DEF::component_start_callback(int32_t param, Data& data)
             }
 
           /** Add y tracks to the gcell */
-          for(std::size_t i = 0, end_i = m_tracks_y.size(); i < end_i; ++i)
+          for(std::size_t i = 0, end_i = data.m_tracks_y.size(); i < end_i; ++i)
             {
-              double       left_edge  = std::ceil(gcell->m_box[0] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
-              const double right_edge = std::floor(gcell->m_box[2] / m_tracks_y[i].m_spacing) * m_tracks_y[i].m_spacing;
-              const double start      = m_tracks_y[i].m_start;
-              const double step       = m_tracks_y[i].m_spacing;
+              const double start      = data.m_tracks_y[i].m_start;
+              const double step       = data.m_tracks_y[i].m_spacing;
 
-              while(left_edge < right_edge)
+              double       left_edge  = start + std::ceil((gcell->m_box[0] - start) / step) * step;
+              const double right_edge = start + std::floor((gcell->m_box[2] - start) / step) * step;
+
+              while(left_edge <= right_edge)
                 {
                   GCell::Track track;
-                  track.m_box   = utils::make_clockwise_rectangle({ left_edge + start, gcell->m_box[1], left_edge + start, gcell->m_box[5] });
-                  track.m_metal = m_tracks_y[i].m_metal;
+                  track.m_box   = utils::make_clockwise_rectangle({ left_edge, gcell->m_box[1], left_edge, gcell->m_box[5] });
+                  track.m_metal = data.m_tracks_y[i].m_metal;
 
                   gcell->m_tracks_y.emplace_back(std::move(track));
                   left_edge += step;
@@ -423,7 +433,6 @@ DEF::component_callback(defiComponent* param, Data& data)
 void
 DEF::pin_callback(defiPin* param, Data& data)
 {
-
   std::vector<std::pair<types::Polygon, types::Metal>> rects;
 
   for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
@@ -465,7 +474,7 @@ DEF::pin_callback(defiPin* param, Data& data)
 void
 DEF::net_callback(defiNet* param, Data& data)
 {
-  if(std::strcmp(param->use(), "SIGNAL") == 0)
+  if(std::strcmp(param->use(), "SIGNAL") == 0 || std::strcmp(param->use(), "CLOCK") == 0)
     {
       const std::string net_name = param->name();
 
@@ -481,7 +490,7 @@ DEF::net_callback(defiNet* param, Data& data)
         }
 
       data.m_nets[net_name] = std::move(net);
-      // return;
+      return;
     }
 
   defiPath* path;

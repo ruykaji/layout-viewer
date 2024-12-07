@@ -4,7 +4,8 @@ namespace matrix
 {
 /** =============================== CONSTRUCTORS ================================= */
 
-Matrix::Matrix(const Shape& shape) : m_shape(shape), m_data(nullptr)
+Matrix::Matrix(const Shape& shape)
+    : m_shape(shape), m_data(nullptr)
 {
   const std::size_t length = allocate();
 
@@ -19,7 +20,8 @@ Matrix::~Matrix()
   delete[] m_data;
 }
 
-Matrix::Matrix(const Matrix& matrix) : m_shape(matrix.m_shape), m_data(nullptr)
+Matrix::Matrix(const Matrix& matrix)
+    : m_shape(matrix.m_shape), m_data(nullptr)
 {
   const std::size_t length = allocate();
 
@@ -29,7 +31,8 @@ Matrix::Matrix(const Matrix& matrix) : m_shape(matrix.m_shape), m_data(nullptr)
     }
 }
 
-Matrix::Matrix(Matrix&& matrix) : m_shape(matrix.m_shape), m_data(matrix.m_data)
+Matrix::Matrix(Matrix&& matrix)
+    : m_shape(matrix.m_shape), m_data(matrix.m_data)
 {
   matrix.m_data  = nullptr;
   matrix.m_shape = Shape{ 0, 0, 0 };
@@ -63,6 +66,45 @@ Matrix::operator=(Matrix&& matrix)
   matrix.m_shape = Shape{ 0, 0, 0 };
 
   return *this;
+}
+
+Matrix&
+Matrix::operator+=(const Matrix& matrix)
+{
+  if(m_shape != matrix.m_shape)
+    {
+      throw std::runtime_error("Matrix Error: Invalid shape of the left hand value.");
+    }
+
+  const std::size_t length = m_shape.m_z * m_shape.m_y * m_shape.m_x;
+
+  for(std::size_t i = 0; i < length; ++i)
+    {
+      m_data[i] += matrix.m_data[i];
+    }
+
+  return *this;
+}
+
+/** =============================== PUBLIC STATIC METHODS =============================== */
+
+void
+Matrix::mask(Matrix& matrix, const Matrix& mask)
+{
+  if(matrix.m_shape != mask.m_shape)
+    {
+      throw std::runtime_error("Matrix Error: Invalid shape of the mask.");
+    }
+
+  const std::size_t length = matrix.m_shape.m_z * matrix.m_shape.m_y * matrix.m_shape.m_x;
+
+  for(std::size_t i = 0; i < length; ++i)
+    {
+      if(mask.m_data[i] != 0)
+        {
+          matrix.m_data[i] = 0;
+        }
+    }
 }
 
 /** =============================== PUBLIC METHODS =============================== */

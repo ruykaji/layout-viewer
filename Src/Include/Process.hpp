@@ -4,15 +4,22 @@
 #include "Include/DEF.hpp"
 #include "Include/Guide.hpp"
 #include "Include/LEF.hpp"
+#include "Include/Matrix.hpp"
 
 namespace process
 {
 
-void
-fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets);
+struct Task
+{
+  matrix::Matrix                                                                      m_matrix;
+  std::unordered_map<std::string, std::vector<std::tuple<uint8_t, uint8_t, uint8_t>>> m_nets;
+};
 
 void
-merge_gcells(def::Data& def_data);
+apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets);
+
+std::vector<std::vector<Task>>
+make_tasks(def::Data& def_data);
 
 } // namespace process
 

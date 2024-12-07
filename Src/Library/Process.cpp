@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <queue>
 #include <unordered_set>
@@ -11,6 +13,7 @@ namespace process
 namespace details
 {
 
+/** Support function for placement in gcell */
 void
 apply_orientation(types::Polygon& rect, types::Orientation orientation, double width, double height)
 {
@@ -98,32 +101,113 @@ place_at(types::Polygon& rect, double x, double y, double height)
     }
 }
 
-std::size_t
-number_of_metal1_tracks(const std::vector<def::GCell::Track>& tracks)
+/** Support functions for track assignment */
+std::pair<double, double>
+calculate_centroid(const std::vector<double>& polygon)
 {
-  std::size_t counter = 0;
+  const std::size_t n    = polygon.size() / 2;
 
-  for(const auto& track : tracks)
+  double            area = 0.0;
+  double            cx   = 0.0;
+  double            cy   = 0.0;
+
+  for(std::size_t i = 0; i < n; i += 2)
     {
-      if(track.m_metal == types::Metal::M1)
+      const double x1 = polygon[2 * i];
+      const double y1 = polygon[2 * i + 1];
+      const double x2 = polygon[2 * ((i + 1) % n)];
+      const double y2 = polygon[2 * ((i + 1) % n) + 1];
+
+      area += (x1 * y2 - x2 * y1);
+
+      const double factor = (x1 * y2 - x2 * y1);
+
+      cx += (x1 + x2) * factor;
+      cy += (y1 + y2) * factor;
+    }
+
+  area *= 3.0;
+
+  return { cx / area, cy / area };
+}
+
+bool
+is_point_inside_polygon(double px, double py, const std::vector<double>& polygon)
+{
+  std::size_t n      = polygon.size() / 2;
+  bool        inside = false;
+
+  for(int i = 0, j = n - 1; i < n; j = i++)
+    {
+      double xi = polygon[2 * i], yi = polygon[2 * i + 1];
+      double xj = polygon[2 * j], yj = polygon[2 * j + 1];
+
+      bool   intersect = ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+
+      if(intersect)
         {
-          ++counter;
+          inside = !inside;
         }
     }
 
-  return counter;
+  return inside;
+}
+
+std::pair<double, double>
+find_closest_point_in_polygon(const std::pair<double, double>& centroid, const std::vector<double>& polygon)
+{
+  const std::size_t         n = polygon.size() / 2; // Number of vertices
+
+  std::pair<double, double> closest_point;
+  double                    min_dist_sq = std::numeric_limits<double>::max();
+
+  for(std::size_t i = 0; i < n; ++i)
+    {
+      const std::pair<double, double> a  = { polygon[2 * i], polygon[2 * i + 1] };
+      const std::pair<double, double> b  = { polygon[2 * ((i + 1) % n)], polygon[2 * ((i + 1) % n) + 1] };
+
+      const double                    ax = b.first - a.first;
+      const double                    ay = b.second - a.second;
+      double                          t  = ((centroid.first - a.first) * ax + (centroid.second - a.second) * ay) / (ax * ax + ay * ay);
+
+      if(t < 0.0)
+        {
+          t = 0.0;
+        }
+
+      if(t > 1.0)
+        {
+          t = 1.0;
+        }
+
+      const std::pair<double, double> projection = { a.first + t * ax, a.second + t * ay };
+      const double                    dist_sq    = (centroid.first - projection.first) * (centroid.first - projection.first) + (centroid.second - projection.second) * (centroid.second - projection.second);
+
+      if(dist_sq < min_dist_sq)
+        {
+          min_dist_sq   = dist_sq;
+          closest_point = projection;
+        }
+    }
+
+  return closest_point;
 }
 
 } // namespace details
 
 void
-fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
+apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
 {
   using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, types::Polygon>>;
 
   /** Add global obstacles to gcells */
   for(auto& [rect, metal] : def_data.m_obstacles)
     {
+      if(metal == types::Metal::L1 || metal == types::Metal::NONE)
+        {
+          continue;
+        }
+
       GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
       for(auto& [gcell, overlap] : gwo)
@@ -140,6 +224,11 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
     {
       for(auto& [rect, metal] : pin->m_ports)
         {
+          if(metal == types::Metal::NONE)
+            {
+              continue;
+            }
+
           GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
           for(auto& [gcell, overlap] : gwo)
@@ -164,6 +253,11 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
 
       for(auto& obs : macro.m_obs)
         {
+          if(obs.m_metal == types::Metal::L1 || obs.m_metal == types::Metal::NONE)
+            {
+              continue;
+            }
+
           for(auto& rect : obs.m_rect)
             {
               details::scale_by(rect, lef_data.m_database_number);
@@ -174,7 +268,7 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
 
               for(auto& [gcell, overlap] : gwo)
                 {
-                  gcell->m_obstacles.emplace_back(rect, obs.m_metal);
+                  gcell->m_obstacles.emplace_back(overlap, obs.m_metal);
                 }
             }
         }
@@ -185,6 +279,11 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
 
           for(auto& [rect, metal] : new_pin->m_ports)
             {
+              if(metal == types::Metal::NONE)
+                {
+                  continue;
+                }
+
               details::scale_by(rect, lef_data.m_database_number);
               details::apply_orientation(rect, component.m_orientation, width, height);
               details::place_at(rect, component.m_x, component.m_y, height);
@@ -202,7 +301,7 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
         }
     }
 
-  /** Apply global routing to gcells and pins */
+  /** Apply global routing to gcells and pins from a guide file */
   for(const auto& guide_net : nets)
     {
       if(def_data.m_nets.count(guide_net.m_name) == 0)
@@ -225,28 +324,13 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
               /** Add edge pins and assign them to tracks */
               if(i > 0)
                 {
-                  def::GCell*                     prev_gcell        = gwo[i - 1].first;
+                  gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
+                  gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 1));
 
-                  std::vector<def::GCell::Track>& prev_gcell_tracks = direction == lef::Layer::Direction::HORIZONTAL ? prev_gcell->m_tracks_x : prev_gcell->m_tracks_y;
-                  std::vector<def::GCell::Track>& gcell_tracks      = direction == lef::Layer::Direction::HORIZONTAL ? gcell->m_tracks_x : gcell->m_tracks_y;
+                  def::GCell* prev_gcell                     = gwo[i - 1].first;
 
-                  for(std::size_t j = 0, end = prev_gcell_tracks.size(); j < end; ++j)
-                    {
-                      if(prev_gcell_tracks[j].m_metal == metal && prev_gcell_tracks[j].m_rn == 0)
-                        {
-                          prev_gcell_tracks[j].m_rn = current_net.m_idx;
-                          // break;
-                        }
-                    }
-
-                  for(std::size_t j = 0, end = gcell_tracks.size(); j < end; ++j)
-                    {
-                      if(gcell_tracks[j].m_metal == metal && gcell_tracks[j].m_ln == 0)
-                        {
-                          gcell_tracks[j].m_ln = current_net.m_idx;
-                          // break;
-                        }
-                    }
+                  prev_gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
+                  prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, -1));
                 }
 
               if(gcell_to_pins.count(gcell) == 0)
@@ -275,7 +359,16 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                             {
                               /** For this cell current pin's geometry is an obstacle */
                               const std::vector<std::pair<types::Polygon, types::Metal>>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
-                              another_gcell->m_obstacles.insert(another_gcell->m_obstacles.end(), std::make_move_iterator(obstacles.begin()), std::make_move_iterator(obstacles.end()));
+
+                              for(const auto& [poly, metal] : obstacles)
+                                {
+                                  if(metal == types::Metal::L1 || metal == types::Metal::NONE)
+                                    {
+                                      continue;
+                                    }
+
+                                  another_gcell->m_obstacles.emplace_back(poly, metal);
+                                }
                             }
                         }
 
@@ -286,159 +379,187 @@ fill_gcells(def::Data& def_data, const lef::Data& lef_data, const std::vector<gu
                       gcell->m_pins[name]                   = pin;
                       gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
                       gcell->m_nets[guide_net.m_name].m_pins.emplace_back(name);
+
+                      def_data.m_nets_gcells[guide_net.m_name].emplace_back(gcell);
                     }
                 }
             }
         }
     }
+
+  /** Remove all not used gcells and collect statistics */
+  std::size_t max_nets     = 0;
+  std::size_t max_pins     = 0;
+
+  std::size_t min_nets     = UINT64_MAX;
+  std::size_t min_pins     = UINT64_MAX;
+
+  std::size_t total_gcells = 0;
+  std::size_t total_nets   = 0;
+  std::size_t total_pins   = 0;
+
+  for(std::size_t y = 0, end_y = def_data.m_gcells.size(); y < end_y; ++y)
+    {
+      auto itr = std::remove_if(def_data.m_gcells[y].begin(), def_data.m_gcells[y].end(), [&max_nets, &min_nets, &max_pins, &min_pins, &total_gcells, &total_nets, &total_pins](const def::GCell* ptr) {
+        if(ptr->m_pins.size() == 0 && ptr->m_edge_pins.empty())
+          {
+            delete ptr;
+            return true;
+          }
+
+        /** Collect statistics */
+        max_nets = std::max(max_nets, ptr->m_nets.size());
+        min_nets = std::min(min_nets, ptr->m_nets.size());
+        max_pins = std::max(max_pins, ptr->m_pins.size() + ptr->m_edge_pins.size());
+        min_pins = std::min(min_pins, ptr->m_pins.size() + ptr->m_edge_pins.size());
+
+        total_nets += ptr->m_nets.size();
+        total_pins += ptr->m_pins.size() + ptr->m_edge_pins.size();
+        ++total_gcells;
+
+        if(ptr->m_pins.size() + ptr->m_edge_pins.size() == 1)
+          {
+            std::cout << "Warning Routing: GCell contains only one pin!" << std::endl;
+          }
+
+        return false;
+      });
+      def_data.m_gcells[y].erase(itr, def_data.m_gcells[y].end());
+    }
+
+  auto itr = std::remove_if(def_data.m_gcells.begin(), def_data.m_gcells.end(), [](const auto vec) { return vec.size() == 0; });
+  def_data.m_gcells.erase(itr, def_data.m_gcells.end());
+
+  std::cout << "Gcell statistics:" << '\n';
+  std::cout << "  - Nets [min, abg, max] : [" << min_nets << ',' << total_nets / total_gcells << ',' << max_nets << "]\n";
+  std::cout << "  - Pins [min, avg, max]: [" << min_pins << ',' << total_pins / total_gcells << ',' << max_pins << "]\n";
+  std::cout << std::flush;
 }
 
-void
-merge_gcells(def::Data& def_data)
+std::vector<std::vector<Task>>
+make_tasks(def::Data& def_data)
 {
-  std::vector<std::pair<std::size_t, std::size_t>>              remove;
+  const std::size_t              size             = 32; /** TODO: Remove this hardcode */
+  const std::size_t              number_of_metals = def_data.m_tracks_x.size();
+  const auto&                    pins             = def_data.m_pins;
 
-  std::queue<std::tuple<def::GCell*, std::size_t, std::size_t>> queue;
-  queue.emplace(def_data.m_gcells[0][0], 0, 0);
+  std::vector<std::vector<Task>> tasks;
+  tasks.resize(def_data.m_gcells.size());
 
-  std::size_t num_rows  = def_data.m_gcells.size();
-  std::size_t num_cols  = def_data.m_gcells[0].size();
-
-  std::size_t x         = 0;
-  std::size_t y         = 0;
-  def::GCell* gcell     = nullptr;
-
-  bool        is_merged = false; ///> Indicates that last gcell was merged
-
-  while(!queue.empty() && (x < num_cols || y < num_rows))
+  for(std::size_t y = 0, end_y = def_data.m_gcells.size(); y < end_y; ++y)
     {
-      if(!is_merged)
+      for(std::size_t x = 0, end_x = def_data.m_gcells[y].size(); x < end_x; ++x)
         {
-          auto tuple = std::move(queue.front());
-          queue.pop();
+          Task task;
+          task.m_matrix           = matrix::Matrix({ size * 2, size * 2, uint8_t(def_data.m_tracks_x.size()) });
 
-          gcell = std::get<0>(tuple);
-          x     = std::get<1>(tuple);
-          y     = std::get<2>(tuple);
-        }
+          def::GCell*  gcell      = def_data.m_gcells[y][x];
 
-      if(gcell->m_is_merged)
-        {
-          continue;
-        }
+          /** Place tracks */
+          /** TODO: Move to a separate function */
+          const double m1_offset  = def_data.m_tracks_x[0].m_start;
+          const double m1_step    = def_data.m_tracks_x[0].m_spacing;
 
-      /** Check next gcell by x */
-      def::GCell* next_x_gcell = def_data.m_gcells[y][x + 1];
+          const double m1_left_x  = gcell->m_tracks_y.front().m_box[1];
+          const double m1_right_x = gcell->m_tracks_y.back().m_box[1];
 
-      if(x + 1 < num_cols && !next_x_gcell->m_is_merged)
-        {
-          if(details::number_of_metal1_tracks(next_x_gcell->m_tracks_y) + details::number_of_metal1_tracks(gcell->m_tracks_y) <= 32)
+          const double m1_left_y  = gcell->m_tracks_x.front().m_box[0];
+          const double m1_right_y = gcell->m_tracks_x.back().m_box[0];
+
+          for(std::size_t m = 0; m < number_of_metals; ++m)
             {
-              ++x;
-              is_merged                 = true;
-              next_x_gcell->m_is_merged = true;
-              remove.emplace_back(x, y);
-
-              /** Merge */
-              gcell->m_box = utils::merge_polygons(gcell->m_box, next_x_gcell->m_box);
-              gcell->m_tracks_x.insert(gcell->m_tracks_x.end(), std::make_move_iterator(next_x_gcell->m_tracks_x.begin()), std::make_move_iterator(next_x_gcell->m_tracks_x.end()));
-              gcell->m_obstacles.insert(gcell->m_obstacles.end(), std::make_move_iterator(next_x_gcell->m_obstacles.begin()), std::make_move_iterator(next_x_gcell->m_obstacles.end()));
-
-              for(std::size_t i = 0, end = gcell->m_tracks_y.size(); i < end; ++i)
+              if(m == 0)
                 {
-                  gcell->m_tracks_y[i].m_box = utils::make_clockwise_rectangle({
-                      gcell->m_tracks_y[i].m_box[0],
-                      gcell->m_tracks_y[i].m_box[1],
-                      next_x_gcell->m_tracks_y[i].m_box[4],
-                      next_x_gcell->m_tracks_y[i].m_box[5],
-                  });
-
-                  gcell->m_tracks_y[i].m_rn  = next_x_gcell->m_tracks_y[i].m_rn;
-                }
-
-              for(const auto& [key, value] : next_x_gcell->m_nets)
-                {
-                  if(gcell->m_nets.count(key) == 0)
+                  /** First layer always fill whole matrix as it suppose to be */
+                  for(std::size_t y = 0, end_y = size * 2; y < end_y; y += 2)
                     {
-                      gcell->m_nets[key] = std::move(value);
+                      for(std::size_t x = 0, end_x = size * 2; x < end_x; ++x)
+                        {
+                          task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, y, m);
+                        }
                     }
                 }
-
-              for(const auto& [key, value] : next_x_gcell->m_pins)
+              else
                 {
-                  if(gcell->m_pins.count(key) == 0)
+                  const double offset = def_data.m_tracks_x[m].m_start;
+                  const double step   = def_data.m_tracks_x[m].m_spacing;
+
+                  if(m % 2 == 0)
                     {
-                      gcell->m_pins[key] = std::move(value);
+                      double left = offset + std::ceil((m1_left_x - offset) / step) * step;
+
+                      while(left < m1_right_x)
+                        {
+                          int64_t n = std::floor((left - m1_offset) / m1_step) - gcell->m_box[0];
+
+                          /** Add track by x */
+                          for(std::size_t x = 0, end_x = size * 2; x < end_x; ++x)
+                            {
+                              task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, n * 2, m);
+
+                              if(task.m_matrix.get_at(x, n * 2, m - 1) == uint8_t(types::Cell::TRACE))
+                                {
+                                  task.m_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), x, n * 2, m - 1);
+                                }
+                            }
+
+                          left += step;
+                        }
                     }
-                }
-            }
-          else
-            {
-              is_merged = false;
-              queue.emplace(next_x_gcell, x + 1, y);
-            }
-        }
-
-      /** Check next gcell by y */
-      def::GCell* next_y_gcell = def_data.m_gcells[y + 1][x];
-
-      if(y + 1 < num_rows && !next_y_gcell->m_is_merged)
-        {
-          if(details::number_of_metal1_tracks(next_y_gcell->m_tracks_x) + details::number_of_metal1_tracks(gcell->m_tracks_x) <= 32)
-            {
-              ++y;
-              is_merged                 = true;
-              next_y_gcell->m_is_merged = true;
-              remove.emplace_back(x, y);
-
-              /** Merge */
-              gcell->m_box = utils::merge_polygons(gcell->m_box, next_y_gcell->m_box);
-              gcell->m_tracks_y.insert(gcell->m_tracks_y.end(), std::make_move_iterator(next_y_gcell->m_tracks_y.begin()), std::make_move_iterator(next_y_gcell->m_tracks_y.end()));
-              gcell->m_obstacles.insert(gcell->m_obstacles.end(), std::make_move_iterator(next_y_gcell->m_obstacles.begin()), std::make_move_iterator(next_y_gcell->m_obstacles.end()));
-
-              for(std::size_t i = 0, end = gcell->m_tracks_x.size(); i < end; ++i)
-                {
-                  gcell->m_tracks_x[i].m_box = utils::make_clockwise_rectangle({
-                      gcell->m_tracks_x[i].m_box[0],
-                      gcell->m_tracks_x[i].m_box[1],
-                      next_y_gcell->m_tracks_x[i].m_box[4],
-                      next_y_gcell->m_tracks_x[i].m_box[5],
-                  });
-
-                  gcell->m_tracks_x[i].m_rn  = next_y_gcell->m_tracks_x[i].m_rn;
-                }
-
-              for(const auto& [key, value] : next_y_gcell->m_nets)
-                {
-                  if(gcell->m_nets.count(key) == 0)
+                  else
                     {
-                      gcell->m_nets[key] = std::move(value);
-                    }
-                }
+                      double left = offset + std::ceil((m1_left_y - offset) / step) * step;
 
-              for(const auto& [key, value] : next_y_gcell->m_pins)
-                {
-                  if(gcell->m_pins.count(key) == 0)
-                    {
-                      gcell->m_pins[key] = std::move(value);
+                      while(left < m1_right_y)
+                        {
+                          int64_t n = std::floor((left - m1_offset) / m1_step) - gcell->m_box[1];
+
+                          /** Add track by y*/
+                          for(std::size_t y = 0, end_y = size * 2; y < end_y; ++y)
+                            {
+                              task.m_matrix.set_at(uint8_t(types::Cell::TRACE), n * 2, y, m);
+
+                              if(task.m_matrix.get_at(n * 2, y, m - 1) == uint8_t(types::Cell::TRACE))
+                                {
+                                  task.m_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), n * 2, y, m - 1);
+                                }
+                            }
+
+                          left += step;
+                        }
                     }
                 }
             }
-          else
-            {
-              is_merged = false;
-              queue.emplace(next_y_gcell, x, y + 1);
-            }
-        }
 
-      gcell->m_is_merged = true;
+          // for(const auto& [name, net] : gcell->m_nets)
+          //   {
+          // double mean_pin_x;
+          // double mean_pin_y;
+
+          // for(const auto& pin_name : net.m_pins)
+          //   {
+          //     pin::Pin*                                        pin = pins.at(pin_name);
+          //     std::unordered_map<types::Metal, types::Polygon> pin_polygons;
+
+          //     /**
+          //      * 1. Find polygon centroid.
+          //      * 2. Project it on polygon(non-convex case).
+          //      * 3. Project new(old in convex case) centroid on closest track.
+          //      * 4. If point is not iside of the polygon that add projection line to resulting path for this net.
+          //      */
+
+          //     for(const auto& [rect, metal] : pin->m_ports)
+          //       {
+          //         pin_polygons[metal] = utils::merge_polygons(pin_polygons[metal], rect);
+          //       }
+          //   }
+          // }
+
+          tasks[y].emplace_back(std::move(task));
+        }
     }
 
-  for(const auto& [x, y] : remove)
-    {
-      delete def_data.m_gcells[y][x];
-      def_data.m_gcells[y].erase(def_data.m_gcells[y].begin() + x);
-    }
+  return tasks;
 }
 
 } // namespace process

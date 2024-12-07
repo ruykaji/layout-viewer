@@ -14,6 +14,18 @@ struct Shape
   uint8_t m_x = 0;
   uint8_t m_y = 0;
   uint8_t m_z = 0;
+
+  friend bool
+  operator==(const Shape& lhs, const Shape& rhs)
+  {
+    return lhs.m_x == rhs.m_x && lhs.m_y == rhs.m_y && lhs.m_z == rhs.m_z;
+  }
+
+  friend bool
+  operator!=(const Shape& lhs, const Shape& rhs)
+  {
+    return !(lhs == rhs);
+  }
 };
 
 class Matrix
@@ -68,6 +80,27 @@ public:
    */
   Matrix&
   operator=(Matrix&& matrix);
+
+  /**
+   * @brief Sum-assignment of two matrices.
+   *
+   * @param matrix Matrix to sum with.
+   * @return Matrix&
+   */
+  Matrix&
+  operator+=(const Matrix& matrix);
+
+public:
+  /** =============================== PUBLIC STATIC METHODS =============================== */
+
+  /**
+   * @brief Masks matrix using another matrix.
+   *
+   * @param matrix Matrix to mask.
+   * @param mask Mask to use.
+   */
+  static void
+  mask(Matrix& matrix, const Matrix& mask);
 
 public:
   /** =============================== PUBLIC METHODS =============================== */
