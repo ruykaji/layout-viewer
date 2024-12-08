@@ -8,7 +8,7 @@
 
 #include <filesystem>
 
-namespace gui
+namespace gui::project_settings
 {
 
 struct ProjectSettings
@@ -25,14 +25,14 @@ struct ProjectSettings
   read_from(const std::filesystem::path& path);
 };
 
-class ProjectSettingsWidget : public QDialog
+class Widget : public QDialog
 {
   Q_OBJECT
 
 public:
   /** =============================== CONSTRUCTORS ================================= */
 
-  ProjectSettingsWidget(QWidget* parent = nullptr);
+  Widget(QWidget* parent = nullptr);
 
 public:
   /** =============================== PUBLIC METHODS =============================== */

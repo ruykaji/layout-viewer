@@ -8,7 +8,7 @@
 
 #include "Include/ProjectSettingsWidget.hpp"
 
-namespace gui
+namespace gui::project_settings
 {
 
 void
@@ -71,7 +71,7 @@ ProjectSettings::read_from(const std::filesystem::path& path)
 
 /** =============================== CONSTRUCTORS ================================= */
 
-ProjectSettingsWidget::ProjectSettingsWidget(QWidget* parent)
+Widget::Widget(QWidget* parent)
     : QDialog(parent)
 {
   setWindowTitle("Project Settings");
@@ -138,7 +138,7 @@ ProjectSettingsWidget::ProjectSettingsWidget(QWidget* parent)
 /** =============================== PUBLIC METHODS =============================== */
 
 ProjectSettings
-ProjectSettingsWidget::get_settings() const
+Widget::get_settings() const
 {
   ProjectSettings settings;
   settings.m_name       = m_name_edit->text().toStdString();
@@ -152,7 +152,7 @@ ProjectSettingsWidget::get_settings() const
 /** =============================== PRIVATE METHODS ============================== */
 
 QHBoxLayout*
-ProjectSettingsWidget::make_file_input(const QString& label_text, const int32_t label_width, QLineEdit*& line_edit, std::function<void()> callback)
+Widget::make_file_input(const QString& label_text, const int32_t label_width, QLineEdit*& line_edit, std::function<void()> callback)
 {
   QLabel* label = new QLabel(label_text);
   label->setFixedWidth(label_width);
@@ -172,7 +172,7 @@ ProjectSettingsWidget::make_file_input(const QString& label_text, const int32_t 
 }
 
 QHBoxLayout*
-ProjectSettingsWidget::make_string_input(const QString& label_text, const int32_t label_width, QLineEdit*& line_edit, std::function<void()> callback)
+Widget::make_string_input(const QString& label_text, const int32_t label_width, QLineEdit*& line_edit, std::function<void()> callback)
 {
   QLabel* label = new QLabel(label_text);
   label->setFixedWidth(label_width);
@@ -189,7 +189,7 @@ ProjectSettingsWidget::make_string_input(const QString& label_text, const int32_
 }
 
 int32_t
-ProjectSettingsWidget::get_max_label_width(const QStringList& labels)
+Widget::get_max_label_width(const QStringList& labels)
 {
   int32_t            maxWidth = 0;
   const QFontMetrics metrics(font());

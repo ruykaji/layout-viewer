@@ -3,10 +3,10 @@
 
 #include <QMainWindow>
 
-#include "Include/Ini.hpp"
 #include "Include/Process.hpp"
 
 #include "Include/ProjectSettingsWidget.hpp"
+#include "Include/StagesWidget.hpp"
 #include "Include/ViewerWidget.hpp"
 
 namespace gui
@@ -20,13 +20,28 @@ public:
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow();
 
-signals:
-  void
-  send_viewer_data(const viewer::Data& data);
-
 private:
   void
   create_menu();
+
+  void
+  apply_global_routing();
+
+  void
+  make_tasks();
+
+  void
+  encode();
+
+  void
+  route();
+
+  void
+  extract();
+
+signals:
+  void
+  send_viewer_data(const viewer::Data& data);
 
 private slots:
   void
@@ -36,11 +51,16 @@ private slots:
   create_project();
 
   void
-  start_routing();
+  change_stage(const stages::Stages stage);
 
 private:
-  viewer::Widget* m_viewer_widget;
-  ProjectSettings m_settings;
+  viewer::Widget*                   m_viewer_widget;
+  stages::Widget*                   m_stages_widget;
+
+  project_settings::ProjectSettings m_settings;
+
+  lef::Data                         m_lef_data;
+  def::Data                         m_def_data;
 };
 
 } // namespace gui
