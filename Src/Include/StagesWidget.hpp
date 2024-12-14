@@ -10,7 +10,6 @@ namespace gui::stages
 enum class Stages
 {
   APPLY_GLOBAL_ROUTING = 0,
-  MAKE_TASKS,
   ENCODE,
   ROUTE,
   EXTRACT

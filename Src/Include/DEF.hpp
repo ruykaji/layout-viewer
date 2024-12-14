@@ -62,6 +62,10 @@ struct GCell
     types::Metal   m_metal;
   };
 
+  /** Matrix coordinates */
+  std::size_t                                                           m_idx_x;
+  std::size_t                                                           m_idx_y;
+
   types::Polygon                                                        m_box;
   std::vector<Track>                                                    m_tracks_x;
   std::vector<Track>                                                    m_tracks_y;

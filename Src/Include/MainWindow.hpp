@@ -28,9 +28,6 @@ private:
   apply_global_routing();
 
   void
-  make_tasks();
-
-  void
   encode();
 
   void

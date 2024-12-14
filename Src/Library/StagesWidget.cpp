@@ -15,7 +15,6 @@ Widget::Widget(QWidget* parent)
   const int32_t max_label_width             = get_max_label_width({ "Apply Global Routing", "Make Tasks", "Encode", "Route", "Extract" });
 
   QPushButton*  apply_global_routing_button = add_stage("Apply Global Routing", max_label_width, [this]() { emit change_stage(Stages::APPLY_GLOBAL_ROUTING); });
-  QPushButton*  make_tasks_button           = add_stage("Make Tasks", max_label_width, [this]() { emit change_stage(Stages::MAKE_TASKS); });
   QPushButton*  encode_button               = add_stage("Encode", max_label_width, [this]() { emit change_stage(Stages::ENCODE); });
   QPushButton*  route_button                = add_stage("Route", max_label_width, [this]() { emit change_stage(Stages::ROUTE); });
   QPushButton*  extract_button              = add_stage("Extract", max_label_width, [this]() { emit change_stage(Stages::EXTRACT); });
@@ -27,7 +26,6 @@ Widget::Widget(QWidget* parent)
   layout->setAlignment(Qt::AlignTop);
 
   layout->addWidget(apply_global_routing_button);
-  layout->addWidget(make_tasks_button);
   layout->addWidget(encode_button);
   layout->addWidget(route_button);
   layout->addWidget(extract_button);

@@ -47,4 +47,4 @@ set(QT_HEADERS
    ${CMAKE_SOURCE_DIR}/Src/Include/StagesWidget.hpp)
 
 add_library(MainWindow ${QT_SOURCES} ${QT_HEADERS})
-target_link_libraries(MainWindow PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Process)
+target_link_libraries(MainWindow PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Process)

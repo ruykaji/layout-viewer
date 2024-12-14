@@ -9,6 +9,118 @@
 namespace gui
 {
 
+namespace details
+{
+
+QColor
+get_metal_color(types::Metal metal)
+{
+  switch(metal)
+    {
+    case types::Metal::L1:
+      {
+        return QColor(0, 0, 255);
+      }
+    case types::Metal::L1M1_V:
+      {
+        return QColor(255, 0, 0, 50);
+      }
+    case types::Metal::M1:
+      {
+        return QColor(255, 0, 0);
+      }
+    case types::Metal::M2:
+      {
+        return QColor(0, 255, 0);
+      }
+    case types::Metal::M3:
+      {
+        return QColor(255, 255, 0);
+      }
+    case types::Metal::M4:
+      {
+        return QColor(0, 255, 255);
+      }
+    case types::Metal::M5:
+      {
+        return QColor(255, 0, 255);
+      }
+    case types::Metal::M6:
+      {
+        return QColor(125, 125, 255);
+      }
+    case types::Metal::M7:
+      {
+        return QColor(255, 125, 125);
+      }
+    case types::Metal::M8:
+      {
+        return QColor(125, 255, 125);
+      }
+    case types::Metal::M9:
+      {
+        return QColor(255, 75, 125);
+      }
+    default:
+      {
+        return QColor(255, 255, 255);
+      }
+    }
+}
+
+types::Metal
+get_metal_type(const QColor& color)
+{
+  if(color == QColor(0, 0, 255))
+    {
+      return types::Metal::L1;
+    }
+  if(color == QColor(255, 0, 0, 50))
+    {
+      return types::Metal::L1M1_V;
+    }
+  if(color == QColor(255, 0, 0))
+    {
+      return types::Metal::M1;
+    }
+  if(color == QColor(0, 255, 0))
+    {
+      return types::Metal::M2;
+    }
+  if(color == QColor(255, 255, 0))
+    {
+      return types::Metal::M3;
+    }
+  if(color == QColor(0, 255, 255))
+    {
+      return types::Metal::M4;
+    }
+  if(color == QColor(255, 0, 255))
+    {
+      return types::Metal::M5;
+    }
+  if(color == QColor(125, 125, 255))
+    {
+      return types::Metal::M6;
+    }
+  if(color == QColor(255, 125, 125))
+    {
+      return types::Metal::M7;
+    }
+  if(color == QColor(125, 255, 125))
+    {
+      return types::Metal::M8;
+    }
+  if(color == QColor(255, 75, 125))
+    {
+      return types::Metal::M9;
+    }
+
+  return types::Metal::NONE;
+}
+
+} // namespace
+
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
@@ -36,8 +148,8 @@ MainWindow::MainWindow(QWidget* parent)
 
   setCentralWidget(central_widget);
   setWindowTitle("Viewer");
-  setMinimumSize(1280, 1080);
-  resize(1280, 1080);
+  setMinimumSize(1620, 1080);
+  resize(1620, 1080);
 }
 
 MainWindow::~MainWindow() {};
@@ -70,46 +182,92 @@ MainWindow::apply_global_routing()
 
   process::apply_global_routing(m_def_data, m_lef_data, guide_nets);
 
-  viewer::Data viewer_data;
-  viewer_data.m_box = m_def_data.m_box;
+  /** Make view data */
+  {
+    viewer::Data viewer_data;
+    viewer_data.m_box = m_def_data.m_box;
 
-  for(std::size_t y = 0, end_y = m_def_data.m_gcells.size(); y < end_y; ++y)
-    {
-      for(std::size_t x = 0, end_x = m_def_data.m_gcells[y].size(); x < end_x; ++x)
-        {
-          def::GCell* gcell = m_def_data.m_gcells[y][x];
+    for(std::size_t y = 0, end_y = m_def_data.m_gcells.size(); y < end_y; ++y)
+      {
+        for(std::size_t x = 0, end_x = m_def_data.m_gcells[y].size(); x < end_x; ++x)
+          {
+            def::GCell*         gcell = m_def_data.m_gcells[y][x];
 
-          viewer_data.m_rects.emplace_back(gcell->m_box, types::Metal::NONE);
+            viewer::Data::Batch batch;
+            batch.m_width  = gcell->m_box[2] - gcell->m_box[0];
+            batch.m_height = gcell->m_box[5] - gcell->m_box[3];
 
-          for(const auto& obs : gcell->m_obstacles)
-            {
-              viewer_data.m_rects.emplace_back(obs);
-            }
+            batch.m_rects.emplace_back(gcell->m_box, details::get_metal_color(types::Metal::NONE));
 
-          for(const auto& [_, pin] : gcell->m_pins)
-            {
-              for(const auto& [rect, metal] : pin->m_ports)
-                {
-                  viewer_data.m_rects.emplace_back(rect, metal);
-                }
-            }
-        }
-    }
+            for(const auto& obs : gcell->m_obstacles)
+              {
+                batch.m_rects.emplace_back(obs.first, details::get_metal_color(obs.second));
+              }
 
-  std::sort(viewer_data.m_rects.begin(), viewer_data.m_rects.end(), [](const auto& lhs, const auto& rhs) { return static_cast<uint8_t>(lhs.second) < static_cast<uint8_t>(rhs.second); });
+            for(const auto& [_, pin] : gcell->m_pins)
+              {
+                for(const auto& [rect, metal] : pin->m_ports)
+                  {
+                    batch.m_rects.emplace_back(rect, details::get_metal_color(metal));
+                  }
+              }
 
-  emit send_viewer_data(viewer_data);
-}
+            std::sort(batch.m_rects.begin(), batch.m_rects.end(), [](const auto& lhs, const auto& rhs) {
+              return static_cast<uint8_t>(details::get_metal_type(lhs.second)) < static_cast<uint8_t>(details::get_metal_type(rhs.second));
+            });
 
-void
-MainWindow::make_tasks()
-{
-  process::make_tasks(m_def_data);
+            viewer_data.m_batches.emplace_back(std::move(batch));
+          }
+      }
+
+    emit send_viewer_data(viewer_data);
+  }
 }
 
 void
 MainWindow::encode()
 {
+  const std::vector<std::vector<process::Task>> tasks = process::encode(m_def_data);
+
+  /** Make view data */
+  {
+    viewer::Data viewer_data;
+    viewer_data.m_box = { 0, 0, uint32_t(tasks.size() * 64), uint32_t(tasks.size() * 64) };
+
+    for(std::size_t y = 0, end_y = tasks.size(); y < end_y; ++y)
+      {
+        for(std::size_t x = 0, end_x = tasks[y].size(); x < end_x; ++x)
+          {
+            const auto&         task  = tasks[y][x];
+            const auto&         shape = task.m_matrix.shape();
+
+            viewer::Data::Batch batch;
+
+            for(std::size_t i = 0, cols = shape.m_x; i < cols; ++i)
+              {
+                for(std::size_t j = 0, rows = shape.m_y; j < rows; ++j)
+                  {
+                    uint16_t color = 0;
+
+                    for(std::size_t k = 0, depth = shape.m_z; k < depth; ++k)
+                      {
+                        color += task.m_matrix.get_at(i, j, k);
+                      }
+
+                    double         i_x = task.m_idx_x * 64 + i;
+                    double         j_y = task.m_idx_y * 64 + j;
+                    types::Polygon rect{ i_x, j_y, i_x + 1, j_y, i_x + 1, j_y + 1, i_x, j_y + 1 };
+
+                    batch.m_rects.emplace_back(std::move(rect), QColor(color * 10, 0, 0));
+                  }
+              }
+
+            viewer_data.m_batches.emplace_back(std::move(batch));
+          }
+      }
+
+    emit send_viewer_data(viewer_data);
+  }
 }
 
 void
@@ -162,11 +320,6 @@ MainWindow::change_stage(const stages::Stages stage)
     case stages::Stages::APPLY_GLOBAL_ROUTING:
       {
         apply_global_routing();
-        break;
-      }
-    case stages::Stages::MAKE_TASKS:
-      {
-        make_tasks();
         break;
       }
     case stages::Stages::ENCODE:

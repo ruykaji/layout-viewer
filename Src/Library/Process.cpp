@@ -437,7 +437,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 }
 
 std::vector<std::vector<Task>>
-make_tasks(def::Data& def_data)
+encode(def::Data& def_data)
 {
   const std::size_t              size             = 32; /** TODO: Remove this hardcode */
   const std::size_t              number_of_metals = def_data.m_tracks_x.size();
@@ -450,30 +450,35 @@ make_tasks(def::Data& def_data)
     {
       for(std::size_t x = 0, end_x = def_data.m_gcells[y].size(); x < end_x; ++x)
         {
-          Task task;
-          task.m_matrix           = matrix::Matrix({ size * 2, size * 2, uint8_t(def_data.m_tracks_x.size()) });
+          def::GCell* gcell = def_data.m_gcells[y][x];
 
-          def::GCell*  gcell      = def_data.m_gcells[y][x];
+          Task        task;
+          task.m_idx_x                      = gcell->m_idx_x;
+          task.m_idx_y                      = gcell->m_idx_y;
+          task.m_matrix                     = matrix::Matrix({ size * 2, size * 2, uint8_t(def_data.m_tracks_x.size()) });
 
           /** Place tracks */
           /** TODO: Move to a separate function */
-          const double m1_offset  = def_data.m_tracks_x[0].m_start;
-          const double m1_step    = def_data.m_tracks_x[0].m_spacing;
+          const double      m1_offset       = def_data.m_tracks_x[0].m_start;
+          const double      m1_step         = def_data.m_tracks_x[0].m_spacing;
 
-          const double m1_left_x  = gcell->m_tracks_y.front().m_box[1];
-          const double m1_right_x = gcell->m_tracks_y.back().m_box[1];
+          const double      m1_left_x       = gcell->m_tracks_x.front().m_box[0];
+          const double      m1_right_x      = gcell->m_tracks_x.back().m_box[2];
 
-          const double m1_left_y  = gcell->m_tracks_x.front().m_box[0];
-          const double m1_right_y = gcell->m_tracks_x.back().m_box[0];
+          const double      m1_left_y       = gcell->m_tracks_y.front().m_box[3];
+          const double      m1_right_y      = gcell->m_tracks_y.back().m_box[5];
+
+          const std::size_t m1_max_tracks_x = (m1_right_x - m1_left_x) / m1_step;
+          const std::size_t m1_max_tracks_y = (m1_right_y - m1_left_y) / m1_step;
 
           for(std::size_t m = 0; m < number_of_metals; ++m)
             {
               if(m == 0)
                 {
                   /** First layer always fill whole matrix as it suppose to be */
-                  for(std::size_t y = 0, end_y = size * 2; y < end_y; y += 2)
+                  for(std::size_t y = 0, end_y = m1_max_tracks_y * 2, end_x = m1_max_tracks_x * 2; y < end_y; y += 2)
                     {
-                      for(std::size_t x = 0, end_x = size * 2; x < end_x; ++x)
+                      for(std::size_t x = 0; x < end_x; ++x)
                         {
                           task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, y, m);
                         }
@@ -490,10 +495,10 @@ make_tasks(def::Data& def_data)
 
                       while(left < m1_right_x)
                         {
-                          int64_t n = std::floor((left - m1_offset) / m1_step) - gcell->m_box[0];
+                          int64_t n = std::floor((m1_right_x - (left - m1_offset)) / m1_step);
 
                           /** Add track by x */
-                          for(std::size_t x = 0, end_x = size * 2; x < end_x; ++x)
+                          for(std::size_t x = 0, end_x = end_x = m1_max_tracks_x * 2; x < end_x; ++x)
                             {
                               task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, n * 2, m);
 
@@ -512,10 +517,10 @@ make_tasks(def::Data& def_data)
 
                       while(left < m1_right_y)
                         {
-                          int64_t n = std::floor((left - m1_offset) / m1_step) - gcell->m_box[1];
+                          int64_t n = std::floor((m1_right_y - (left - m1_offset)) / m1_step);
 
                           /** Add track by y*/
-                          for(std::size_t y = 0, end_y = size * 2; y < end_y; ++y)
+                          for(std::size_t y = 0, end_y = m1_max_tracks_y * 2; y < end_y; ++y)
                             {
                               task.m_matrix.set_at(uint8_t(types::Cell::TRACE), n * 2, y, m);
 

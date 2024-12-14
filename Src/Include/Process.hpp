@@ -11,6 +11,11 @@ namespace process
 
 struct Task
 {
+  /** Matrix coordinates */
+  std::size_t                                                                         m_idx_x;
+  std::size_t                                                                         m_idx_y;
+
+  /** Data */
   matrix::Matrix                                                                      m_matrix;
   std::unordered_map<std::string, std::vector<std::tuple<uint8_t, uint8_t, uint8_t>>> m_nets;
 };
@@ -19,7 +24,7 @@ void
 apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets);
 
 std::vector<std::vector<Task>>
-make_tasks(def::Data& def_data);
+encode(def::Data& def_data);
 
 } // namespace process
 

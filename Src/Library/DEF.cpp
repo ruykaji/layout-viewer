@@ -362,8 +362,10 @@ DEF::component_start_callback(int32_t param, Data& data)
 
       for(std::size_t x = 0, end_x = columns.size() - 1; x < end_x; ++x)
         {
-          GCell* gcell = new GCell();
-          gcell->m_box = utils::make_clockwise_rectangle({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
+          GCell* gcell   = new GCell();
+          gcell->m_idx_x = x;
+          gcell->m_idx_y = y;
+          gcell->m_box   = utils::make_clockwise_rectangle({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
 
           /** Add x tracks to the gcell */
           for(std::size_t i = 0, end_i = data.m_tracks_x.size(); i < end_i; ++i)

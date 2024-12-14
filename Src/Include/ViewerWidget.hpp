@@ -1,7 +1,10 @@
 #ifndef __VIEWER_WIDGET_HPP__
 #define __VIEWER_WIDGET_HPP__
 
+#include <QOpenGLFunctions>
+#include <QOpenGLWidget>
 #include <QPaintEvent>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QWheelEvent>
 #include <QWidget>
@@ -13,48 +16,58 @@ namespace gui::viewer
 
 struct Data
 {
-  std::array<uint32_t, 4UL>                            m_box;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_rects;
+  struct Batch
+  {
+    std::size_t                                    m_width;
+    std::size_t                                    m_height;
+    std::vector<std::pair<types::Polygon, QColor>> m_rects;
+  };
+
+  std::array<uint32_t, 4UL> m_box;
+  std::vector<Batch>        m_batches;
 };
 
-class Widget : public QWidget
+class Widget : public QOpenGLWidget, protected QOpenGLFunctions
 {
   Q_OBJECT
 
 public:
   explicit Widget(QWidget* parent = nullptr);
 
-public slots:
-  void
-  set_viewer_data(const Data& data);
-
 protected:
-  virtual void
-  paintEvent(QPaintEvent* event) override;
+  void
+  initializeGL() override;
 
-  virtual void
-  resizeEvent(QResizeEvent* event) override;
+  void
+  resizeGL(int w, int h) override;
 
-  virtual void
+  void
+  paintGL() override;
+
+  void
   wheelEvent(QWheelEvent* event) override;
 
-  virtual void
+  void
   mousePressEvent(QMouseEvent* event) override;
 
-  virtual void
+  void
   mouseMoveEvent(QMouseEvent* event) override;
 
   virtual void
   mouseReleaseEvent(QMouseEvent* event) override;
 
-private:
-  Data    m_data;
+public slots:
+  void
+  set_viewer_data(const Data& data);
 
-  bool    m_is_dragging;
-  qreal   m_scale_factor;
-  QPointF m_last_mouse_pos;
-  QPointF m_transition_offset;
-  QPointF m_mouse_scene_pos;
+private:
+  Data   m_data;
+
+  bool   m_is_dragging;
+  double m_zoom_factor;
+  double m_pan_x;
+  double m_pan_y;
+  QPoint m_last_mouse_position;
 };
 
 } // namespace gui
