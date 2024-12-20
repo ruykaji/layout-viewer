@@ -3,6 +3,8 @@
 
 #include <string_view>
 
+#include <clipper2/clipper.h>
+
 #include "Include/Types.hpp"
 
 namespace utils
@@ -18,9 +20,9 @@ namespace utils
  * the top-left corner.
  *
  * @param vertices An array containing four integers: {x0, y0, x1, y1}.
- * @return A `types::Polygon` object representing the rectangle.
+ * @return Clipper2Lib::PathD
  */
-types::Polygon
+Clipper2Lib::PathD
 make_clockwise_rectangle(const std::array<double, 4> vertices);
 
 /**
@@ -37,9 +39,6 @@ are_rectangle_intersects(const types::Polygon& lhs_rect, const types::Polygon& r
 
 types::Polygon
 get_rect_overlap(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect);
-
-types::Polygon
-merge_polygons(const types::Polygon& lhs, const types::Polygon& rhs);
 
 } // namespace utils
 

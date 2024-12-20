@@ -19,7 +19,7 @@ enum class Orientation
   FW     /** 270 with mirroring */
 };
 
-enum class Metal
+enum class Metal : uint8_t
 {
   NONE = 0,
   L1,

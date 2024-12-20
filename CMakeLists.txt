@@ -28,6 +28,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
+find_package(Clipper2 REQUIRED)
 
 include_directories(Src)
 add_subdirectory(Src)

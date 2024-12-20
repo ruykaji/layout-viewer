@@ -19,6 +19,7 @@ main(int argc, char const* argv[])
   const std::vector<guide::Net> guide_nets = guide::read(guide_path);
 
   process::apply_global_routing(def_data, lef_data, guide_nets);
+  std::vector<process::Task> tasks = process::encode(def_data);
 
   return 0;
 }

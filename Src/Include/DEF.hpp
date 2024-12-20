@@ -63,18 +63,16 @@ struct GCell
   };
 
   /** Matrix coordinates */
-  std::size_t                                                           m_idx_x;
-  std::size_t                                                           m_idx_y;
+  std::size_t                                                      m_idx_x;
+  std::size_t                                                      m_idx_y;
 
-  types::Polygon                                                        m_box;
-  std::vector<Track>                                                    m_tracks_x;
-  std::vector<Track>                                                    m_tracks_y;
-  std::vector<std::pair<types::Polygon, types::Metal>>                  m_obstacles;
+  types::Polygon                                                   m_box;
+  std::vector<Track>                                               m_tracks_x;
+  std::vector<Track>                                               m_tracks_y;
+  std::vector<std::pair<types::Polygon, types::Metal>>             m_obstacles;
 
-  std::unordered_multimap<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
-
-  std::unordered_map<std::string, pin::Pin*>                            m_pins;
-  std::unordered_map<std::string, Net>                                  m_nets;
+  std::unordered_map<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
+  std::unordered_map<std::string, std::vector<pin::Pin*>>          m_nets;
 
   static std::vector<std::pair<GCell*, types::Polygon>>
   find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
@@ -91,7 +89,7 @@ struct Data
   std::unordered_map<std::string, pin::Pin*>           m_pins;
 
   /** Nets related */
-  /** TODO: remove from all nets maps std::string as key and replace it with net's index */
+  // TODO: remove from all nets maps std::string as key and replace it with net's index
   std::unordered_map<std::string, std::vector<GCell*>> m_nets_gcells;
   std::unordered_map<std::string, Net>                 m_nets;
 

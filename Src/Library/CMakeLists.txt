@@ -32,7 +32,7 @@ add_library(Guide Guide.cpp)
 
 # Process library
 add_library(Process Process.cpp)
-target_link_libraries(Process PUBLIC LEF DEF Guide Matrix)
+target_link_libraries(Process PUBLIC LEF DEF Guide Matrix Clipper2)
 
 # Qt widgets
 set(QT_SOURCES 

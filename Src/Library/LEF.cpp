@@ -252,17 +252,13 @@ LEF::pin_callback(lefiPin* param, Data& data)
 {
   const std::string name = param->name();
 
-  pin::Pin          pin;
-
-  if(param->hasDirection())
+  if(name == "VPWR" || name == "VGND")
     {
-      pin::set_direction(pin, param->direction());
+      return;
     }
 
-  if(param->hasUse())
-    {
-      pin::set_use(pin, param->use());
-    }
+  std::vector<std::pair<types::Polygon, types::Metal>> rects;
+  types::Metal                                         top_metal;
 
   for(std::size_t i = 0, end = param->numPorts(); i < end; ++i)
     {
@@ -276,16 +272,51 @@ LEF::pin_callback(lefiPin* param, Data& data)
             case lefiGeomEnum::lefiGeomLayerE:
               {
                 metal = utils::get_skywater130_metal(geometries->getLayer(j));
+
+                if(top_metal < metal)
+                  {
+                    top_metal = metal;
+                  }
+
                 break;
               }
             case lefiGeomEnum::lefiGeomRectE:
               {
+                if(types::Metal::NONE == metal)
+                  {
+                    break;
+                  }
+
                 lefiGeomRect* rect = geometries->getRect(j);
-                pin.m_ports.emplace_back(utils::make_clockwise_rectangle({ rect->xl, rect->yl, rect->xh, rect->yh }), metal);
+                rects.emplace_back(utils::make_clockwise_rectangle({ rect->xl, rect->yl, rect->xh, rect->yh }), metal);
                 break;
               }
             default: break;
             }
+        }
+    }
+
+  pin::Pin pin;
+
+  if(param->hasDirection())
+    {
+      pin::set_direction(pin, param->direction());
+    }
+
+  if(param->hasUse())
+    {
+      pin::set_use(pin, param->use());
+    }
+
+  for(const auto& [rect, metal] : rects)
+    {
+      if(metal == top_metal)
+        {
+          pin.m_ports.emplace_back(std::move(rect), metal);
+        }
+      else
+        {
+          pin.m_obs.emplace_back(std::move(rect), metal);
         }
     }
 

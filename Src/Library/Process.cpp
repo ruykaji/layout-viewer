@@ -4,16 +4,35 @@
 #include <queue>
 #include <unordered_set>
 
+#include <clipper2/clipper.h>
+
 #include "Include/Process.hpp"
 #include "Include/Utils.hpp"
 
-namespace process
+namespace process::details::apply_global_routing
 {
 
-namespace details
+/** Support function for placement macros in gcells */
+bool
+is_ignore_metal(const types::Metal metal)
 {
+  switch(metal)
+    {
+    case types::Metal::L1M1_V:
+    case types::Metal::M1M2_V:
+    case types::Metal::M2M3_V:
+    case types::Metal::M3M4_V:
+    case types::Metal::M4M5_V:
+    case types::Metal::M6M7_V:
+    case types::Metal::M7M8_V:
+    case types::Metal::M8M9_V:
+    case types::Metal::NONE:
+      return true;
+    default:
+      return false;
+    }
+}
 
-/** Support function for placement in gcell */
 void
 apply_orientation(types::Polygon& rect, types::Orientation orientation, double width, double height)
 {
@@ -101,6 +120,160 @@ place_at(types::Polygon& rect, double x, double y, double height)
     }
 }
 
+} // namespace process::details::global_routing
+
+namespace process::details::encode
+{
+
+void
+prepare_root_matrix(matrix::Matrix& root_matrix, const def::GCell* gcell, const def::Data& def_data)
+{
+  const std::size_t number_of_metals = def_data.m_tracks_x.size();
+
+  const double      m1_offset        = def_data.m_tracks_x[0].m_start;
+  const double      m1_step          = def_data.m_tracks_x[0].m_spacing;
+
+  const double      m1_left_x        = gcell->m_tracks_x.front().m_box[0];
+  const double      m1_right_x       = gcell->m_tracks_x.back().m_box[2];
+
+  const double      m1_left_y        = gcell->m_tracks_y.front().m_box[3];
+  const double      m1_right_y       = gcell->m_tracks_y.back().m_box[5];
+
+  const std::size_t m1_max_tracks_x  = (m1_right_x - m1_left_x) / m1_step;
+  const std::size_t m1_max_tracks_y  = (m1_right_y - m1_left_y) / m1_step;
+
+  for(std::size_t m = 0; m < number_of_metals; ++m)
+    {
+      if(m == 0)
+        {
+          /** First layer always fill whole matrix as it suppose to be */
+          for(std::size_t y = 0, end_y = m1_max_tracks_y * 2, end_x = m1_max_tracks_x * 2; y < end_y; y += 2)
+            {
+              for(std::size_t x = 0; x < end_x; ++x)
+                {
+                  root_matrix.set_at(uint8_t(types::Cell::TRACE), x, y, m);
+                }
+            }
+        }
+      else
+        {
+          const double offset = def_data.m_tracks_x[m].m_start;
+          const double step   = def_data.m_tracks_x[m].m_spacing;
+
+          if(m % 2 == 0)
+            {
+              double left = offset + std::ceil((m1_left_x - offset) / step) * step;
+
+              while(left < m1_right_x)
+                {
+                  int64_t n = std::floor((m1_right_x - (left - m1_offset)) / m1_step);
+
+                  /** Add track by x */
+                  for(std::size_t x = 0, end_x = end_x = m1_max_tracks_x * 2; x < end_x; ++x)
+                    {
+                      root_matrix.set_at(uint8_t(types::Cell::TRACE), x, n * 2, m);
+
+                      if(root_matrix.get_at(x, n * 2, m - 1) == uint8_t(types::Cell::TRACE))
+                        {
+                          root_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), x, n * 2, m - 1);
+                        }
+                    }
+
+                  left += step;
+                }
+            }
+          else
+            {
+              double left = offset + std::ceil((m1_left_y - offset) / step) * step;
+
+              while(left < m1_right_y)
+                {
+                  int64_t n = std::floor((m1_right_y - (left - m1_offset)) / m1_step);
+
+                  /** Add track by y*/
+                  for(std::size_t y = 0, end_y = m1_max_tracks_y * 2; y < end_y; ++y)
+                    {
+                      root_matrix.set_at(uint8_t(types::Cell::TRACE), n * 2, y, m);
+
+                      if(root_matrix.get_at(n * 2, y, m - 1) == uint8_t(types::Cell::TRACE))
+                        {
+                          root_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), n * 2, y, m - 1);
+                        }
+                    }
+
+                  left += step;
+                }
+            }
+        }
+    }
+}
+
+std::tuple<uint8_t, uint8_t, uint8_t>
+map_to_rgb(const std::vector<uint32_t>& values, uint32_t N)
+{
+  for(uint32_t value : values)
+    {
+      if(value < 0 || value >= N)
+        {
+          throw std::invalid_argument("All values must be in the range [0, N-1]");
+        }
+    }
+
+  std::size_t cmb_value = 0;
+  std::size_t k         = values.size();
+
+  for(std::size_t i = 0; i < k; ++i)
+    {
+      cmb_value += values[i] * std::pow(N, k - i - 1);
+    }
+
+  return { ((cmb_value / (256 * 256)) % 256), ((cmb_value / 256) % 256), (cmb_value % 256) };
+}
+
+/** Polygon merging */
+Clipper2Lib::PathD
+convertToPathD(const std::vector<double>& polygon)
+{
+  Clipper2Lib::PathD path;
+
+  for(size_t i = 0; i < polygon.size(); i += 2)
+    {
+      path.emplace_back(Clipper2Lib::PointD(polygon[i], polygon[i + 1]));
+    }
+
+  return path;
+}
+
+std::vector<double>
+convertToPolygon(const Clipper2Lib::PathD& path)
+{
+  std::vector<double> polygon;
+  for(const auto& point : path)
+    {
+      polygon.push_back(point.x);
+      polygon.push_back(point.y);
+    }
+  return polygon;
+}
+
+std::vector<double>
+unionPolygons(const std::vector<double>& polygon1, const std::vector<double>& polygon2)
+{
+  Clipper2Lib::PathD  path1    = convertToPathD(polygon1);
+  Clipper2Lib::PathD  path2    = convertToPathD(polygon2);
+  
+  Clipper2Lib::PathsD solution = Clipper2Lib::Union(Clipper2Lib::PathsD{ path1 }, Clipper2Lib::PathsD{ path2 }, Clipper2Lib::FillRule::NonZero);
+
+  if(!solution.empty())
+    {
+      return convertToPolygon(solution[0]);
+    }
+  else
+    {
+      return {};
+    }
+}
+
 /** Support functions for track assignment */
 std::pair<double, double>
 calculate_centroid(const std::vector<double>& polygon)
@@ -111,24 +284,31 @@ calculate_centroid(const std::vector<double>& polygon)
   double            cx   = 0.0;
   double            cy   = 0.0;
 
-  for(std::size_t i = 0; i < n; i += 2)
+  for(std::size_t i = 0; i < n; ++i)
     {
-      const double x1 = polygon[2 * i];
-      const double y1 = polygon[2 * i + 1];
-      const double x2 = polygon[2 * ((i + 1) % n)];
-      const double y2 = polygon[2 * ((i + 1) % n) + 1];
+      const double x1     = polygon[2 * i];
+      const double y1     = polygon[2 * i + 1];
+      const double x2     = polygon[2 * ((i + 1) % n)];
+      const double y2     = polygon[2 * ((i + 1) % n) + 1];
 
-      area += (x1 * y2 - x2 * y1);
+      const double factor = -(x1 * y2 - x2 * y1);
 
-      const double factor = (x1 * y2 - x2 * y1);
-
+      area += factor;
       cx += (x1 + x2) * factor;
       cy += (y1 + y2) * factor;
     }
 
-  area *= 3.0;
+  area = std::abs(area) / 2.0;
 
-  return { cx / area, cy / area };
+  if(area == 0.0)
+    {
+      throw std::runtime_error("Degenerate polygon: area is zero.");
+    }
+
+  cx /= (6.0 * area);
+  cy /= (6.0 * area);
+
+  return { std::abs(cx), std::abs(cy) };
 }
 
 bool
@@ -193,7 +373,72 @@ find_closest_point_in_polygon(const std::pair<double, double>& centroid, const s
   return closest_point;
 }
 
-} // namespace details
+} // namespace process::details::encode
+
+namespace process
+{
+
+std::pair<matrix::Matrix, std::vector<std::vector<uint8_t>>>
+Task::encode_wip(const uint8_t max_layers)
+{
+  /** Pack all nets */
+  const matrix::Matrix&             wip_matrix = m_matrices[m_wip_idx];
+  const matrix::Shape               wip_shape  = m_matrices[m_wip_idx].shape();
+  const uint8_t                     min_z      = m_wip_idx * max_layers;
+  const uint8_t                     max_z      = min_z + wip_shape.m_z;
+
+  std::vector<std::vector<uint8_t>> packed_terminals;
+
+  for(std::size_t i = 0, end = m_nets.size(); i < end; ++i)
+    {
+      std::vector<uint8_t> terminals{ uint8_t(i), 0 };
+
+      for(std::size_t j = 0, end = m_nets[i].size() / 3; j < end; j += 3)
+        {
+          if(m_nets[i][j + 2] >= min_z && m_nets[i][j + 2] < max_z)
+            {
+              terminals.emplace_back(m_nets[i][j]);
+              terminals.emplace_back(m_nets[i][j + 1]);
+              terminals.emplace_back(m_nets[i][j + 2]);
+            }
+        }
+
+      if(!terminals.empty())
+        {
+          terminals[1] = uint8_t(terminals.size());
+          packed_terminals.emplace_back(std::move(terminals));
+        }
+    }
+
+  /** Encode the wip matrix */
+  matrix::Matrix rgb{ { wip_shape.m_x, wip_shape.m_y, 3 } };
+
+  for(uint8_t x = 0; x < wip_shape.m_x; ++x)
+    {
+      for(uint8_t y = 0; y < wip_shape.m_x; ++y)
+        {
+          std::vector<uint32_t> channels;
+
+          for(uint8_t z = 0; z < wip_shape.m_z; ++z)
+            {
+              channels.emplace_back(wip_matrix.get_at(x, y, z));
+            }
+
+          const auto rgb_value = details::encode::map_to_rgb(channels, 100); // TODO Remove this hardcode
+
+          rgb.set_at(std::get<0>(rgb_value), x, y, 0);
+          rgb.set_at(std::get<1>(rgb_value), x, y, 1);
+          rgb.set_at(std::get<2>(rgb_value), x, y, 2);
+        }
+    }
+
+  return std::make_pair(std::move(rgb), std::move(packed_terminals));
+}
+
+void
+Task::set_value(const std::string& name, const uint8_t value, const uint8_t x, const uint8_t y, const uint8_t z)
+{
+}
 
 void
 apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
@@ -203,7 +448,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
   /** Add global obstacles to gcells */
   for(auto& [rect, metal] : def_data.m_obstacles)
     {
-      if(metal == types::Metal::L1 || metal == types::Metal::NONE)
+      if(details::apply_global_routing::is_ignore_metal(metal) || metal == types::Metal::L1)
         {
           continue;
         }
@@ -216,7 +461,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
         }
     }
 
-  /** TODO: Try to replace with something less memory required data structures, or it will go away itself as i replace guide file with my own global routing */
+  // TODO: Try to replace with something less memory required data structures, or it will go away itself as i replace guide file with my own global routing
   std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<std::pair<types::Polygon, types::Metal>>>> gcell_to_pins;
   std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                                                       pin_to_gcells;
 
@@ -224,7 +469,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
     {
       for(auto& [rect, metal] : pin->m_ports)
         {
-          if(metal == types::Metal::NONE)
+          if(details::apply_global_routing::is_ignore_metal(metal))
             {
               continue;
             }
@@ -253,16 +498,16 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
       for(auto& obs : macro.m_obs)
         {
-          if(obs.m_metal == types::Metal::L1 || obs.m_metal == types::Metal::NONE)
+          if(details::apply_global_routing::is_ignore_metal(obs.m_metal) || obs.m_metal == types::Metal::L1)
             {
               continue;
             }
 
           for(auto& rect : obs.m_rect)
             {
-              details::scale_by(rect, lef_data.m_database_number);
-              details::apply_orientation(rect, component.m_orientation, width, height);
-              details::place_at(rect, component.m_x, component.m_y, height);
+              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
+              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
+              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
 
               GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
@@ -279,14 +524,14 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
           for(auto& [rect, metal] : new_pin->m_ports)
             {
-              if(metal == types::Metal::NONE)
+              if(details::apply_global_routing::is_ignore_metal(metal))
                 {
                   continue;
                 }
 
-              details::scale_by(rect, lef_data.m_database_number);
-              details::apply_orientation(rect, component.m_orientation, width, height);
-              details::place_at(rect, component.m_x, component.m_y, height);
+              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
+              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
+              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
 
               GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
@@ -294,6 +539,25 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
                 {
                   gcell_to_pins[gcell][new_pin].emplace_back(std::move(overlap), metal);
                   pin_to_gcells[new_pin].emplace(gcell);
+                }
+            }
+
+          for(auto& [rect, metal] : new_pin->m_obs)
+            {
+              if(details::apply_global_routing::is_ignore_metal(metal))
+                {
+                  continue;
+                }
+
+              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
+              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
+              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
+
+              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+
+              for(auto& [gcell, overlap] : gwo)
+                {
+                  gcell->m_obstacles.emplace_back(overlap, metal);
                 }
             }
 
@@ -324,13 +588,25 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
               /** Add edge pins and assign them to tracks */
               if(i > 0)
                 {
-                  gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
-                  gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 1));
+                  if(!gcell->m_edge_pins.count(guide_net.m_name))
+                    {
+                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 1));
+                    }
+                  else
+                    {
+                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 0));
+                    }
 
-                  def::GCell* prev_gcell                     = gwo[i - 1].first;
+                  def::GCell* prev_gcell = gwo[i - 1].first;
 
-                  prev_gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
-                  prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, -1));
+                  if(!prev_gcell->m_edge_pins.count(guide_net.m_name))
+                    {
+                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, -1));
+                    }
+                  else
+                    {
+                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 0));
+                    }
                 }
 
               if(gcell_to_pins.count(gcell) == 0)
@@ -362,7 +638,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
                               for(const auto& [poly, metal] : obstacles)
                                 {
-                                  if(metal == types::Metal::L1 || metal == types::Metal::NONE)
+                                  if(details::apply_global_routing::is_ignore_metal(metal) || metal == types::Metal::L1)
                                     {
                                       continue;
                                     }
@@ -373,13 +649,10 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
                         }
 
                       /** Place current pin in a gcell */
-                      pin->m_is_placed                      = true;
-                      pin->m_ports                          = std::move(gcell_pins.at(pin));
+                      pin->m_is_placed = true;
+                      pin->m_ports     = std::move(gcell_pins.at(pin));
 
-                      gcell->m_pins[name]                   = pin;
-                      gcell->m_nets[guide_net.m_name].m_idx = current_net.m_idx;
-                      gcell->m_nets[guide_net.m_name].m_pins.emplace_back(name);
-
+                      gcell->m_nets[guide_net.m_name].emplace_back(pin);
                       def_data.m_nets_gcells[guide_net.m_name].emplace_back(gcell);
                     }
                 }
@@ -388,179 +661,89 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
     }
 
   /** Remove all not used gcells and collect statistics */
-  std::size_t max_nets     = 0;
-  std::size_t max_pins     = 0;
-
-  std::size_t min_nets     = UINT64_MAX;
-  std::size_t min_pins     = UINT64_MAX;
-
-  std::size_t total_gcells = 0;
-  std::size_t total_nets   = 0;
-  std::size_t total_pins   = 0;
-
   for(std::size_t y = 0, end_y = def_data.m_gcells.size(); y < end_y; ++y)
     {
-      auto itr = std::remove_if(def_data.m_gcells[y].begin(), def_data.m_gcells[y].end(), [&max_nets, &min_nets, &max_pins, &min_pins, &total_gcells, &total_nets, &total_pins](const def::GCell* ptr) {
-        if(ptr->m_pins.size() == 0 && ptr->m_edge_pins.empty())
+      auto itr = std::remove_if(def_data.m_gcells[y].begin(), def_data.m_gcells[y].end(), [](const def::GCell* ptr) {
+        if(ptr->m_nets.size() == 0 && ptr->m_edge_pins.empty())
           {
             delete ptr;
             return true;
           }
 
-        /** Collect statistics */
-        max_nets = std::max(max_nets, ptr->m_nets.size());
-        min_nets = std::min(min_nets, ptr->m_nets.size());
-        max_pins = std::max(max_pins, ptr->m_pins.size() + ptr->m_edge_pins.size());
-        min_pins = std::min(min_pins, ptr->m_pins.size() + ptr->m_edge_pins.size());
-
-        total_nets += ptr->m_nets.size();
-        total_pins += ptr->m_pins.size() + ptr->m_edge_pins.size();
-        ++total_gcells;
-
-        if(ptr->m_pins.size() + ptr->m_edge_pins.size() == 1)
-          {
-            std::cout << "Warning Routing: GCell contains only one pin!" << std::endl;
-          }
-
         return false;
       });
+
       def_data.m_gcells[y].erase(itr, def_data.m_gcells[y].end());
     }
 
   auto itr = std::remove_if(def_data.m_gcells.begin(), def_data.m_gcells.end(), [](const auto vec) { return vec.size() == 0; });
   def_data.m_gcells.erase(itr, def_data.m_gcells.end());
-
-  std::cout << "Gcell statistics:" << '\n';
-  std::cout << "  - Nets [min, abg, max] : [" << min_nets << ',' << total_nets / total_gcells << ',' << max_nets << "]\n";
-  std::cout << "  - Pins [min, avg, max]: [" << min_pins << ',' << total_pins / total_gcells << ',' << max_pins << "]\n";
-  std::cout << std::flush;
 }
 
-std::vector<std::vector<Task>>
+std::vector<Task>
 encode(def::Data& def_data)
 {
-  const std::size_t              size             = 32; /** TODO: Remove this hardcode */
-  const std::size_t              number_of_metals = def_data.m_tracks_x.size();
-  const auto&                    pins             = def_data.m_pins;
+  const uint8_t     max_nets_in_task     = 10; // TODO: Remove this hardcode
+  const uint8_t     max_layers_in_matrix = 2;  // TODO: Remove this hardcode
+  const uint8_t     size                 = 32; // TODO: Remove this hardcode
+  const uint8_t     number_of_layers     = uint8_t(def_data.m_tracks_x.size());
 
-  std::vector<std::vector<Task>> tasks;
-  tasks.resize(def_data.m_gcells.size());
+  std::vector<Task> tasks;
 
   for(std::size_t y = 0, end_y = def_data.m_gcells.size(); y < end_y; ++y)
     {
       for(std::size_t x = 0, end_x = def_data.m_gcells[y].size(); x < end_x; ++x)
         {
-          def::GCell* gcell = def_data.m_gcells[y][x];
+          def::GCell*    gcell = def_data.m_gcells[y][x];
 
-          Task        task;
-          task.m_idx_x                      = gcell->m_idx_x;
-          task.m_idx_y                      = gcell->m_idx_y;
-          task.m_matrix                     = matrix::Matrix({ size * 2, size * 2, uint8_t(def_data.m_tracks_x.size()) });
+          /** Preapare the root matrix */
+          matrix::Matrix root_matrix{ { size * 2, size * 2, uint8_t(def_data.m_tracks_x.size()) } };
+          details::encode::prepare_root_matrix(root_matrix, gcell, def_data);
 
-          /** Place tracks */
-          /** TODO: Move to a separate function */
-          const double      m1_offset       = def_data.m_tracks_x[0].m_start;
-          const double      m1_step         = def_data.m_tracks_x[0].m_spacing;
+          TaskBatch task_batch;
+          task_batch.m_gcell = gcell;
 
-          const double      m1_left_x       = gcell->m_tracks_x.front().m_box[0];
-          const double      m1_right_x      = gcell->m_tracks_x.back().m_box[2];
-
-          const double      m1_left_y       = gcell->m_tracks_y.front().m_box[3];
-          const double      m1_right_y      = gcell->m_tracks_y.back().m_box[5];
-
-          const std::size_t m1_max_tracks_x = (m1_right_x - m1_left_x) / m1_step;
-          const std::size_t m1_max_tracks_y = (m1_right_y - m1_left_y) / m1_step;
-
-          for(std::size_t m = 0; m < number_of_metals; ++m)
+          /** Make tasks for each net group */
+          for(auto net_itr = gcell->m_nets.begin(), net_itr_end = gcell->m_nets.end(); net_itr != net_itr_end;)
             {
-              if(m == 0)
+              Task task;
+
+              for(uint8_t i = 0; i <= number_of_layers; i += max_layers_in_matrix)
                 {
-                  /** First layer always fill whole matrix as it suppose to be */
-                  for(std::size_t y = 0, end_y = m1_max_tracks_y * 2, end_x = m1_max_tracks_x * 2; y < end_y; y += 2)
+                  task.m_matrices.emplace_back(matrix::Shape{ size * 2, size * 2, std::min(max_layers_in_matrix, uint8_t(number_of_layers - i)) });
+                }
+
+              for(std::size_t i = 0; i < max_nets_in_task && net_itr != net_itr_end; ++i, ++net_itr)
+                {
+                  /** Track assignment */
+                  const auto& [name, net] = *net_itr;
+
+                  for(const auto& pin : net)
                     {
-                      for(std::size_t x = 0; x < end_x; ++x)
+                      types::Polygon pin_polygon;
+
+                      /**
+                       * 1. Find polygon centroid.
+                       * 2. Project it on polygon(non-convex case).
+                       * 3. Project new(old in convex case) centroid on closest track.
+                       * 4. If point is not iside of the polygon that add projection line to resulting path for this net.
+                       */
+                      for(const auto& [rect, metal] : pin->m_ports)
                         {
-                          task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, y, m);
+                          pin_polygon = details::encode::unionPolygons(pin_polygon, rect);
+                        }
+
+                      std::pair<double, double> centroid = details::encode::calculate_centroid(pin_polygon);
+
+                      if(!details::encode::is_point_inside_polygon(centroid.first, centroid.second, pin_polygon))
+                        {
+                          centroid = details::encode::find_closest_point_in_polygon(centroid, pin_polygon);
                         }
                     }
                 }
-              else
-                {
-                  const double offset = def_data.m_tracks_x[m].m_start;
-                  const double step   = def_data.m_tracks_x[m].m_spacing;
 
-                  if(m % 2 == 0)
-                    {
-                      double left = offset + std::ceil((m1_left_x - offset) / step) * step;
-
-                      while(left < m1_right_x)
-                        {
-                          int64_t n = std::floor((m1_right_x - (left - m1_offset)) / m1_step);
-
-                          /** Add track by x */
-                          for(std::size_t x = 0, end_x = end_x = m1_max_tracks_x * 2; x < end_x; ++x)
-                            {
-                              task.m_matrix.set_at(uint8_t(types::Cell::TRACE), x, n * 2, m);
-
-                              if(task.m_matrix.get_at(x, n * 2, m - 1) == uint8_t(types::Cell::TRACE))
-                                {
-                                  task.m_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), x, n * 2, m - 1);
-                                }
-                            }
-
-                          left += step;
-                        }
-                    }
-                  else
-                    {
-                      double left = offset + std::ceil((m1_left_y - offset) / step) * step;
-
-                      while(left < m1_right_y)
-                        {
-                          int64_t n = std::floor((m1_right_y - (left - m1_offset)) / m1_step);
-
-                          /** Add track by y*/
-                          for(std::size_t y = 0, end_y = m1_max_tracks_y * 2; y < end_y; ++y)
-                            {
-                              task.m_matrix.set_at(uint8_t(types::Cell::TRACE), n * 2, y, m);
-
-                              if(task.m_matrix.get_at(n * 2, y, m - 1) == uint8_t(types::Cell::TRACE))
-                                {
-                                  task.m_matrix.set_at(uint8_t(types::Cell::INTERSECTION_VIA), n * 2, y, m - 1);
-                                }
-                            }
-
-                          left += step;
-                        }
-                    }
-                }
+              task_batch.m_task.emplace_back(std::move(task));
             }
-
-          // for(const auto& [name, net] : gcell->m_nets)
-          //   {
-          // double mean_pin_x;
-          // double mean_pin_y;
-
-          // for(const auto& pin_name : net.m_pins)
-          //   {
-          //     pin::Pin*                                        pin = pins.at(pin_name);
-          //     std::unordered_map<types::Metal, types::Polygon> pin_polygons;
-
-          //     /**
-          //      * 1. Find polygon centroid.
-          //      * 2. Project it on polygon(non-convex case).
-          //      * 3. Project new(old in convex case) centroid on closest track.
-          //      * 4. If point is not iside of the polygon that add projection line to resulting path for this net.
-          //      */
-
-          //     for(const auto& [rect, metal] : pin->m_ports)
-          //       {
-          //         pin_polygons[metal] = utils::merge_polygons(pin_polygons[metal], rect);
-          //       }
-          //   }
-          // }
-
-          tasks[y].emplace_back(std::move(task));
         }
     }
 

@@ -204,11 +204,14 @@ MainWindow::apply_global_routing()
                 batch.m_rects.emplace_back(obs.first, details::get_metal_color(obs.second));
               }
 
-            for(const auto& [_, pin] : gcell->m_pins)
+            for(const auto& [name, net] : gcell->m_nets)
               {
-                for(const auto& [rect, metal] : pin->m_ports)
+                for(const auto& pin : net)
                   {
-                    batch.m_rects.emplace_back(rect, details::get_metal_color(metal));
+                    for(const auto& [rect, metal] : pin->m_ports)
+                      {
+                        batch.m_rects.emplace_back(rect, details::get_metal_color(metal));
+                      }
                   }
               }
 
@@ -227,44 +230,44 @@ MainWindow::apply_global_routing()
 void
 MainWindow::encode()
 {
-  const std::vector<std::vector<process::Task>> tasks = process::encode(m_def_data);
+  const std::vector<process::Task> tasks = process::encode(m_def_data);
 
   /** Make view data */
   {
     viewer::Data viewer_data;
     viewer_data.m_box = { 0, 0, uint32_t(tasks.size() * 64), uint32_t(tasks.size() * 64) };
 
-    for(std::size_t y = 0, end_y = tasks.size(); y < end_y; ++y)
-      {
-        for(std::size_t x = 0, end_x = tasks[y].size(); x < end_x; ++x)
-          {
-            const auto&         task  = tasks[y][x];
-            const auto&         shape = task.m_matrix.shape();
+    // for(std::size_t y = 0, end_y = tasks.size(); y < end_y; ++y)
+    //   {
+    //     for(std::size_t x = 0, end_x = tasks[y].size(); x < end_x; ++x)
+    //       {
+    //         const auto&         task  = tasks[y][x];
+    //         const auto&         shape = task.m_matrix.shape();
 
-            viewer::Data::Batch batch;
+    //         viewer::Data::Batch batch;
 
-            for(std::size_t i = 0, cols = shape.m_x; i < cols; ++i)
-              {
-                for(std::size_t j = 0, rows = shape.m_y; j < rows; ++j)
-                  {
-                    uint16_t color = 0;
+    //         for(std::size_t i = 0, cols = shape.m_x; i < cols; ++i)
+    //           {
+    //             for(std::size_t j = 0, rows = shape.m_y; j < rows; ++j)
+    //               {
+    //                 uint16_t color = 0;
 
-                    for(std::size_t k = 0, depth = shape.m_z; k < depth; ++k)
-                      {
-                        color += task.m_matrix.get_at(i, j, k);
-                      }
+    //                 for(std::size_t k = 0, depth = shape.m_z; k < depth; ++k)
+    //                   {
+    //                     color += task.m_matrix.get_at(i, j, k);
+    //                   }
 
-                    double         i_x = task.m_idx_x * 64 + i;
-                    double         j_y = task.m_idx_y * 64 + j;
-                    types::Polygon rect{ i_x, j_y, i_x + 1, j_y, i_x + 1, j_y + 1, i_x, j_y + 1 };
+    //                 double         i_x = task.m_idx_x * 64 + i;
+    //                 double         j_y = task.m_idx_y * 64 + j;
+    //                 types::Polygon rect{ i_x, j_y, i_x + 1, j_y, i_x + 1, j_y + 1, i_x, j_y + 1 };
 
-                    batch.m_rects.emplace_back(std::move(rect), QColor(color * 10, 0, 0));
-                  }
-              }
+    //                 batch.m_rects.emplace_back(std::move(rect), QColor(color * 10, 0, 0));
+    //               }
+    //           }
 
-            viewer_data.m_batches.emplace_back(std::move(batch));
-          }
-      }
+    //         viewer_data.m_batches.emplace_back(std::move(batch));
+    //       }
+    //   }
 
     emit send_viewer_data(viewer_data);
   }

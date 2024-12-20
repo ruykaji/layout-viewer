@@ -436,6 +436,7 @@ void
 DEF::pin_callback(defiPin* param, Data& data)
 {
   std::vector<std::pair<types::Polygon, types::Metal>> rects;
+  types::Metal                                         top_metal;
 
   for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
     {
@@ -452,17 +453,39 @@ DEF::pin_callback(defiPin* param, Data& data)
 
           port->bounds(j, &xl, &yl, &xh, &yh);
 
-          types::Polygon rect  = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
-          types::Metal   metal = utils::get_skywater130_metal(port->layer(j));
+          types::Metal metal = utils::get_skywater130_metal(port->layer(j));
+
+          if(types::Metal::NONE == metal)
+            {
+              continue;
+            }
+
+          types::Polygon rect = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
 
           rects.emplace_back(std::move(rect), metal);
+
+          if(top_metal < metal)
+            {
+              top_metal = metal;
+            }
         }
     }
 
   if(std::strcmp(param->use(), "GROUND") != 0 && std::strcmp(param->use(), "POWER") != 0)
     {
-      pin::Pin* pin              = new pin::Pin();
-      pin->m_ports               = std::move(rects);
+      pin::Pin* pin = new pin::Pin();
+
+      for(const auto& [rect, metal] : rects)
+        {
+          if(metal == top_metal)
+            {
+              pin->m_ports.emplace_back(std::move(rect), metal);
+            }
+          else
+            {
+              pin->m_obs.emplace_back(std::move(rect), metal);
+            }
+        }
 
       const std::string name     = param->pinName();
       data.m_pins["PIN:" + name] = pin;

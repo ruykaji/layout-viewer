@@ -106,40 +106,4 @@ get_rect_overlap(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect)
   return { left, top, right, top, right, bottom, left, bottom };
 }
 
-types::Polygon
-merge_polygons(const types::Polygon& lhs, const types::Polygon& rhs)
-{
-  types::Polygon merged = lhs;
-  merged.insert(merged.end(), rhs.begin(), rhs.end());
-
-  double cx = 0;
-  double cy = 0;
-
-  for(size_t i = 0, end = merged.size(); i < end; i += 2)
-    {
-      cx += merged[i];
-      cy += merged[i + 1];
-    }
-
-  cx /= merged.size() / 2.0;
-  cy /= merged.size() / 2.0;
-
-  std::vector<std::pair<double, double>> points;
-
-  for(size_t i = 0, end = merged.size(); i < end; i += 2)
-    {
-      points.emplace_back(merged[i], merged[i + 1]);
-    }
-
-  std::sort(points.begin(), points.end(), [cx, cy](const auto& a, const auto& b) { return std::atan2(a.second - cy, a.first - cx) < std::atan2(b.second - cy, b.first - cx); });
-
-  for(size_t i = 0, end = merged.size(); i < end; i += 2)
-    {
-      merged[i]     = points[i].first;
-      merged[i + 1] = points[i].second;
-    }
-
-  return merged;
-}
-
 } // namespace utils
