@@ -9,7 +9,7 @@
 #include <QWheelEvent>
 #include <QWidget>
 
-#include "Include/Types.hpp"
+#include "Include/Geometry.hpp"
 
 namespace gui::viewer
 {
@@ -18,9 +18,9 @@ struct Data
 {
   struct Batch
   {
-    std::size_t                                    m_width;
-    std::size_t                                    m_height;
-    std::vector<std::pair<types::Polygon, QColor>> m_rects;
+    std::size_t                                   m_width;
+    std::size_t                                   m_height;
+    std::vector<std::pair<geom::Polygon, QColor>> m_rects;
   };
 
   std::array<uint32_t, 4UL> m_box;
@@ -61,13 +61,20 @@ public slots:
   set_viewer_data(const Data& data);
 
 private:
-  Data   m_data;
+  Data                m_data;
 
-  bool   m_is_dragging;
-  double m_zoom_factor;
-  double m_pan_x;
-  double m_pan_y;
-  QPoint m_last_mouse_position;
+  bool                m_is_dragging;
+  double              m_zoom_factor;
+  double              m_pan_x;
+  double              m_pan_y;
+  QPointF             m_last_mouse_position;
+  QPointF             m_last_mouse_scene_position;
+
+  GLuint              vao;
+  GLuint              vbo;
+  GLuint              ebo;
+  std::vector<float>  vertices;
+  std::vector<GLuint> indices;
 };
 
 } // namespace gui

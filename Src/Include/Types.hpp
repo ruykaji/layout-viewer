@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include <clipper2/clipper.h>
+
 namespace types
 {
 
@@ -51,8 +53,6 @@ enum class Cell : uint8_t
   INTERSECTION_VIA = 3,
   TERMINAL         = 4
 };
-
-using Polygon = std::vector<double>;
 
 } // namespace types
 

@@ -7,8 +7,8 @@
 
 #include <defrReader.hpp>
 
+#include "Include/Geometry.hpp"
 #include "Include/Pin.hpp"
-#include "Include/Types.hpp"
 
 namespace def
 {
@@ -56,26 +56,20 @@ struct Net
 
 struct GCell
 {
-  struct Track
-  {
-    types::Polygon m_box;
-    types::Metal   m_metal;
-  };
-
   /** Matrix coordinates */
   std::size_t                                                      m_idx_x;
   std::size_t                                                      m_idx_y;
 
-  types::Polygon                                                   m_box;
-  std::vector<Track>                                               m_tracks_x;
-  std::vector<Track>                                               m_tracks_y;
-  std::vector<std::pair<types::Polygon, types::Metal>>             m_obstacles;
+  geom::Polygon                                                    m_box;
+  std::vector<geom::Polygon>                                       m_tracks_x;
+  std::vector<geom::Polygon>                                       m_tracks_y;
+  std::vector<geom::Polygon>                                       m_obstacles;
 
   std::unordered_map<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
   std::unordered_map<std::string, std::vector<pin::Pin*>>          m_nets;
 
-  static std::vector<std::pair<GCell*, types::Polygon>>
-  find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
+  static std::vector<std::pair<GCell*, geom::Polygon>>
+  find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
 };
 
 struct Data
@@ -83,7 +77,7 @@ struct Data
   /** General */
   std::array<uint32_t, 4UL>                            m_box;
   std::vector<ComponentTemplate>                       m_components;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_obstacles;
+  std::vector<geom::Polygon>                           m_obstacles;
 
   /** Pins related */
   std::unordered_map<std::string, pin::Pin*>           m_pins;

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "Include/Geometry.hpp"
 #include "Include/Types.hpp"
 
 namespace pin
@@ -31,12 +32,11 @@ enum class Direction
 
 struct Pin
 {
-  bool                                                 m_is_placed = false;
-  std::pair<double, double>                            m_center;
-  Use                                                  m_use;
-  Direction                                            m_direction;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_ports;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_obs;
+  bool                       m_is_placed = false;
+  Use                        m_use;
+  Direction                  m_direction;
+  std::vector<geom::Polygon> m_ports;
+  std::vector<geom::Polygon> m_obs;
 };
 
 /**

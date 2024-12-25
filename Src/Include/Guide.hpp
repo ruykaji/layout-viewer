@@ -5,15 +5,15 @@
 #include <string>
 #include <vector>
 
-#include "Include/Types.hpp"
+#include "Include/Geometry.hpp"
 
 namespace guide
 {
 
 struct Net
 {
-  std::string                                          m_name;
-  std::vector<std::pair<types::Polygon, types::Metal>> m_path;
+  std::string                m_name;
+  std::vector<geom::Polygon> m_path;
 };
 
 std::vector<Net>

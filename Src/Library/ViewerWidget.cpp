@@ -1,3 +1,4 @@
+#include <GL/glu.h>
 #include <QApplication>
 #include <QDebug>
 #include <QPainter>
@@ -5,6 +6,18 @@
 #include <QTransform>
 
 #include "Include/ViewerWidget.hpp"
+
+namespace gui::viewer::details
+{
+
+void
+tess_vertex_callback(const GLvoid* data)
+{
+  const GLdouble* vertex = static_cast<const GLdouble*>(data);
+  glVertex2d(vertex[0], vertex[1]);
+}
+
+} // namespace gui::viewer::details
 
 namespace gui::viewer
 {
@@ -40,6 +53,19 @@ void
 Widget::paintGL()
 {
   glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glPushAttrib(GL_ALL_ATTRIB_BITS);
+
+  QString  text_coords = QString("X: %1, Y: %2").arg(m_last_mouse_scene_position.x(), 0, 'd', 0).arg(m_last_mouse_scene_position.y(), 0, 'd', 0);
+  QPainter painter(this);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setPen(Qt::white);
+  painter.setFont(QFont("Arial", 12));
+  painter.drawText(10, height() - 20, text_coords);
+  painter.end();
+
+  glPopAttrib();
 
   glPushMatrix();
   glTranslatef(m_pan_x, m_pan_y, 0.0f);
@@ -49,31 +75,53 @@ Widget::paintGL()
     {
       for(const auto& pair : batch.m_rects)
         {
-          const auto& [rect, color] = pair;
+          auto [poly, color] = pair;
 
-          const double red          = color.redF();
-          const double green        = color.greenF();
-          const double blue         = color.blueF();
+          const double red   = color.redF();
+          const double green = color.greenF();
+          const double blue  = color.blueF();
 
           if(red == 1.0 && green == 1.0 && blue == 1.0)
             {
-              glColor4f(red, green, blue, 1.00f);
+              glColor4f(1.0f, 1.0f, 1.0f, 0.25f);
               glBegin(GL_LINE_LOOP);
-              glVertex2f(rect[0], rect[1]);
-              glVertex2f(rect[2], rect[3]);
-              glVertex2f(rect[4], rect[5]);
-              glVertex2f(rect[6], rect[7]);
+
+              for(const auto& point : poly.m_points)
+                {
+                  glVertex2d(point.x, point.y);
+                }
+
               glEnd();
             }
           else
             {
               glColor4f(red, green, blue, 0.25f);
-              glBegin(GL_QUADS);
-              glVertex2f(rect[0], rect[1]);
-              glVertex2f(rect[2], rect[3]);
-              glVertex2f(rect[4], rect[5]);
-              glVertex2f(rect[6], rect[7]);
-              glEnd();
+
+              static GLdouble vertices[100][3] = { 0 };
+              std::size_t     i                = 0;
+
+              GLUtesselator*  tess             = gluNewTess();
+              gluTessCallback(tess, GLU_TESS_BEGIN, (void (*)())glBegin);
+              gluTessCallback(tess, GLU_TESS_VERTEX, (void (*)())details::tess_vertex_callback);
+              gluTessCallback(tess, GLU_TESS_END, (void (*)())glEnd);
+
+              gluTessBeginPolygon(tess, nullptr);
+              gluTessBeginContour(tess);
+
+              for(const auto& point : poly.m_points)
+                {
+                  vertices[i][0] = point.x;
+                  vertices[i][1] = point.y;
+                  vertices[i][2] = 0.0;
+
+                  gluTessVertex(tess, vertices[i], vertices[i]);
+                  ++i;
+                }
+
+              gluTessEndContour(tess);
+              gluTessEndPolygon(tess);
+
+              gluDeleteTess(tess);
             }
         }
     }
@@ -124,12 +172,17 @@ Widget::mouseMoveEvent(QMouseEvent* event)
 {
   if(m_is_dragging)
     {
-      QPoint delta = event->pos() - m_last_mouse_position;
+      QPointF delta = event->pos() - m_last_mouse_position;
       m_pan_x += delta.x();
       m_pan_y += delta.y();
     }
 
   m_last_mouse_position = event->pos();
+
+  QTransform transform;
+  transform.translate(m_pan_x, m_pan_y);
+  transform.scale(m_zoom_factor, m_zoom_factor);
+  m_last_mouse_scene_position = transform.inverted().map(m_last_mouse_position);
 
   update();
 }

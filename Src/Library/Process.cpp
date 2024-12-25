@@ -34,89 +34,63 @@ is_ignore_metal(const types::Metal metal)
 }
 
 void
-apply_orientation(types::Polygon& rect, types::Orientation orientation, double width, double height)
+apply_orientation(geom::Polygon& poly, types::Orientation orientation, double width, double height)
 {
-  for(size_t i = 0; i < rect.size(); i += 2)
+  if(poly.m_points.size() < 4)
     {
-      double x = rect[i];
-      double y = rect[i + 1];
+      throw std::runtime_error("Process Error: Wrong rectangle format.");
+    }
+
+  for(size_t i = 0; i < poly.m_points.size(); ++i)
+    {
+      double x = poly.m_points[i].x;
+      double y = poly.m_points[i].y;
 
       switch(orientation)
         {
         case types::Orientation::S:
           {
-            rect[i]     = width - x;
-            rect[i + 1] = height - y;
+            poly.m_points[i].x = width - x;
+            poly.m_points[i].y = height - y;
             break;
           }
         case types::Orientation::E:
           {
-            rect[i]     = height - y;
-            rect[i + 1] = x;
+            poly.m_points[i].x = height - y;
+            poly.m_points[i].y = x;
             break;
           }
         case types::Orientation::W:
           {
-            rect[i]     = y;
-            rect[i + 1] = width - x;
+            poly.m_points[i].x = y;
+            poly.m_points[i].y = width - x;
             break;
           }
         case types::Orientation::FN:
           {
-            rect[i] = width - x;
+            poly.m_points[i].x = width - x;
             break;
           }
         case types::Orientation::FS:
           {
-            rect[i + 1] = height - y;
+            poly.m_points[i].y = height - y;
             break;
           }
         case types::Orientation::FE:
           {
-            rect[i]     = y;
-            rect[i + 1] = x;
+            poly.m_points[i].x = y;
+            poly.m_points[i].y = x;
             break;
           }
         case types::Orientation::FW:
           {
-            rect[i]     = height - y;
-            rect[i + 1] = width - x;
+            poly.m_points[i].x = height - y;
+            poly.m_points[i].y = width - x;
             break;
           }
         default:
           break;
         }
-    }
-
-  if(rect[3] > rect[5])
-    {
-      std::swap(rect[3], rect[5]);
-      std::swap(rect[1], rect[7]);
-    }
-
-  if(rect[0] > rect[2])
-    {
-      std::swap(rect[0], rect[2]);
-      std::swap(rect[4], rect[6]);
-    }
-}
-
-void
-scale_by(types::Polygon& rect, double scale)
-{
-  for(auto& point : rect)
-    {
-      point *= scale;
-    }
-}
-
-void
-place_at(types::Polygon& rect, double x, double y, double height)
-{
-  for(std::size_t i = 0, end = rect.size(); i < end; i += 2)
-    {
-      rect[i] += x;
-      rect[i + 1] += y;
     }
 }
 
@@ -133,11 +107,11 @@ prepare_root_matrix(matrix::Matrix& root_matrix, const def::GCell* gcell, const 
   const double      m1_offset        = def_data.m_tracks_x[0].m_start;
   const double      m1_step          = def_data.m_tracks_x[0].m_spacing;
 
-  const double      m1_left_x        = gcell->m_tracks_x.front().m_box[0];
-  const double      m1_right_x       = gcell->m_tracks_x.back().m_box[2];
+  const double      m1_left_x        = gcell->m_tracks_x.front().m_points[0].x;
+  const double      m1_right_x       = gcell->m_tracks_x.back().m_points[1].x;
 
-  const double      m1_left_y        = gcell->m_tracks_y.front().m_box[3];
-  const double      m1_right_y       = gcell->m_tracks_y.back().m_box[5];
+  const double      m1_left_y        = gcell->m_tracks_y.front().m_points[1].y;
+  const double      m1_right_y       = gcell->m_tracks_y.back().m_points[2].y;
 
   const std::size_t m1_max_tracks_x  = (m1_right_x - m1_left_x) / m1_step;
   const std::size_t m1_max_tracks_y  = (m1_right_y - m1_left_y) / m1_step;
@@ -228,50 +202,6 @@ map_to_rgb(const std::vector<uint32_t>& values, uint32_t N)
     }
 
   return { ((cmb_value / (256 * 256)) % 256), ((cmb_value / 256) % 256), (cmb_value % 256) };
-}
-
-/** Polygon merging */
-Clipper2Lib::PathD
-convertToPathD(const std::vector<double>& polygon)
-{
-  Clipper2Lib::PathD path;
-
-  for(size_t i = 0; i < polygon.size(); i += 2)
-    {
-      path.emplace_back(Clipper2Lib::PointD(polygon[i], polygon[i + 1]));
-    }
-
-  return path;
-}
-
-std::vector<double>
-convertToPolygon(const Clipper2Lib::PathD& path)
-{
-  std::vector<double> polygon;
-  for(const auto& point : path)
-    {
-      polygon.push_back(point.x);
-      polygon.push_back(point.y);
-    }
-  return polygon;
-}
-
-std::vector<double>
-unionPolygons(const std::vector<double>& polygon1, const std::vector<double>& polygon2)
-{
-  Clipper2Lib::PathD  path1    = convertToPathD(polygon1);
-  Clipper2Lib::PathD  path2    = convertToPathD(polygon2);
-  
-  Clipper2Lib::PathsD solution = Clipper2Lib::Union(Clipper2Lib::PathsD{ path1 }, Clipper2Lib::PathsD{ path2 }, Clipper2Lib::FillRule::NonZero);
-
-  if(!solution.empty())
-    {
-      return convertToPolygon(solution[0]);
-    }
-  else
-    {
-      return {};
-    }
 }
 
 /** Support functions for track assignment */
@@ -443,42 +373,42 @@ Task::set_value(const std::string& name, const uint8_t value, const uint8_t x, c
 void
 apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::vector<guide::Net>& nets)
 {
-  using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, types::Polygon>>;
+  using GCellsWithOverlaps = std::vector<std::pair<def::GCell*, geom::Polygon>>;
 
   /** Add global obstacles to gcells */
-  for(auto& [rect, metal] : def_data.m_obstacles)
+  for(auto& poly : def_data.m_obstacles)
     {
-      if(details::apply_global_routing::is_ignore_metal(metal) || metal == types::Metal::L1)
+      if(details::apply_global_routing::is_ignore_metal(poly.m_metal) || poly.m_metal == types::Metal::L1)
         {
           continue;
         }
 
-      GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+      GCellsWithOverlaps gwo = def::GCell::find_overlaps(poly, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
       for(auto& [gcell, overlap] : gwo)
         {
-          gcell->m_obstacles.emplace_back(overlap, metal);
+          gcell->m_obstacles.emplace_back(overlap);
         }
     }
 
   // TODO: Try to replace with something less memory required data structures, or it will go away itself as i replace guide file with my own global routing
-  std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<std::pair<types::Polygon, types::Metal>>>> gcell_to_pins;
-  std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                                                       pin_to_gcells;
+  std::unordered_map<def::GCell*, std::unordered_map<pin::Pin*, std::vector<geom::Polygon>>> gcell_to_pins;
+  std::unordered_map<pin::Pin*, std::unordered_set<def::GCell*>>                             pin_to_gcells;
 
   for(auto& [_, pin] : def_data.m_pins)
     {
-      for(auto& [rect, metal] : pin->m_ports)
+      for(const auto& port : pin->m_ports)
         {
-          if(details::apply_global_routing::is_ignore_metal(metal))
+          if(details::apply_global_routing::is_ignore_metal(port.m_metal))
             {
               continue;
             }
 
-          GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+          GCellsWithOverlaps gwo = def::GCell::find_overlaps(port, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
           for(auto& [gcell, overlap] : gwo)
             {
-              gcell_to_pins[gcell][pin].emplace_back(std::move(overlap), metal);
+              gcell_to_pins[gcell][pin].emplace_back(std::move(overlap));
               pin_to_gcells[pin].emplace(gcell);
             }
         }
@@ -491,7 +421,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
         {
           throw std::runtime_error("Process Error: Couldn't find a macro with the name - \"" + component.m_name + "\".");
         }
-
+        
       lef::Macro   macro  = lef_data.m_macros.at(component.m_name);
       const double width  = macro.m_width * lef_data.m_database_number;
       const double height = macro.m_height * lef_data.m_database_number;
@@ -503,18 +433,15 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
               continue;
             }
 
-          for(auto& rect : obs.m_rect)
+          obs.scale_by(lef_data.m_database_number);
+          details::apply_global_routing::apply_orientation(obs, component.m_orientation, width, height);
+          obs.move_by({ component.m_x, component.m_y });
+
+          GCellsWithOverlaps gwo = def::GCell::find_overlaps(obs, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+
+          for(auto& [gcell, overlap] : gwo)
             {
-              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
-              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
-              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
-
-              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
-
-              for(auto& [gcell, overlap] : gwo)
-                {
-                  gcell->m_obstacles.emplace_back(overlap, obs.m_metal);
-                }
+              gcell->m_obstacles.emplace_back(overlap);
             }
         }
 
@@ -522,42 +449,42 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
         {
           pin::Pin* new_pin = new pin::Pin(pin);
 
-          for(auto& [rect, metal] : new_pin->m_ports)
+          for(auto& port : new_pin->m_ports)
             {
-              if(details::apply_global_routing::is_ignore_metal(metal))
+              if(details::apply_global_routing::is_ignore_metal(port.m_metal))
                 {
                   continue;
                 }
 
-              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
-              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
-              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
+              port.scale_by(lef_data.m_database_number);
+              details::apply_global_routing::apply_orientation(port, component.m_orientation, width, height);
+              port.move_by({ component.m_x, component.m_y });
 
-              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+              GCellsWithOverlaps gwo = def::GCell::find_overlaps(port, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
               for(auto& [gcell, overlap] : gwo)
                 {
-                  gcell_to_pins[gcell][new_pin].emplace_back(std::move(overlap), metal);
+                  gcell_to_pins[gcell][new_pin].emplace_back(std::move(overlap));
                   pin_to_gcells[new_pin].emplace(gcell);
                 }
             }
 
-          for(auto& [rect, metal] : new_pin->m_obs)
+          for(auto& poly : new_pin->m_obs)
             {
-              if(details::apply_global_routing::is_ignore_metal(metal))
+              if(details::apply_global_routing::is_ignore_metal(poly.m_metal))
                 {
                   continue;
                 }
 
-              details::apply_global_routing::scale_by(rect, lef_data.m_database_number);
-              details::apply_global_routing::apply_orientation(rect, component.m_orientation, width, height);
-              details::apply_global_routing::place_at(rect, component.m_x, component.m_y, height);
+              poly.scale_by(lef_data.m_database_number);
+              details::apply_global_routing::apply_orientation(poly, component.m_orientation, width, height);
+              poly.move_by({ component.m_x, component.m_y });
 
-              GCellsWithOverlaps gwo = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+              GCellsWithOverlaps gwo = def::GCell::find_overlaps(poly, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
 
               for(auto& [gcell, overlap] : gwo)
                 {
-                  gcell->m_obstacles.emplace_back(overlap, metal);
+                  gcell->m_obstacles.emplace_back(overlap);
                 }
             }
 
@@ -576,10 +503,10 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
       const def::Net& current_net = def_data.m_nets.at(guide_net.m_name);
 
-      for(const auto& [rect, metal] : guide_net.m_path)
+      for(const auto& poly : guide_net.m_path)
         {
-          GCellsWithOverlaps    gwo       = def::GCell::find_overlaps(rect, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
-          lef::Layer::Direction direction = lef_data.m_layers.at(metal).m_direction;
+          GCellsWithOverlaps    gwo       = def::GCell::find_overlaps(poly, def_data.m_gcells, def_data.m_max_gcell_x, def_data.m_max_gcell_y);
+          lef::Layer::Direction direction = lef_data.m_layers.at(poly.m_metal).m_direction;
 
           for(std::size_t i = 0, end = gwo.size(); i < end; ++i)
             {
@@ -590,22 +517,22 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
                 {
                   if(!gcell->m_edge_pins.count(guide_net.m_name))
                     {
-                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 1));
+                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(poly.m_metal, 1));
                     }
                   else
                     {
-                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 0));
+                      gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(poly.m_metal, 0));
                     }
 
                   def::GCell* prev_gcell = gwo[i - 1].first;
 
                   if(!prev_gcell->m_edge_pins.count(guide_net.m_name))
                     {
-                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, -1));
+                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(poly.m_metal, -1));
                     }
                   else
                     {
-                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(metal, 0));
+                      prev_gcell->m_edge_pins.emplace(guide_net.m_name, std::make_pair(poly.m_metal, 0));
                     }
                 }
 
@@ -634,16 +561,16 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
                           if(another_gcell != gcell)
                             {
                               /** For this cell current pin's geometry is an obstacle */
-                              const std::vector<std::pair<types::Polygon, types::Metal>>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
+                              const std::vector<geom::Polygon>& obstacles = gcell_to_pins.at(another_gcell).at(pin);
 
-                              for(const auto& [poly, metal] : obstacles)
+                              for(const auto& obs : obstacles)
                                 {
-                                  if(details::apply_global_routing::is_ignore_metal(metal) || metal == types::Metal::L1)
+                                  if(details::apply_global_routing::is_ignore_metal(obs.m_metal) || obs.m_metal == types::Metal::L1)
                                     {
                                       continue;
                                     }
 
-                                  another_gcell->m_obstacles.emplace_back(poly, metal);
+                                  another_gcell->m_obstacles.emplace_back(obs);
                                 }
                             }
                         }
@@ -678,6 +605,8 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
   auto itr = std::remove_if(def_data.m_gcells.begin(), def_data.m_gcells.end(), [](const auto vec) { return vec.size() == 0; });
   def_data.m_gcells.erase(itr, def_data.m_gcells.end());
+
+  int a = 0;
 }
 
 std::vector<Task>
@@ -720,7 +649,7 @@ encode(def::Data& def_data)
 
                   for(const auto& pin : net)
                     {
-                      types::Polygon pin_polygon;
+                      geom::Polygon pin_polygon;
 
                       /**
                        * 1. Find polygon centroid.
@@ -728,17 +657,17 @@ encode(def::Data& def_data)
                        * 3. Project new(old in convex case) centroid on closest track.
                        * 4. If point is not iside of the polygon that add projection line to resulting path for this net.
                        */
-                      for(const auto& [rect, metal] : pin->m_ports)
-                        {
-                          pin_polygon = details::encode::unionPolygons(pin_polygon, rect);
-                        }
+                      // for(const auto& [rect, metal] : pin->m_portss)
+                      //   {
+                      //     pin_polygon = details::encode::unionPolygons(pin_polygon, rect);
+                      //   }
 
-                      std::pair<double, double> centroid = details::encode::calculate_centroid(pin_polygon);
+                      // std::pair<double, double> centroid = details::encode::calculate_centroid(pin_polygon);
 
-                      if(!details::encode::is_point_inside_polygon(centroid.first, centroid.second, pin_polygon))
-                        {
-                          centroid = details::encode::find_closest_point_in_polygon(centroid, pin_polygon);
-                        }
+                      // if(!details::encode::is_point_inside_polygon(centroid.first, centroid.second, pin_polygon))
+                      //   {
+                      //     centroid = details::encode::find_closest_point_in_polygon(centroid, pin_polygon);
+                      //   }
                     }
                 }
 

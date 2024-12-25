@@ -194,23 +194,23 @@ MainWindow::apply_global_routing()
             def::GCell*         gcell = m_def_data.m_gcells[y][x];
 
             viewer::Data::Batch batch;
-            batch.m_width  = gcell->m_box[2] - gcell->m_box[0];
-            batch.m_height = gcell->m_box[5] - gcell->m_box[3];
+            batch.m_width  = gcell->m_box.m_points[1].x - gcell->m_box.m_points[0].x;
+            batch.m_height = gcell->m_box.m_points[2].y - gcell->m_box.m_points[1].y;
 
             batch.m_rects.emplace_back(gcell->m_box, details::get_metal_color(types::Metal::NONE));
 
             for(const auto& obs : gcell->m_obstacles)
               {
-                batch.m_rects.emplace_back(obs.first, details::get_metal_color(obs.second));
+                batch.m_rects.emplace_back(obs, details::get_metal_color(obs.m_metal));
               }
 
             for(const auto& [name, net] : gcell->m_nets)
               {
                 for(const auto& pin : net)
                   {
-                    for(const auto& [rect, metal] : pin->m_ports)
+                    for(const auto& port : pin->m_ports)
                       {
-                        batch.m_rects.emplace_back(rect, details::get_metal_color(metal));
+                        batch.m_rects.emplace_back(port, details::get_metal_color(port.m_metal));
                       }
                   }
               }

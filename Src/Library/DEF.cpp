@@ -45,9 +45,8 @@ namespace def
  ******************************************************************************************/
 
 /** =============================== STATIC PUBLIC METHODS ==================================== */
-
-std::vector<std::pair<GCell*, types::Polygon>>
-GCell::find_overlaps(const types::Polygon& rect, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
+std::vector<std::pair<GCell*, geom::Polygon>>
+GCell::find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
 {
   const std::size_t num_rows          = gcells.size();
   const std::size_t num_cols          = gcells[0].size();
@@ -55,96 +54,75 @@ GCell::find_overlaps(const types::Polygon& rect, const std::vector<std::vector<G
   const std::size_t step_row          = height / num_rows;
   const std::size_t step_col          = width / num_cols;
 
-  std::size_t       left_most_gcell   = std::floor(rect[0] / step_col);
-  std::size_t       top_most_gcell    = std::floor(rect[1] / step_row);
-  std::size_t       right_most_gcell  = std::floor((rect[2] - 1) / step_col);
-  std::size_t       bottom_most_gcell = std::floor((rect[5] - 1) / step_row);
+  const auto&       left_top          = poly.m_left_top;
+  const auto&       right_bottom      = poly.m_right_bottom;
 
-  /** Check top left gcell */
+  std::size_t       left_most_gcell   = std::clamp<std::size_t>(std::floor(left_top.x / step_col), 0, num_cols - 1);
+  std::size_t       top_most_gcell    = std::clamp<std::size_t>(std::floor(left_top.y / step_row), 0, num_rows - 1);
+  std::size_t       right_most_gcell  = std::clamp<std::size_t>(std::floor((right_bottom.x - 1) / step_col), 0, num_cols - 1);
+  std::size_t       bottom_most_gcell = std::clamp<std::size_t>(std::floor((right_bottom.y - 1) / step_row), 0, num_rows - 1);
+
+  auto              adjust_gcell      = [&](std::size_t& gcell_row, std::size_t& gcell_col, const geom::Point& target_point) -> bool {
+    if(gcell_row >= num_rows || gcell_col >= num_cols)
+      {
+        return false;
+      }
+
+    const auto& box_points = gcells[gcell_row][gcell_col]->m_box.m_points;
+
+    if((box_points[1].x <= target_point.x && box_points[0].x >= target_point.x && box_points[2].y <= target_point.y && box_points[0].y >= target_point.y))
+      {
+        return false;
+      }
+
+    if(box_points[1].x > target_point.x && gcell_col > 0)
+      {
+        --gcell_col;
+      }
+    else if(box_points[0].x < target_point.x && gcell_col < num_cols - 1)
+      {
+        ++gcell_col;
+      }
+
+    if(box_points[2].y > target_point.y && gcell_row > 0)
+      {
+        --gcell_row;
+      }
+    else if(box_points[0].y < target_point.y && gcell_row < num_rows - 1)
+      {
+        ++gcell_row;
+      }
+    else
+      {
+        return false;
+      }
+
+    return true;
+  };
+
   while(true)
     {
-      if(top_most_gcell >= num_rows || left_most_gcell >= num_cols)
-        {
-          return {};
-        }
-
-      GCell* top_left_gcell = gcells[top_most_gcell][left_most_gcell];
-
-      if(top_left_gcell->m_box[0] <= rect[0]
-         && top_left_gcell->m_box[2] >= rect[0]
-         && top_left_gcell->m_box[1] <= rect[1]
-         && top_left_gcell->m_box[5] >= rect[1])
+      if(!adjust_gcell(top_most_gcell, left_most_gcell, left_top))
         {
           break;
-        }
-
-      if(top_left_gcell->m_box[0] > rect[0])
-        {
-          left_most_gcell -= 1;
-        }
-
-      if(top_left_gcell->m_box[2] < rect[0])
-        {
-          left_most_gcell += 1;
-        }
-
-      if(top_left_gcell->m_box[1] > rect[1])
-        {
-          top_most_gcell -= 1;
-        }
-
-      if(top_left_gcell->m_box[5] < rect[1])
-        {
-          top_most_gcell += 1;
         }
     }
 
-  /** Check bottom right gcell */
   while(true)
     {
-      if(bottom_most_gcell >= num_rows || right_most_gcell >= num_cols)
+      if(!adjust_gcell(bottom_most_gcell, right_most_gcell, right_bottom))
         {
           break;
-        }
-
-      GCell* bottom_right_gcell = gcells[bottom_most_gcell][right_most_gcell];
-
-      if(bottom_right_gcell->m_box[0] <= rect[2]
-         && bottom_right_gcell->m_box[2] >= rect[2]
-         && bottom_right_gcell->m_box[1] <= rect[5]
-         && bottom_right_gcell->m_box[5] >= rect[5])
-        {
-          break;
-        }
-
-      if(bottom_right_gcell->m_box[0] > rect[2])
-        {
-          right_most_gcell -= 1;
-        }
-
-      if(bottom_right_gcell->m_box[2] < rect[2])
-        {
-          right_most_gcell += 1;
-        }
-
-      if(bottom_right_gcell->m_box[1] > rect[5])
-        {
-          bottom_most_gcell -= 1;
-        }
-
-      if(bottom_right_gcell->m_box[5] < rect[5])
-        {
-          bottom_most_gcell += 1;
         }
     }
 
-  std::vector<std::pair<GCell*, types::Polygon>> gcells_with_overlap;
+  std::vector<std::pair<GCell*, geom::Polygon>> gcells_with_overlap;
 
-  for(std::size_t y = top_most_gcell, end_y = std::min(num_rows - 1, bottom_most_gcell); y <= end_y; ++y)
+  for(std::size_t y = top_most_gcell; y <= std::min(num_rows - 1, bottom_most_gcell); ++y)
     {
-      for(std::size_t x = left_most_gcell, end_x = std::min(num_cols - 1, right_most_gcell); x <= end_x; ++x)
+      for(std::size_t x = left_most_gcell; x <= std::min(num_cols - 1, right_most_gcell); ++x)
         {
-          gcells_with_overlap.emplace_back(gcells[y][x], utils::get_rect_overlap(rect, gcells[y][x]->m_box));
+          gcells_with_overlap.emplace_back(gcells[y][x], std::move(poly - gcells[y][x]->m_box));
         }
     }
 
@@ -362,10 +340,12 @@ DEF::component_start_callback(int32_t param, Data& data)
 
       for(std::size_t x = 0, end_x = columns.size() - 1; x < end_x; ++x)
         {
-          GCell* gcell   = new GCell();
-          gcell->m_idx_x = x;
-          gcell->m_idx_y = y;
-          gcell->m_box   = utils::make_clockwise_rectangle({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
+          GCell* gcell           = new GCell();
+          gcell->m_idx_x         = x;
+          gcell->m_idx_y         = y;
+          gcell->m_box           = geom::Polygon({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
+
+          const auto& box_points = gcell->m_box.m_points;
 
           /** Add x tracks to the gcell */
           for(std::size_t i = 0, end_i = data.m_tracks_x.size(); i < end_i; ++i)
@@ -373,15 +353,12 @@ DEF::component_start_callback(int32_t param, Data& data)
               const double start      = data.m_tracks_x[i].m_start;
               const double step       = data.m_tracks_x[i].m_spacing;
 
-              double       left_edge  = start + std::ceil((gcell->m_box[1] - start) / step) * step;
-              const double right_edge = start + std::floor((gcell->m_box[5] - start) / step) * step;
+              double       left_edge  = start + std::ceil((box_points[0].y - start) / step) * step;
+              const double right_edge = start + std::floor((box_points[2].y - start) / step) * step;
 
               while(left_edge <= right_edge)
                 {
-                  GCell::Track track;
-                  track.m_box   = utils::make_clockwise_rectangle({ gcell->m_box[0], left_edge, gcell->m_box[2], left_edge });
-                  track.m_metal = data.m_tracks_x[i].m_metal;
-
+                  geom::Polygon track({ box_points[0].x, left_edge, box_points[1].x, left_edge }, data.m_tracks_x[i].m_metal);
                   gcell->m_tracks_x.emplace_back(std::move(track));
                   left_edge += step;
                 }
@@ -393,15 +370,12 @@ DEF::component_start_callback(int32_t param, Data& data)
               const double start      = data.m_tracks_y[i].m_start;
               const double step       = data.m_tracks_y[i].m_spacing;
 
-              double       left_edge  = start + std::ceil((gcell->m_box[0] - start) / step) * step;
-              const double right_edge = start + std::floor((gcell->m_box[2] - start) / step) * step;
+              double       left_edge  = start + std::ceil((box_points[0].x - start) / step) * step;
+              const double right_edge = start + std::floor((box_points[1].x - start) / step) * step;
 
               while(left_edge <= right_edge)
                 {
-                  GCell::Track track;
-                  track.m_box   = utils::make_clockwise_rectangle({ left_edge, gcell->m_box[1], left_edge, gcell->m_box[5] });
-                  track.m_metal = data.m_tracks_y[i].m_metal;
-
+                  geom::Polygon track({ box_points[0].x, left_edge, box_points[1].x, left_edge }, data.m_tracks_y[i].m_metal);
                   gcell->m_tracks_y.emplace_back(std::move(track));
                   left_edge += step;
                 }
@@ -435,8 +409,8 @@ DEF::component_callback(defiComponent* param, Data& data)
 void
 DEF::pin_callback(defiPin* param, Data& data)
 {
-  std::vector<std::pair<types::Polygon, types::Metal>> rects;
-  types::Metal                                         top_metal;
+  std::unordered_map<types::Metal, std::vector<geom::Polygon>> polygons;
+  types::Metal                                                 top_metal;
 
   for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
     {
@@ -459,40 +433,62 @@ DEF::pin_callback(defiPin* param, Data& data)
             {
               continue;
             }
-
-          types::Polygon rect = utils::make_clockwise_rectangle({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y });
-
-          rects.emplace_back(std::move(rect), metal);
-
-          if(top_metal < metal)
+          else if(top_metal < metal)
             {
               top_metal = metal;
             }
+
+          geom::Polygon target({ static_cast<double>(xl) + x, static_cast<double>(yl) + y, static_cast<double>(xh) + x, static_cast<double>(yh) + y }, metal);
+
+          // TODO Find a way to optimize this part
+          auto          remove_itr = std::remove_if(polygons[metal].begin(), polygons[metal].end(), [&target](const auto& polygon) {
+            if(!(target / polygon))
+              {
+                return false;
+              }
+
+            target += polygon;
+            return true;
+          });
+
+          if(remove_itr != polygons[metal].end())
+            {
+              polygons[metal].erase(remove_itr, polygons[metal].end());
+            }
+
+          polygons[metal].emplace_back(std::move(target));
         }
+    }
+
+  if(polygons.size() == 0)
+    {
+      return;
+    }
+
+  std::vector<geom::Polygon> obs;
+
+  for(const auto& [metal, v_polygons] : polygons)
+    {
+      if(metal == top_metal)
+        {
+          continue;
+        }
+
+      obs.insert(obs.end(), std::make_move_iterator(v_polygons.begin()), std::make_move_iterator(v_polygons.end()));
     }
 
   if(std::strcmp(param->use(), "GROUND") != 0 && std::strcmp(param->use(), "POWER") != 0)
     {
       pin::Pin* pin = new pin::Pin();
-
-      for(const auto& [rect, metal] : rects)
-        {
-          if(metal == top_metal)
-            {
-              pin->m_ports.emplace_back(std::move(rect), metal);
-            }
-          else
-            {
-              pin->m_obs.emplace_back(std::move(rect), metal);
-            }
-        }
+      pin->m_ports  = std::move(polygons[top_metal]);
+      pin->m_obs.insert(pin->m_obs.end(), std::make_move_iterator(obs.begin()), std::make_move_iterator(obs.end()));
 
       const std::string name     = param->pinName();
       data.m_pins["PIN:" + name] = pin;
     }
   else
     {
-      data.m_obstacles.insert(data.m_obstacles.end(), std::make_move_iterator(rects.begin()), std::make_move_iterator(rects.end()));
+      data.m_obstacles.insert(data.m_obstacles.end(), std::make_move_iterator(obs.begin()), std::make_move_iterator(obs.end()));
     }
 }
 
@@ -503,7 +499,7 @@ DEF::net_callback(defiNet* param, Data& data)
     {
       const std::string net_name = param->name();
 
-      Net               net;
+      Net net;
       net.m_idx = data.m_nets.size() + 1;
 
       for(std::size_t i = 0, end = param->numConnections(); i < end; ++i)
@@ -578,12 +574,12 @@ DEF::net_callback(defiNet* param, Data& data)
                             y += width / 2;
                           }
 
-                        const types::Polygon rect                = utils::make_clockwise_rectangle({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x), static_cast<double>(y) });
-                        auto                 gcell_with_overlaps = GCell::find_overlaps(rect, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
+                        const geom::Polygon target({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x + 1), static_cast<double>(y + 1) }, metal);
+                        auto                gcell_with_overlaps = GCell::find_overlaps(target, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
 
                         for(auto& [gcell, overlap] : gcell_with_overlaps)
                           {
-                            gcell->m_obstacles.emplace_back(std::move(overlap), metal);
+                            gcell->m_obstacles.emplace_back(std::move(overlap));
                           }
 
                         x      = -1;

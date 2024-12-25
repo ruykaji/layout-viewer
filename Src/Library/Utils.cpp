@@ -6,17 +6,6 @@
 namespace utils
 {
 
-types::Polygon
-make_clockwise_rectangle(const std::array<double, 4> vertices)
-{
-  double min_x = std::min(vertices[0], vertices[2]);
-  double max_x = std::max(vertices[0], vertices[2]);
-  double min_y = std::min(vertices[1], vertices[3]);
-  double max_y = std::max(vertices[1], vertices[3]);
-
-  return { min_x, min_y, max_x, min_y, max_x, max_y, min_x, max_y };
-}
-
 types::Metal
 get_skywater130_metal(const std::string_view str)
 {
@@ -76,34 +65,6 @@ get_skywater130_metal(const std::string_view str)
     }
 
   return types::Metal::NONE;
-}
-
-bool
-are_rectangle_intersects(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect)
-{
-  if(lhs_rect[0] > rhs_rect[4] || rhs_rect[0] > lhs_rect[4])
-    {
-      return false;
-    }
-
-  if(lhs_rect[1] > rhs_rect[5] || rhs_rect[1] > lhs_rect[5])
-    {
-      return false;
-    }
-
-  return true;
-}
-
-types::Polygon
-get_rect_overlap(const types::Polygon& lhs_rect, const types::Polygon& rhs_rect)
-{
-  double left   = std::max(lhs_rect[0], rhs_rect[0]);
-  double top    = std::max(lhs_rect[1], rhs_rect[1]);
-
-  double right  = std::min(lhs_rect[4], rhs_rect[4]);
-  double bottom = std::min(lhs_rect[5], rhs_rect[5]);
-
-  return { left, top, right, top, right, bottom, left, bottom };
 }
 
 } // namespace utils

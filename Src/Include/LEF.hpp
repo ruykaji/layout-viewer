@@ -8,6 +8,7 @@
 
 #include <lefrReader.hpp>
 
+#include "Include/Geometry.hpp"
 #include "Include/Pin.hpp"
 #include "Include/Types.hpp"
 
@@ -35,17 +36,11 @@ struct Layer
   double m_spacing;
 };
 
-struct OBSMetalGroup
-{
-  std::vector<types::Polygon> m_rect;
-  types::Metal                m_metal;
-};
-
 struct Macro
 {
   double                                    m_width;
   double                                    m_height;
-  std::vector<OBSMetalGroup>                m_obs;
+  std::vector<geom::Polygon>                m_obs;
   std::unordered_map<std::string, pin::Pin> m_pins;
 };
 

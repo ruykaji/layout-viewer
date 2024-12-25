@@ -251,14 +251,15 @@ void
 LEF::pin_callback(lefiPin* param, Data& data)
 {
   const std::string name = param->name();
+  const std::string use  = param->use();
 
-  if(name == "VPWR" || name == "VGND")
+  if(use == "POWER" || use == "GROUND")
     {
       return;
     }
 
-  std::vector<std::pair<types::Polygon, types::Metal>> rects;
-  types::Metal                                         top_metal;
+  std::unordered_map<types::Metal, std::vector<geom::Polygon>> polygons;
+  types::Metal                                                 top_metal = types::Metal::NONE;
 
   for(std::size_t i = 0, end = param->numPorts(); i < end; ++i)
     {
@@ -287,8 +288,26 @@ LEF::pin_callback(lefiPin* param, Data& data)
                     break;
                   }
 
-                lefiGeomRect* rect = geometries->getRect(j);
-                rects.emplace_back(utils::make_clockwise_rectangle({ rect->xl, rect->yl, rect->xh, rect->yh }), metal);
+                const lefiGeomRect* rect = geometries->getRect(j);
+                geom::Polygon       target({ rect->xl, rect->yl, rect->xh, rect->yh }, metal);
+
+                // TODO Find a way to optimize this part
+                auto                remove_itr = std::remove_if(polygons[metal].begin(), polygons[metal].end(), [&target](const auto& polygon) {
+                  if(!(target / polygon))
+                    {
+                      return false;
+                    }
+
+                  target += polygon;
+                  return true;
+                });
+
+                if(remove_itr != polygons[metal].end())
+                  {
+                    polygons[metal].erase(remove_itr, polygons[metal].end());
+                  }
+
+                polygons[metal].emplace_back(std::move(target));
                 break;
               }
             default: break;
@@ -296,28 +315,25 @@ LEF::pin_callback(lefiPin* param, Data& data)
         }
     }
 
+  if(polygons.size() == 0)
+    {
+      return;
+    }
+
   pin::Pin pin;
+  pin::set_use(pin, use);
+  pin::set_direction(pin, param->direction());
 
-  if(param->hasDirection())
-    {
-      pin::set_direction(pin, param->direction());
-    }
+  pin.m_ports = std::move(polygons[top_metal]);
 
-  if(param->hasUse())
-    {
-      pin::set_use(pin, param->use());
-    }
-
-  for(const auto& [rect, metal] : rects)
+  for(const auto& [metal, v_polygons] : polygons)
     {
       if(metal == top_metal)
         {
-          pin.m_ports.emplace_back(std::move(rect), metal);
+          continue;
         }
-      else
-        {
-          pin.m_obs.emplace_back(std::move(rect), metal);
-        }
+
+      pin.m_obs.insert(pin.m_obs.end(), std::make_move_iterator(v_polygons.begin()), std::make_move_iterator(v_polygons.end()));
     }
 
   data.m_macros[m_last_macro_name].m_pins.emplace(std::move(name), std::move(pin));
@@ -327,7 +343,7 @@ void
 LEF::obstruction_callback(lefiObstruction* param, Data& data)
 {
   lefiGeometries* geometries = param->geometries();
-  OBSMetalGroup   obs_metal_group;
+  geom::Polygon   polygon;
 
   for(std::size_t i = 0, end = geometries->numItems(); i < end; ++i)
     {
@@ -335,16 +351,24 @@ LEF::obstruction_callback(lefiObstruction* param, Data& data)
         {
         case lefiGeomEnum::lefiGeomLayerE:
           {
-            data.m_macros[m_last_macro_name].m_obs.push_back(obs_metal_group);
+            types::Metal metal = utils::get_skywater130_metal(geometries->getLayer(i));
 
-            obs_metal_group.m_metal = utils::get_skywater130_metal(geometries->getLayer(i));
-            obs_metal_group.m_rect.clear();
+            if(polygon.m_metal != metal)
+              {
+                if(polygon.m_metal != types::Metal::NONE)
+                  {
+                    data.m_macros[m_last_macro_name].m_obs.push_back(polygon);
+                  }
+
+                polygon.m_metal = utils::get_skywater130_metal(geometries->getLayer(i));
+                polygon.m_points.clear();
+              }
             break;
           }
         case lefiGeomEnum::lefiGeomRectE:
           {
             lefiGeomRect* rect = geometries->getRect(i);
-            obs_metal_group.m_rect.emplace_back(utils::make_clockwise_rectangle({ rect->xl, rect->yl, rect->xh, rect->yh }));
+            polygon += geom::Polygon({ rect->xl, rect->yl, rect->xh, rect->yh }, polygon.m_metal);
             break;
           }
         case lefiGeomEnum::lefiGeomPolygonE:

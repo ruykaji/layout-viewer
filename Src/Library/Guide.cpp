@@ -65,9 +65,8 @@ read(const std::filesystem::path& path)
       next_pos             = line.find(' ', pos);
       double       y2      = std::stod(line.substr(pos, next_pos - pos));
 
-      types::Metal metal   = utils::get_skywater130_metal(line.substr(next_pos + 1));
-
-      nets.back().m_path.emplace_back(utils::make_clockwise_rectangle({ x1, y1, x2, y2 }), metal);
+      geom::Polygon target({ x1, y1, x2, y2 }, utils::get_skywater130_metal(line.substr(next_pos + 1)));
+      nets.back().m_path.emplace_back(std::move(target));
     }
 
   return nets;
