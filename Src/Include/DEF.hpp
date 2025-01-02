@@ -56,17 +56,27 @@ struct Net
 
 struct GCell
 {
-  /** Matrix coordinates */
+  struct Track
+  {
+    geom::Point  m_start;
+    geom::Point  m_end;
+    double       m_step;
+    types::Metal m_metal;
+  };
+
   std::size_t                                                      m_idx_x;
   std::size_t                                                      m_idx_y;
 
   geom::Polygon                                                    m_box;
-  std::vector<geom::Polygon>                                       m_tracks_x;
-  std::vector<geom::Polygon>                                       m_tracks_y;
+  std::vector<Track>                                               m_tracks_x;
+  std::vector<Track>                                               m_tracks_y;
   std::vector<geom::Polygon>                                       m_obstacles;
 
   std::unordered_map<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
   std::unordered_map<std::string, std::vector<pin::Pin*>>          m_nets;
+
+  void
+  assign_inner_pins();
 
   static std::vector<std::pair<GCell*, geom::Polygon>>
   find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);

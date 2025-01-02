@@ -17,6 +17,15 @@ namespace utils
 types::Metal
 get_skywater130_metal(const std::string_view str);
 
+std::string
+skywater130_metal_to_string(const types::Metal metal);
+
+std::tuple<uint32_t, uint32_t, uint32_t>
+get_metal_color(types::Metal metal);
+
+std::string
+get_color_from_string(const std::string& string);
+
 } // namespace utils
 
 #endif

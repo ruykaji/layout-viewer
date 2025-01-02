@@ -1,5 +1,5 @@
-#ifndef __PROJECT_SETTINGS_WIDGET_HPP__
-#define __PROJECT_SETTINGS_WIDGET_HPP__
+#ifndef __CREATE_PROJECT_HPP__
+#define __CREATE_PROJECT_HPP__
 
 #include <QAction>
 #include <QDialog>
@@ -8,41 +8,23 @@
 
 #include <filesystem>
 
-namespace gui::project_settings
+#include "Include/GUI/ProjectSettings.hpp"
+
+namespace gui::create_project
 {
-
-struct ProjectSettings
-{
-  std::string m_name;
-  std::string m_pdk_folder;
-  std::string m_def_file;
-  std::string m_guide_file;
-
-  void
-  save_to(const std::filesystem::path& path) const;
-
-  void
-  read_from(const std::filesystem::path& path);
-};
 
 class Widget : public QDialog
 {
   Q_OBJECT
 
 public:
-  /** =============================== CONSTRUCTORS ================================= */
-
   Widget(QWidget* parent = nullptr);
 
 public:
-  /** =============================== PUBLIC METHODS =============================== */
-
   ProjectSettings
   get_settings() const;
 
 private:
-  /** =============================== PRIVATE METHODS ============================== */
-
   QHBoxLayout*
   make_file_input(const QString& label_text, const int32_t label_width, QLineEdit*& line_edit, std::function<void()> callback);
 

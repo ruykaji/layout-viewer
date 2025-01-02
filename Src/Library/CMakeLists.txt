@@ -27,16 +27,4 @@ add_library(Guide Guide.cpp)
 add_library(Process Process.cpp)
 target_link_libraries(Process PUBLIC LEF DEF Guide Matrix)
 
-set(QT_SOURCES 
-   MainWindow.cpp 
-   ViewerWidget.cpp 
-   ProjectSettingsWidget.cpp
-   StagesWidget.cpp)
-set(QT_HEADERS 
-   ${CMAKE_SOURCE_DIR}/Src/Include/MainWindow.hpp 
-   ${CMAKE_SOURCE_DIR}/Src/Include/ViewerWidget.hpp 
-   ${CMAKE_SOURCE_DIR}/Src/Include/ProjectSettingsWidget.hpp
-   ${CMAKE_SOURCE_DIR}/Src/Include/StagesWidget.hpp)
-
-add_library(MainWindow ${QT_SOURCES} ${QT_HEADERS})
-target_link_libraries(MainWindow PUBLIC Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets Process GLU)
+add_subdirectory(GUI)

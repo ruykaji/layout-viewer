@@ -15,10 +15,6 @@ using Point = Clipper2Lib::Point<double>;
 struct Polygon
 {
   types::Metal       m_metal;
-
-  Point              m_left_top;
-  Point              m_right_bottom;
-  Point              m_center;
   std::vector<Point> m_points;
 
 public:
@@ -93,20 +89,29 @@ public:
   void
   move_by(const Point offset);
 
-private:
   /**
-   * @brief Updates most top left and most bottom right points of the polygon.
+   * @brief Gets most top left and most bottom right points of the polygon.
    *
    */
-  void
-  update_extrem_points();
+  std::pair<Point, Point>
+  get_extrem_points() const;
 
   /**
-   * @brief Updates center of the polygon.
+   * @brief Gets center of the polygon.
    *
    */
-  void
-  update_center();
+  Point
+  get_center() const;
+
+  /**
+   * @brief Checks if point lies in polygon.
+   *
+   * @param point The point to check.
+   * @return true
+   * @return false
+   */
+  bool
+  probe_point(const Point& point) const;
 };
 
 } // namespace geom

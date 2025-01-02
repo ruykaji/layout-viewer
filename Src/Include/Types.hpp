@@ -42,7 +42,8 @@ enum class Metal : uint8_t
   M7M8_V,
   M8,
   M8M9_V,
-  M9
+  M9,
+  SIZE = 19
 };
 
 enum class Cell : uint8_t

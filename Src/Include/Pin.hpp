@@ -37,6 +37,7 @@ struct Pin
   Direction                  m_direction;
   std::vector<geom::Polygon> m_ports;
   std::vector<geom::Polygon> m_obs;
+  std::string                m_name;
 };
 
 /**

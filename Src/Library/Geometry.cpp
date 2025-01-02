@@ -17,31 +17,43 @@ do_edges_intersect(const Point& p1, const Point& q1, const Point& p2, const Poin
     double val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
 
     if(std::fabs(val) < 1e-4)
-      return 0;
+      {
+        return 0;
+      }
 
     return (val > 0) ? 1 : 2;
   };
 
-  int o1 = orientation(p1, q1, p2);
-  int o2 = orientation(p1, q1, q2);
-  int o3 = orientation(p2, q2, p1);
-  int o4 = orientation(p2, q2, q1);
+  int32_t o1 = orientation(p1, q1, p2);
+  int32_t o2 = orientation(p1, q1, q2);
+  int32_t o3 = orientation(p2, q2, p1);
+  int32_t o4 = orientation(p2, q2, q1);
 
   if(o1 != o2 && o3 != o4)
-    return true;
+    {
+      return true;
+    }
 
-  auto onSegment = [](const Point& p, const Point& q, const Point& r) {
+  auto on_segment = [](const Point& p, const Point& q, const Point& r) {
     return q.x <= std::max(p.x, r.x) && q.x >= std::min(p.x, r.x) && q.y <= std::max(p.y, r.y) && q.y >= std::min(p.y, r.y);
   };
 
-  if(o1 == 0 && onSegment(p1, p2, q1))
-    return true;
-  if(o2 == 0 && onSegment(p1, q2, q1))
-    return true;
-  if(o3 == 0 && onSegment(p2, p1, q2))
-    return true;
-  if(o4 == 0 && onSegment(p2, q1, q2))
-    return true;
+  if(o1 == 0 && on_segment(p1, p2, q1))
+    {
+      return true;
+    }
+  else if(o2 == 0 && on_segment(p1, q2, q1))
+    {
+      return true;
+    }
+  else if(o3 == 0 && on_segment(p2, p1, q2))
+    {
+      return true;
+    }
+  else if(o4 == 0 && on_segment(p2, q1, q2))
+    {
+      return true;
+    }
 
   return false;
 }
@@ -49,7 +61,7 @@ do_edges_intersect(const Point& p1, const Point& q1, const Point& p2, const Poin
 } // namespace details
 
 Polygon::Polygon()
-    : m_metal(types::Metal::NONE), m_left_top(0, 0), m_right_bottom(0, 0), m_center(0, 0), m_points() {};
+    : m_metal(types::Metal::NONE), m_points() {};
 
 Polygon::Polygon(const std::array<double, 4> ver, types::Metal metal)
     : m_metal(metal)
@@ -60,9 +72,6 @@ Polygon::Polygon(const std::array<double, 4> ver, types::Metal metal)
   double max_y = std::max(ver[1], ver[3]);
 
   m_points     = { Point{ max_x, max_y }, Point{ min_x, max_y }, Point{ min_x, min_y }, Point{ max_x, min_y } };
-
-  update_extrem_points();
-  update_center();
 }
 
 Polygon
@@ -93,8 +102,6 @@ operator+(const Polygon& lhs, const Polygon& rhs)
   Polygon polygon;
   polygon.m_metal  = lhs.m_metal;
   polygon.m_points = solution[0];
-  polygon.update_extrem_points();
-  polygon.update_center();
 
   return std::move(polygon);
 }
@@ -127,8 +134,6 @@ operator-(const Polygon& lhs, const Polygon& rhs)
   Polygon polygon;
   polygon.m_metal  = lhs.m_metal;
   polygon.m_points = solution[0];
-  polygon.update_extrem_points();
-  polygon.update_center();
 
   return std::move(polygon);
 }
@@ -184,8 +189,6 @@ Polygon::operator+=(const Polygon& rhs)
   std::vector<std::vector<Point>> solution = Clipper2Lib::Union({ m_points }, { rhs.m_points }, Clipper2Lib::FillRule::NonZero, 8);
 
   m_points                                 = std::move(solution[0]);
-  update_extrem_points();
-  update_center();
 
   return *this;
 }
@@ -206,8 +209,6 @@ Polygon::operator-(const Polygon& rhs)
   std::vector<std::vector<Point>> solution = Clipper2Lib::Intersect({ m_points }, { rhs.m_points }, Clipper2Lib::FillRule::NonZero, 8);
 
   m_points                                 = std::move(solution[0]);
-  update_extrem_points();
-  update_center();
 
   return *this;
 }
@@ -220,10 +221,6 @@ Polygon::scale_by(const double factor)
       point.x *= factor;
       point.y *= factor;
     }
-
-  // TODO Optimize this calls
-  update_extrem_points();
-  update_center();
 }
 
 void
@@ -234,35 +231,61 @@ Polygon::move_by(const Point offset)
       point.x += offset.x;
       point.y += offset.y;
     }
-
-  // TODO Optimize this calls
-  update_extrem_points();
-  update_center();
 }
 
-void
-Polygon::update_extrem_points()
+std::pair<Point, Point>
+Polygon::get_extrem_points() const
 {
-  m_left_top     = m_points[0];
-  m_right_bottom = m_points[0];
+  Point left_top     = m_points[0];
+  Point right_bottom = m_points[0];
 
   for(const auto& point : m_points)
     {
-      if(point.x > m_right_bottom.x || (point.x == m_right_bottom.x && point.y > m_right_bottom.y))
+      if(point.x > right_bottom.x || (point.x == right_bottom.x && point.y > right_bottom.y))
         {
-          m_right_bottom = point;
+          right_bottom = point;
         }
 
-      if(point.x < m_left_top.x || (point.x == m_left_top.x && point.y < m_left_top.y))
+      if(point.x < left_top.x || (point.x == left_top.x && point.y < left_top.y))
         {
-          m_left_top = point;
+          left_top = point;
         }
     }
+
+  return std::make_pair(left_top, right_bottom);
 }
 
-void
-Polygon::update_center()
+Point
+Polygon::get_center() const
 {
+  double            signed_area = 0.0;
+  Point             center{ 0.0, 0.0 };
+
+  const std::size_t n = m_points.size();
+
+  for(std::size_t i = 0; i < n; ++i)
+    {
+      const Point& p1 = m_points[i];
+      const Point& p2 = m_points[(i + 1) % n];
+
+      double       a  = p1.x * p2.y - p2.x * p1.y;
+
+      signed_area += a;
+      center.x += (p1.x + p2.x) * a;
+      center.y += (p1.y + p2.y) * a;
+    }
+
+  signed_area *= 0.5;
+  center.x /= (6.0 * signed_area);
+  center.y /= (6.0 * signed_area);
+
+  return center;
+}
+
+bool
+Polygon::probe_point(const Point& point) const
+{
+  return Clipper2Lib::PointInPolygon(point, m_points) == Clipper2Lib::PointInPolygonResult::IsInside;
 }
 
 } // namespace geom

@@ -107,11 +107,11 @@ prepare_root_matrix(matrix::Matrix& root_matrix, const def::GCell* gcell, const 
   const double      m1_offset        = def_data.m_tracks_x[0].m_start;
   const double      m1_step          = def_data.m_tracks_x[0].m_spacing;
 
-  const double      m1_left_x        = gcell->m_tracks_x.front().m_points[0].x;
-  const double      m1_right_x       = gcell->m_tracks_x.back().m_points[1].x;
+  const double      m1_left_x        = gcell->m_tracks_x.at(0).m_start.x;
+  const double      m1_right_x       = gcell->m_tracks_x.at(0).m_end.x;
 
-  const double      m1_left_y        = gcell->m_tracks_y.front().m_points[1].y;
-  const double      m1_right_y       = gcell->m_tracks_y.back().m_points[2].y;
+  const double      m1_left_y        = gcell->m_tracks_x.at(0).m_start.y;
+  const double      m1_right_y       = gcell->m_tracks_x.at(0).m_end.y;
 
   const std::size_t m1_max_tracks_x  = (m1_right_x - m1_left_x) / m1_step;
   const std::size_t m1_max_tracks_y  = (m1_right_y - m1_left_y) / m1_step;
@@ -202,105 +202,6 @@ map_to_rgb(const std::vector<uint32_t>& values, uint32_t N)
     }
 
   return { ((cmb_value / (256 * 256)) % 256), ((cmb_value / 256) % 256), (cmb_value % 256) };
-}
-
-/** Support functions for track assignment */
-std::pair<double, double>
-calculate_centroid(const std::vector<double>& polygon)
-{
-  const std::size_t n    = polygon.size() / 2;
-
-  double            area = 0.0;
-  double            cx   = 0.0;
-  double            cy   = 0.0;
-
-  for(std::size_t i = 0; i < n; ++i)
-    {
-      const double x1     = polygon[2 * i];
-      const double y1     = polygon[2 * i + 1];
-      const double x2     = polygon[2 * ((i + 1) % n)];
-      const double y2     = polygon[2 * ((i + 1) % n) + 1];
-
-      const double factor = -(x1 * y2 - x2 * y1);
-
-      area += factor;
-      cx += (x1 + x2) * factor;
-      cy += (y1 + y2) * factor;
-    }
-
-  area = std::abs(area) / 2.0;
-
-  if(area == 0.0)
-    {
-      throw std::runtime_error("Degenerate polygon: area is zero.");
-    }
-
-  cx /= (6.0 * area);
-  cy /= (6.0 * area);
-
-  return { std::abs(cx), std::abs(cy) };
-}
-
-bool
-is_point_inside_polygon(double px, double py, const std::vector<double>& polygon)
-{
-  std::size_t n      = polygon.size() / 2;
-  bool        inside = false;
-
-  for(int i = 0, j = n - 1; i < n; j = i++)
-    {
-      double xi = polygon[2 * i], yi = polygon[2 * i + 1];
-      double xj = polygon[2 * j], yj = polygon[2 * j + 1];
-
-      bool   intersect = ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
-
-      if(intersect)
-        {
-          inside = !inside;
-        }
-    }
-
-  return inside;
-}
-
-std::pair<double, double>
-find_closest_point_in_polygon(const std::pair<double, double>& centroid, const std::vector<double>& polygon)
-{
-  const std::size_t         n = polygon.size() / 2; // Number of vertices
-
-  std::pair<double, double> closest_point;
-  double                    min_dist_sq = std::numeric_limits<double>::max();
-
-  for(std::size_t i = 0; i < n; ++i)
-    {
-      const std::pair<double, double> a  = { polygon[2 * i], polygon[2 * i + 1] };
-      const std::pair<double, double> b  = { polygon[2 * ((i + 1) % n)], polygon[2 * ((i + 1) % n) + 1] };
-
-      const double                    ax = b.first - a.first;
-      const double                    ay = b.second - a.second;
-      double                          t  = ((centroid.first - a.first) * ax + (centroid.second - a.second) * ay) / (ax * ax + ay * ay);
-
-      if(t < 0.0)
-        {
-          t = 0.0;
-        }
-
-      if(t > 1.0)
-        {
-          t = 1.0;
-        }
-
-      const std::pair<double, double> projection = { a.first + t * ax, a.second + t * ay };
-      const double                    dist_sq    = (centroid.first - projection.first) * (centroid.first - projection.first) + (centroid.second - projection.second) * (centroid.second - projection.second);
-
-      if(dist_sq < min_dist_sq)
-        {
-          min_dist_sq   = dist_sq;
-          closest_point = projection;
-        }
-    }
-
-  return closest_point;
 }
 
 } // namespace process::details::encode
@@ -421,7 +322,7 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
         {
           throw std::runtime_error("Process Error: Couldn't find a macro with the name - \"" + component.m_name + "\".");
         }
-        
+
       lef::Macro   macro  = lef_data.m_macros.at(component.m_name);
       const double width  = macro.m_width * lef_data.m_database_number;
       const double height = macro.m_height * lef_data.m_database_number;
@@ -488,7 +389,8 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
                 }
             }
 
-          def_data.m_pins[component.m_id + ":" + name] = new_pin;
+          new_pin->m_name                  = component.m_id + ":" + name;
+          def_data.m_pins[new_pin->m_name] = new_pin;
         }
     }
 
@@ -605,8 +507,6 @@ apply_global_routing(def::Data& def_data, const lef::Data& lef_data, const std::
 
   auto itr = std::remove_if(def_data.m_gcells.begin(), def_data.m_gcells.end(), [](const auto vec) { return vec.size() == 0; });
   def_data.m_gcells.erase(itr, def_data.m_gcells.end());
-
-  int a = 0;
 }
 
 std::vector<Task>

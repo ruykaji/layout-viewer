@@ -44,7 +44,11 @@ namespace def
  *                                  GCELL STRUCTURE                                       *
  ******************************************************************************************/
 
-/** =============================== STATIC PUBLIC METHODS ==================================== */
+void
+GCell::assign_inner_pins()
+{
+}
+
 std::vector<std::pair<GCell*, geom::Polygon>>
 GCell::find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
 {
@@ -54,15 +58,14 @@ GCell::find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GC
   const std::size_t step_row          = height / num_rows;
   const std::size_t step_col          = width / num_cols;
 
-  const auto&       left_top          = poly.m_left_top;
-  const auto&       right_bottom      = poly.m_right_bottom;
+  const auto [left_top, right_bottom] = poly.get_extrem_points();
 
-  std::size_t       left_most_gcell   = std::clamp<std::size_t>(std::floor(left_top.x / step_col), 0, num_cols - 1);
-  std::size_t       top_most_gcell    = std::clamp<std::size_t>(std::floor(left_top.y / step_row), 0, num_rows - 1);
-  std::size_t       right_most_gcell  = std::clamp<std::size_t>(std::floor((right_bottom.x - 1) / step_col), 0, num_cols - 1);
-  std::size_t       bottom_most_gcell = std::clamp<std::size_t>(std::floor((right_bottom.y - 1) / step_row), 0, num_rows - 1);
+  std::size_t left_most_gcell         = std::clamp<std::size_t>(std::floor(left_top.x / step_col), 0, num_cols - 1);
+  std::size_t top_most_gcell          = std::clamp<std::size_t>(std::floor(left_top.y / step_row), 0, num_rows - 1);
+  std::size_t right_most_gcell        = std::clamp<std::size_t>(std::floor((right_bottom.x - 1) / step_col), 0, num_cols - 1);
+  std::size_t bottom_most_gcell       = std::clamp<std::size_t>(std::floor((right_bottom.y - 1) / step_row), 0, num_rows - 1);
 
-  auto              adjust_gcell      = [&](std::size_t& gcell_row, std::size_t& gcell_col, const geom::Point& target_point) -> bool {
+  auto        adjust_gcell            = [&](std::size_t& gcell_row, std::size_t& gcell_col, const geom::Point& target_point) -> bool {
     if(gcell_row >= num_rows || gcell_col >= num_cols)
       {
         return false;
@@ -133,8 +136,6 @@ GCell::find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GC
  *                                  DEF STRUCTURE                                         *
  ******************************************************************************************/
 
-/** =============================== CONSTRUCTORS ============================================ */
-
 DEF::DEF()
     : m_data()
 {
@@ -163,8 +164,6 @@ DEF::~DEF()
   defrClear();
 }
 
-/** =============================== PUBLIC METHODS ==================================== */
-
 Data
 DEF::parse(const std::filesystem::path& file_path) const
 {
@@ -191,8 +190,6 @@ DEF::parse(const std::filesystem::path& file_path) const
 
   return m_data;
 }
-
-/** =============================== PRIVATE METHODS =================================== */
 
 void
 DEF::die_area_callback(defiBox* param, Data& data)
@@ -353,15 +350,10 @@ DEF::component_start_callback(int32_t param, Data& data)
               const double start      = data.m_tracks_x[i].m_start;
               const double step       = data.m_tracks_x[i].m_spacing;
 
-              double       left_edge  = start + std::ceil((box_points[0].y - start) / step) * step;
-              const double right_edge = start + std::floor((box_points[2].y - start) / step) * step;
+              const double left_edge  = start + std::ceil((box_points[2].y - start) / step) * step;
+              const double right_edge = start + std::floor((box_points[0].y - start) / step) * step;
 
-              while(left_edge <= right_edge)
-                {
-                  geom::Polygon track({ box_points[0].x, left_edge, box_points[1].x, left_edge }, data.m_tracks_x[i].m_metal);
-                  gcell->m_tracks_x.emplace_back(std::move(track));
-                  left_edge += step;
-                }
+              gcell->m_tracks_x.emplace_back(geom::Point(box_points[1].x, left_edge), geom::Point(box_points[0].x, right_edge), step, data.m_tracks_x[i].m_metal);
             }
 
           /** Add y tracks to the gcell */
@@ -370,15 +362,10 @@ DEF::component_start_callback(int32_t param, Data& data)
               const double start      = data.m_tracks_y[i].m_start;
               const double step       = data.m_tracks_y[i].m_spacing;
 
-              double       left_edge  = start + std::ceil((box_points[0].x - start) / step) * step;
-              const double right_edge = start + std::floor((box_points[1].x - start) / step) * step;
+              double       left_edge  = start + std::ceil((box_points[1].x - start) / step) * step;
+              const double right_edge = start + std::floor((box_points[0].x - start) / step) * step;
 
-              while(left_edge <= right_edge)
-                {
-                  geom::Polygon track({ box_points[0].x, left_edge, box_points[1].x, left_edge }, data.m_tracks_y[i].m_metal);
-                  gcell->m_tracks_y.emplace_back(std::move(track));
-                  left_edge += step;
-                }
+              gcell->m_tracks_y.emplace_back(geom::Point(left_edge, box_points[2].y), geom::Point(right_edge, box_points[0].y), step, data.m_tracks_y[i].m_metal);
             }
 
           gcell_row.emplace_back(std::move(gcell));
@@ -499,7 +486,7 @@ DEF::net_callback(defiNet* param, Data& data)
     {
       const std::string net_name = param->name();
 
-      Net net;
+      Net               net;
       net.m_idx = data.m_nets.size() + 1;
 
       for(std::size_t i = 0, end = param->numConnections(); i < end; ++i)
@@ -600,8 +587,6 @@ DEF::net_callback(defiNet* param, Data& data)
         }
     }
 }
-
-/** =============================== PRIVATE STATIC METHODS =================================== */
 
 void
 DEF::error_callback(const char* msg)

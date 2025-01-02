@@ -1,5 +1,8 @@
 <RCC>
     <qresource prefix="/">
         <file>Icons/play.png</file>
+        <file>Icons/cursor-none.png</file>
+        <file>Icons/cursor-select.png</file>
+        <file>Icons/view-mode.png</file>
     </qresource>
 </RCC>

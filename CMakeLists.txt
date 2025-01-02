@@ -31,7 +31,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
 find_package(GLU REQUIRED)
 find_package(Clipper2 REQUIRED)
 
-include_directories(Src)
+include_directories(Src Src/GUI)
 add_subdirectory(Src)
 
 message(STATUS "===================================================")
