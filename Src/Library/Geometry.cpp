@@ -77,11 +77,6 @@ Polygon::Polygon(const std::array<double, 4> ver, types::Metal metal)
 Polygon
 operator+(const Polygon& lhs, const Polygon& rhs)
 {
-  if(lhs.m_metal != rhs.m_metal)
-    {
-      throw std::runtime_error("Geometry Error: It is impossible to union polygons between different layers.");
-    }
-
   if(rhs.m_points.empty())
     {
       return lhs;
@@ -109,11 +104,6 @@ operator+(const Polygon& lhs, const Polygon& rhs)
 Polygon
 operator-(const Polygon& lhs, const Polygon& rhs)
 {
-  if(lhs.m_metal != rhs.m_metal && rhs.m_metal != types::Metal::NONE)
-    {
-      throw std::runtime_error("Geometry Error: It is impossible to intersect polygons between different layers.");
-    }
-
   if(rhs.m_points.empty())
     {
       return lhs;
@@ -141,11 +131,6 @@ operator-(const Polygon& lhs, const Polygon& rhs)
 bool
 operator/(const Polygon& lhs, const Polygon& rhs)
 {
-  if(lhs.m_points.empty() || rhs.m_points.empty())
-    {
-      return false;
-    }
-
   std::vector<std::vector<Point>> solution = Clipper2Lib::Intersect({ lhs.m_points }, { rhs.m_points }, Clipper2Lib::FillRule::NonZero, 8);
 
   if(!solution.empty())
@@ -176,11 +161,6 @@ operator/(const Polygon& lhs, const Polygon& rhs)
 Polygon&
 Polygon::operator+=(const Polygon& rhs)
 {
-  if(m_metal != rhs.m_metal)
-    {
-      throw std::runtime_error("Geometry Error: It is impossible to union polygons between different layers.");
-    }
-
   if(rhs.m_points.empty())
     {
       return *this;
@@ -194,13 +174,8 @@ Polygon::operator+=(const Polygon& rhs)
 }
 
 Polygon&
-Polygon::operator-(const Polygon& rhs)
+Polygon::operator-=(const Polygon& rhs)
 {
-  if(m_metal != rhs.m_metal && rhs.m_metal != types::Metal::NONE)
-    {
-      throw std::runtime_error("Geometry Error: It is impossible to intersect polygons between different layers.");
-    }
-
   if(rhs.m_points.empty())
     {
       return *this;
@@ -241,14 +216,24 @@ Polygon::get_extrem_points() const
 
   for(const auto& point : m_points)
     {
-      if(point.x > right_bottom.x || (point.x == right_bottom.x && point.y > right_bottom.y))
+      if(point.x > right_bottom.x)
         {
-          right_bottom = point;
+          right_bottom.x = point.x;
         }
 
-      if(point.x < left_top.x || (point.x == left_top.x && point.y < left_top.y))
+      if(point.x < left_top.x)
         {
-          left_top = point;
+          left_top.x = point.x;
+        }
+
+      if(point.y > right_bottom.y)
+        {
+          right_bottom.y = point.y;
+        }
+
+      if(point.y < left_top.y)
+        {
+          left_top.y = point.y;
         }
     }
 
@@ -258,34 +243,41 @@ Polygon::get_extrem_points() const
 Point
 Polygon::get_center() const
 {
-  double            signed_area = 0.0;
-  Point             center{ 0.0, 0.0 };
+  // double            signed_area = 0.0;
+  // Point             center{ 0.0, 0.0 };
 
-  const std::size_t n = m_points.size();
+  // const std::size_t n = m_points.size();
 
-  for(std::size_t i = 0; i < n; ++i)
-    {
-      const Point& p1 = m_points[i];
-      const Point& p2 = m_points[(i + 1) % n];
+  // for(std::size_t i = 0; i < n; ++i)
+  //   {
+  //     const Point& p1 = m_points[i];
+  //     const Point& p2 = m_points[(i + 1) % n];
 
-      double       a  = p1.x * p2.y - p2.x * p1.y;
+  //     double       a  = p1.x * p2.y - p2.x * p1.y;
 
-      signed_area += a;
-      center.x += (p1.x + p2.x) * a;
-      center.y += (p1.y + p2.y) * a;
-    }
+  //     signed_area += a;
+  //     center.x += (p1.x + p2.x) * a;
+  //     center.y += (p1.y + p2.y) * a;
+  //   }
 
-  signed_area *= 0.5;
-  center.x /= (6.0 * signed_area);
-  center.y /= (6.0 * signed_area);
+  // signed_area *= 0.5;
+  // center.x /= (6.0 * signed_area);
+  // center.y /= (6.0 * signed_area);
 
-  return center;
+  const auto [left_top, right_bottom] = get_extrem_points();
+  return { (left_top.x + right_bottom.x) / 2.0, (left_top.y + right_bottom.y) / 2.0 };
 }
 
 bool
 Polygon::probe_point(const Point& point) const
 {
-  return Clipper2Lib::PointInPolygon(point, m_points) == Clipper2Lib::PointInPolygonResult::IsInside;
+  return Clipper2Lib::PointInPolygon(point, m_points) != Clipper2Lib::PointInPolygonResult::IsOutside;
+}
+
+double
+Polygon::get_area() const
+{
+  return Clipper2Lib::Area<double>(m_points);
 }
 
 } // namespace geom

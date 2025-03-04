@@ -4,3 +4,9 @@
 # build folders
 build
 Output
+
+# Python
+__pycache__
+*.egg-info
+*.csv
+result*

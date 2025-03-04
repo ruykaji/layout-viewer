@@ -88,23 +88,17 @@ MainWindow::create_menu()
 void
 MainWindow::apply_global_routing()
 {
-  const lef::LEF lef;
-  const def::DEF def;
+  m_proc.set_path_pdk(m_settings.m_pdk_folder);
+  m_proc.set_path_design(m_settings.m_def_file);
+  m_proc.set_path_guide(m_settings.m_guide_file);
 
-  m_lef_data                               = new lef::Data(std::move(lef.parse(m_settings.m_pdk_folder)));
-  m_def_data                               = new def::Data(std::move(def.parse(m_settings.m_def_file)));
+  m_proc.prepare_data();
+  m_proc.collect_overlaps();
+  m_proc.apply_guide();
+  m_proc.remove_empty_gcells();
 
-  const std::vector<guide::Net> guide_nets = guide::read(m_settings.m_guide_file);
-  process::apply_global_routing(*m_def_data, *m_lef_data, guide_nets);
-
-  emit send_viewer_data(m_def_data);
-  emit send_design(m_def_data);
-}
-
-void
-MainWindow::encode()
-{
-  const std::vector<process::Task> tasks = process::encode(*m_def_data);
+  emit send_viewer_data(&m_proc.get_def_data());
+  emit send_design(&m_proc.get_def_data());
 }
 
 void

@@ -9,7 +9,7 @@
 #include <QTransform>
 
 #include "Include/GUI/MainScene.hpp"
-#include "Include/Utils.hpp"
+#include "Include/GlobalUtils.hpp"
 
 namespace gui::main_scene::details
 {
@@ -126,12 +126,17 @@ Scene::paintGL()
 
   glPushAttrib(GL_ALL_ATTRIB_BITS);
 
-  QString  text_coords = QString("X: %1, Y: %2").arg(m_last_mouse_scene_position.x(), 0, 'd', 0).arg(m_last_mouse_scene_position.y(), 0, 'd', 0);
   QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
   painter.setPen(Qt::white);
   painter.setFont(QFont("Arial", 12));
-  painter.drawText(10, height() - 20, text_coords);
+
+  painter.setRenderHint(QPainter::Antialiasing);
+  QString  text_coords = QString("X: %1, Y: %2").arg(m_last_mouse_scene_position.x(), 0, 'd', 0).arg(m_last_mouse_scene_position.y(), 0, 'd', 0);
+  painter.drawText(10, height() - 40, text_coords);
+
+  QString  text_proj_coords = QString("X: %1, Y: %2").arg(std::floor(m_last_mouse_scene_position.x() / 6900), 0, 'd', 0).arg(std::floor(m_last_mouse_scene_position.y() / 6900), 0, 'd', 0);
+  painter.drawText(10, height() - 20, text_proj_coords);
+
   painter.end();
 
   glPopAttrib();
@@ -206,10 +211,24 @@ Scene::paintGL()
   /** Draw pins */
   const auto& pins = m_data->m_pins;
 
-  for(const auto& [_, pin] : pins)
+  for(const auto& [name, net] : m_data->m_nets)
     {
-      for(const auto& poly : pin->m_obs)
+      for(const auto& pin_name : net->m_pins)
         {
+          const auto& pin = m_data->m_pins.at(pin_name);
+
+          for(const auto& poly : pin->m_obs)
+            {
+              if(poly.m_metal != types::Metal::NONE && !m_metal_layers[poly.m_metal])
+                {
+                  continue;
+                }
+
+              details::draw_polygon(poly);
+            }
+
+          const auto& poly = pin->m_ports[0];
+
           if(poly.m_metal != types::Metal::NONE && !m_metal_layers[poly.m_metal])
             {
               continue;
@@ -217,15 +236,6 @@ Scene::paintGL()
 
           details::draw_polygon(poly);
         }
-
-      const auto& poly = pin->m_ports[0];
-
-      if(poly.m_metal != types::Metal::NONE && !m_metal_layers[poly.m_metal])
-        {
-          continue;
-        }
-
-      details::draw_polygon(poly);
     }
 
   glPopMatrix();

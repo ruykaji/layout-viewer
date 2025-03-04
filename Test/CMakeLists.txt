@@ -19,10 +19,6 @@ add_executable(MatrixTest matrix.test.cpp)
 target_link_libraries(MatrixTest Matrix GTest::gtest_main pthread)
 gtest_discover_tests(MatrixTest)
 
-add_executable(RGBTest rgb.test.cpp)
-target_link_libraries(RGBTest RGB GTest::gtest_main pthread)
-gtest_discover_tests(RGBTest)
-
 add_executable(GeometryTest geometry.test.cpp)
 target_link_libraries(GeometryTest Geometry GTest::gtest_main pthread)
 gtest_discover_tests(GeometryTest)

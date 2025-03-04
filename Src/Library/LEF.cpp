@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "Include/LEF.hpp"
-#include "Include/Utils.hpp"
+#include "Include/GlobalUtils.hpp"
 
 #define DEFINE_LEF_CALLBACK(callback_type, callback_name)                   \
   {                                                                         \
@@ -321,9 +321,8 @@ LEF::pin_callback(lefiPin* param, Data& data)
     }
 
   pin::Pin pin;
-  pin::set_use(pin, use);
-  pin::set_direction(pin, param->direction());
-
+  pin.set_use(use);
+  pin.set_direction(param->direction());
   pin.m_ports = std::move(polygons[top_metal]);
 
   for(const auto& [metal, v_polygons] : polygons)

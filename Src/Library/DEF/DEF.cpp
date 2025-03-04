@@ -4,8 +4,8 @@
 #include <cstring>
 #include <iostream>
 
-#include "Include/DEF.hpp"
-#include "Include/Utils.hpp"
+#include "Include/DEF/DEF.hpp"
+#include "Include/GlobalUtils.hpp"
 
 #define DEFINE_DEF_CALLBACK(callback_type, callback_name)                   \
   {                                                                         \
@@ -39,102 +39,6 @@
 
 namespace def
 {
-
-/******************************************************************************************
- *                                  GCELL STRUCTURE                                       *
- ******************************************************************************************/
-
-void
-GCell::assign_inner_pins()
-{
-}
-
-std::vector<std::pair<GCell*, geom::Polygon>>
-GCell::find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height)
-{
-  const std::size_t num_rows          = gcells.size();
-  const std::size_t num_cols          = gcells[0].size();
-
-  const std::size_t step_row          = height / num_rows;
-  const std::size_t step_col          = width / num_cols;
-
-  const auto [left_top, right_bottom] = poly.get_extrem_points();
-
-  std::size_t left_most_gcell         = std::clamp<std::size_t>(std::floor(left_top.x / step_col), 0, num_cols - 1);
-  std::size_t top_most_gcell          = std::clamp<std::size_t>(std::floor(left_top.y / step_row), 0, num_rows - 1);
-  std::size_t right_most_gcell        = std::clamp<std::size_t>(std::floor((right_bottom.x - 1) / step_col), 0, num_cols - 1);
-  std::size_t bottom_most_gcell       = std::clamp<std::size_t>(std::floor((right_bottom.y - 1) / step_row), 0, num_rows - 1);
-
-  auto        adjust_gcell            = [&](std::size_t& gcell_row, std::size_t& gcell_col, const geom::Point& target_point) -> bool {
-    if(gcell_row >= num_rows || gcell_col >= num_cols)
-      {
-        return false;
-      }
-
-    const auto& box_points = gcells[gcell_row][gcell_col]->m_box.m_points;
-
-    if((box_points[1].x <= target_point.x && box_points[0].x >= target_point.x && box_points[2].y <= target_point.y && box_points[0].y >= target_point.y))
-      {
-        return false;
-      }
-
-    if(box_points[1].x > target_point.x && gcell_col > 0)
-      {
-        --gcell_col;
-      }
-    else if(box_points[0].x < target_point.x && gcell_col < num_cols - 1)
-      {
-        ++gcell_col;
-      }
-
-    if(box_points[2].y > target_point.y && gcell_row > 0)
-      {
-        --gcell_row;
-      }
-    else if(box_points[0].y < target_point.y && gcell_row < num_rows - 1)
-      {
-        ++gcell_row;
-      }
-    else
-      {
-        return false;
-      }
-
-    return true;
-  };
-
-  while(true)
-    {
-      if(!adjust_gcell(top_most_gcell, left_most_gcell, left_top))
-        {
-          break;
-        }
-    }
-
-  while(true)
-    {
-      if(!adjust_gcell(bottom_most_gcell, right_most_gcell, right_bottom))
-        {
-          break;
-        }
-    }
-
-  std::vector<std::pair<GCell*, geom::Polygon>> gcells_with_overlap;
-
-  for(std::size_t y = top_most_gcell; y <= std::min(num_rows - 1, bottom_most_gcell); ++y)
-    {
-      for(std::size_t x = left_most_gcell; x <= std::min(num_cols - 1, right_most_gcell); ++x)
-        {
-          gcells_with_overlap.emplace_back(gcells[y][x], std::move(poly - gcells[y][x]->m_box));
-        }
-    }
-
-  return gcells_with_overlap;
-}
-
-/******************************************************************************************
- *                                  DEF STRUCTURE                                         *
- ******************************************************************************************/
 
 DEF::DEF()
     : m_data()
@@ -248,11 +152,11 @@ DEF::row_callback(defiRow* param, Data& data)
 void
 DEF::track_callback(defiTrack* param, Data& data)
 {
-  types::Metal metal = utils::get_skywater130_metal(param->layer(0));
+  const types::Metal metal = ::utils::get_skywater130_metal(param->layer(0));
 
+  /** L1 is not used for routing */
   if(metal == types::Metal::L1)
     {
-      /** L1 is not used for routing */
       return;
     }
 
@@ -260,16 +164,11 @@ DEF::track_callback(defiTrack* param, Data& data)
   track.m_start   = param->x();
   track.m_num     = param->xNum();
   track.m_spacing = param->xStep();
-  /** Assuming that one track have only one metal layer */
-  track.m_metal   = utils::get_skywater130_metal(param->layer(0));
+  track.m_metal   = metal;
 
-  if(std::strcmp(param->macro(), "X") == 0)
+  if(param->macro()[0] == 'X')
     {
-      data.m_tracks_x.emplace_back(std::move(track));
-    }
-  else
-    {
-      data.m_tracks_y.emplace_back(std::move(track));
+      data.m_tracks.emplace_back(std::move(track));
     }
 }
 
@@ -296,6 +195,7 @@ DEF::component_start_callback(int32_t param, Data& data)
 {
   /** Collect all columns, handles case with multiple grids along x axis */
   std::vector<double> columns;
+  double              max_grid_x = 0.0;
 
   for(std::size_t i = 0, end_i = m_gcell_grid_x.size(); i < end_i; ++i)
     {
@@ -306,12 +206,15 @@ DEF::component_start_callback(int32_t param, Data& data)
         {
           columns.emplace_back(start + j * step);
         }
+
+      max_grid_x = start + (m_gcell_grid_x[i].m_num) * step;
     }
 
   std::sort(columns.begin(), columns.end());
 
   /** Collect all rows, handles case with multiple grids along y axis */
   std::vector<double> rows;
+  double              max_grid_y = 0.0;
 
   for(std::size_t i = 0, end_i = m_gcell_grid_y.size(); i < end_i; ++i)
     {
@@ -322,6 +225,8 @@ DEF::component_start_callback(int32_t param, Data& data)
         {
           rows.emplace_back(start + j * step);
         }
+
+      max_grid_y = start + (m_gcell_grid_y[i].m_num) * step;
     }
 
   std::sort(rows.begin(), rows.end());
@@ -337,35 +242,29 @@ DEF::component_start_callback(int32_t param, Data& data)
 
       for(std::size_t x = 0, end_x = columns.size() - 1; x < end_x; ++x)
         {
-          GCell* gcell           = new GCell();
-          gcell->m_idx_x         = x;
-          gcell->m_idx_y         = y;
-          gcell->m_box           = geom::Polygon({ columns[x], rows[y], columns[x + 1], rows[y + 1] });
-
+          GCell*      gcell      = new GCell(x, y, geom::Polygon({ columns[x], rows[y], columns[x + 1], rows[y + 1] }));
           const auto& box_points = gcell->m_box.m_points;
 
           /** Add x tracks to the gcell */
-          for(std::size_t i = 0, end_i = data.m_tracks_x.size(); i < end_i; ++i)
+          for(std::size_t i = 0, end_i = m_data.m_tracks.size(); i < end_i; ++i)
             {
-              const double start      = data.m_tracks_x[i].m_start;
-              const double step       = data.m_tracks_x[i].m_spacing;
+              const double start        = data.m_tracks[i].m_start;
+              const double step         = data.m_tracks[i].m_spacing;
 
-              const double left_edge  = start + std::ceil((box_points[2].y - start) / step) * step;
-              const double right_edge = start + std::floor((box_points[0].y - start) / step) * step;
+              const double left_edge_y  = start + std::ceil((box_points[3].y - start) / step) * step;
+              const double right_edge_y = start + std::floor((box_points[0].y - start) / step) * step;
 
-              gcell->m_tracks_x.emplace_back(geom::Point(box_points[1].x, left_edge), geom::Point(box_points[0].x, right_edge), step, data.m_tracks_x[i].m_metal);
-            }
+              const double left_edge_x  = start + std::ceil((box_points[1].x - start) / step) * step;
+              const double right_edge_x = start + std::floor((box_points[0].x - start) / step) * step;
 
-          /** Add y tracks to the gcell */
-          for(std::size_t i = 0, end_i = data.m_tracks_y.size(); i < end_i; ++i)
-            {
-              const double start      = data.m_tracks_y[i].m_start;
-              const double step       = data.m_tracks_y[i].m_spacing;
-
-              double       left_edge  = start + std::ceil((box_points[1].x - start) / step) * step;
-              const double right_edge = start + std::floor((box_points[0].x - start) / step) * step;
-
-              gcell->m_tracks_y.emplace_back(geom::Point(left_edge, box_points[2].y), geom::Point(right_edge, box_points[0].y), step, data.m_tracks_y[i].m_metal);
+              if(i == 0)
+                {
+                  gcell->set_base(geom::Point(left_edge_x, left_edge_y), geom::Point(right_edge_x, right_edge_y), step, end_i);
+                }
+              else
+                {
+                  gcell->add_track(geom::Point(left_edge_x, left_edge_y), geom::Point(right_edge_x, right_edge_y), step, data.m_tracks[i].m_metal);
+                }
             }
 
           gcell_row.emplace_back(std::move(gcell));
@@ -374,8 +273,8 @@ DEF::component_start_callback(int32_t param, Data& data)
       gcells.emplace_back(std::move(gcell_row));
     }
 
-  data.m_max_gcell_x = columns.back();
-  data.m_max_gcell_y = rows.back();
+  data.m_max_gcell_x = max_grid_x;
+  data.m_max_gcell_y = max_grid_y;
   data.m_gcells      = std::move(gcells);
   data.m_components.reserve(param);
 }
@@ -397,7 +296,7 @@ void
 DEF::pin_callback(defiPin* param, Data& data)
 {
   std::unordered_map<types::Metal, std::vector<geom::Polygon>> polygons;
-  types::Metal                                                 top_metal;
+  types::Metal                                                 top_metal = types::Metal ::NONE;
 
   for(std::size_t i = 0, end_i = param->numPorts(); i < end_i; ++i)
     {
@@ -414,7 +313,7 @@ DEF::pin_callback(defiPin* param, Data& data)
 
           port->bounds(j, &xl, &yl, &xh, &yh);
 
-          types::Metal metal = utils::get_skywater130_metal(port->layer(j));
+          types::Metal metal = ::utils::get_skywater130_metal(port->layer(j));
 
           if(types::Metal::NONE == metal)
             {
@@ -469,9 +368,9 @@ DEF::pin_callback(defiPin* param, Data& data)
       pin::Pin* pin = new pin::Pin();
       pin->m_ports  = std::move(polygons[top_metal]);
       pin->m_obs.insert(pin->m_obs.end(), std::make_move_iterator(obs.begin()), std::make_move_iterator(obs.end()));
+      pin->m_name              = "PIN:" + std::string(param->pinName());
 
-      const std::string name     = param->pinName();
-      data.m_pins["PIN:" + name] = pin;
+      data.m_pins[pin->m_name] = pin;
     }
   else
     {
@@ -484,20 +383,19 @@ DEF::net_callback(defiNet* param, Data& data)
 {
   if(std::strcmp(param->use(), "SIGNAL") == 0 || std::strcmp(param->use(), "CLOCK") == 0)
     {
-      const std::string net_name = param->name();
-
-      Net               net;
-      net.m_idx = data.m_nets.size() + 1;
+      Net* net    = new Net();
+      net->m_idx  = data.m_nets.size();
+      net->m_name = param->name();
 
       for(std::size_t i = 0, end = param->numConnections(); i < end; ++i)
         {
           const std::string instance_name = param->instance(i);
           const std::string pin_name      = param->pin(i);
 
-          net.m_pins.emplace_back(std::move(instance_name + ":" + pin_name));
+          net->m_pins.emplace(std::move(instance_name + ":" + pin_name));
         }
 
-      data.m_nets[net_name] = std::move(net);
+      data.m_nets[net->m_name] = net;
       return;
     }
 
@@ -528,7 +426,7 @@ DEF::net_callback(defiNet* param, Data& data)
                 {
                 case defiPath_e::DEFIPATH_LAYER:
                   {
-                    metal = utils::get_skywater130_metal(path->getLayer());
+                    metal = ::utils::get_skywater130_metal(path->getLayer());
                     break;
                   }
                 case defiPath_e::DEFIPATH_WIDTH:
@@ -561,7 +459,7 @@ DEF::net_callback(defiNet* param, Data& data)
                             y += width / 2;
                           }
 
-                        const geom::Polygon target({ static_cast<double>(prev_x), static_cast<double>(prev_y), static_cast<double>(x + 1), static_cast<double>(y + 1) }, metal);
+                        const geom::Polygon target({ prev_x - 10.0, prev_y - 10.0, x + 10.0, y + 10.0 }, metal);
                         auto                gcell_with_overlaps = GCell::find_overlaps(target, data.m_gcells, data.m_max_gcell_x, data.m_max_gcell_y);
 
                         for(auto& [gcell, overlap] : gcell_with_overlaps)

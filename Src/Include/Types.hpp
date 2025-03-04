@@ -4,8 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <clipper2/clipper.h>
-
 namespace types
 {
 
@@ -48,11 +46,13 @@ enum class Metal : uint8_t
 
 enum class Cell : uint8_t
 {
-  PATH             = 1,
-  TRACE            = 1,
-  INTERSECTION     = 2,
-  INTERSECTION_VIA = 3,
-  TERMINAL         = 4
+  TRACE           = 1,
+  TRACE_INNER_VIA = 2,
+
+  TERMINAL        = 20,
+  // INNER_VIA = 125,
+  PATH            = 10,
+  // OUTER_VIA = 255,
 };
 
 } // namespace types

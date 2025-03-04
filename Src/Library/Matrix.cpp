@@ -7,6 +7,11 @@ namespace matrix
 Matrix::Matrix(const Shape& shape)
     : m_shape(shape), m_data(nullptr)
 {
+  if(m_shape.m_x == 0 || m_shape.m_y == 0 || m_shape.m_z == 0)
+    {
+      return;
+    }
+
   const std::size_t length = allocate();
 
   for(std::size_t i = 0; i < length; ++i)
@@ -109,13 +114,13 @@ Matrix::mask(Matrix& matrix, const Matrix& mask)
 
 /** =============================== PUBLIC METHODS =============================== */
 
-uint8_t*
+double*
 Matrix::data()
 {
   return m_data;
 }
 
-const uint8_t*
+const double*
 Matrix::data() const
 {
   return m_data;
@@ -127,27 +132,27 @@ Matrix::shape() const
   return m_shape;
 }
 
-const uint8_t&
-Matrix::get_at(const uint8_t x, const uint8_t y, const uint8_t z) const
+const double&
+Matrix::get_at(const uint32_t x, const uint32_t y, const uint32_t z) const
 {
   if(x >= m_shape.m_x || y >= m_shape.m_y || z >= m_shape.m_z)
     {
       throw std::out_of_range("Out of range");
     }
 
-  const std::size_t index = y * m_shape.m_y * m_shape.m_z + x * m_shape.m_z + (m_shape.m_z - z - 1);
+  const std::size_t index = y * (m_shape.m_x * m_shape.m_z) + x * m_shape.m_z + z;
   return m_data[index];
 }
 
 void
-Matrix::set_at(const uint8_t value, const uint8_t x, const uint8_t y, const uint8_t z)
+Matrix::set_at(const double value, const uint32_t x, const uint32_t y, const uint32_t z)
 {
   if(x >= m_shape.m_x || y >= m_shape.m_y || z >= m_shape.m_z)
     {
       throw std::out_of_range("Out of range");
     }
 
-  const std::size_t index = y * m_shape.m_y * m_shape.m_z + x * m_shape.m_z + (m_shape.m_z - z - 1);
+  const std::size_t index = y * (m_shape.m_x * m_shape.m_z) + x * m_shape.m_z + z;
   m_data[index]           = value;
 }
 
@@ -164,15 +169,11 @@ std::size_t
 Matrix::allocate()
 {
   const std::size_t length = m_shape.m_z * m_shape.m_y * m_shape.m_x;
+  m_data                   = new double[length];
 
-  if(length != 0)
+  if(m_data == nullptr)
     {
-      m_data = new uint8_t[length];
-
-      if(m_data == nullptr)
-        {
-          throw std::runtime_error("Failed to allocate " + std::to_string(length) + " bytes");
-        }
+      throw std::runtime_error("Failed to allocate " + std::to_string(length) + " bytes");
     }
 
   return length;

@@ -4,16 +4,68 @@
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace matrix
 {
 
+struct Node
+{
+  uint32_t m_x;
+  uint32_t m_y;
+  uint32_t m_z;
+
+  double   m_cost;     // accumulated cost
+  uint32_t m_source_x; // original terminal x
+  uint32_t m_source_y; // original terminal y
+
+  struct Hash
+  {
+    std::size_t
+    operator()(const Node& node) const
+    {
+      auto hash = std::hash<uint32_t>()(node.m_x);
+      hash ^= std::hash<uint32_t>()(node.m_y) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+      hash ^= std::hash<uint32_t>()(node.m_z) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+      return hash;
+    }
+  };
+
+  struct Equal
+  {
+    bool
+    operator()(const Node& lhs, const Node& rhs) const
+    {
+      return lhs.m_x == rhs.m_x && lhs.m_y == rhs.m_y && lhs.m_z == rhs.m_z;
+    }
+  };
+
+  friend bool
+  operator==(const Node& lhs, const Node& rhs)
+  {
+    return lhs.m_x == rhs.m_x && lhs.m_y == rhs.m_y && lhs.m_z == rhs.m_z;
+  }
+};
+
+struct CompareNode
+{
+  bool
+  operator()(const matrix::Node& a, const matrix::Node& b) const
+  {
+    return a.m_cost > b.m_cost;
+  }
+};
+
+using MapOfNodes = std::unordered_map<Node, uint32_t, Node::Hash, Node::Equal>;
+using SetOfNodes = std::unordered_set<Node, Node::Hash, Node::Equal>;
+
 struct Shape
 {
-  uint8_t m_x = 0;
-  uint8_t m_y = 0;
-  uint8_t m_z = 0;
+  std::size_t m_x = 0;
+  std::size_t m_y = 0;
+  std::size_t m_z = 0;
 
   friend bool
   operator==(const Shape& lhs, const Shape& rhs)
@@ -108,17 +160,17 @@ public:
   /**
    * @brief Returns pointer to the underlying data.
    *
-   * @return uint8_t*
+   * @return double*
    */
-  uint8_t*
+  double*
   data();
 
   /**
    * @brief Returns pointer to the underlying data.
    *
-   * @return const uint8_t*
+   * @return const double*
    */
-  const uint8_t*
+  const double*
   data() const;
 
   /**
@@ -135,10 +187,10 @@ public:
    * @param x X-coordinate (width).
    * @param y Y-coordinate (height).
    * @param z Z-coordinate (depth).
-   * @return const uint8_t&
+   * @return const double&
    */
-  const uint8_t&
-  get_at(const uint8_t x, const uint8_t y, const uint8_t z) const;
+  const double&
+  get_at(const uint32_t x, const uint32_t y, const uint32_t z) const;
 
   /**
    * @brief Sets the value at the given (x, y, z) coordinates.
@@ -149,7 +201,7 @@ public:
    * @param z Z-coordinate (depth).
    */
   void
-  set_at(const uint8_t value, const uint8_t x, const uint8_t y, const uint8_t z);
+  set_at(const double value, const uint32_t x, const uint32_t y, const uint32_t z);
 
   /**
    * @brief Clears the matrix data.
@@ -169,9 +221,11 @@ private:
   std::size_t
   allocate();
 
+public:
+  Shape m_shape; ///< Holds the dimensions of the matrix.
+
 private:
-  Shape    m_shape; ///< Holds the dimensions of the matrix.
-  uint8_t* m_data;  ///< Pointer to the dynamically allocated matrix data.
+  double* m_data; ///< Pointer to the dynamically allocated matrix data.
 };
 
 } // namespace matrix

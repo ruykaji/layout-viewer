@@ -6,7 +6,7 @@
 #include <QTreeView>
 
 #include "Include/GUI/Information.hpp"
-#include "Include/Utils.hpp"
+#include "Include/GlobalUtils.hpp"
 
 namespace gui::information::details
 {
@@ -107,10 +107,12 @@ create_gcell_net_list(def::GCell const* gcell)
 
   QStandardItem* root_item = standard_model->invisibleRootItem();
 
-  for(const auto& [name, _] : gcell->m_nets)
+  for(const auto& net : gcell->m_nets)
     {
-      QStandardItem* item = new QStandardItem(QString::fromStdString(name));
-      QColor         color{ QString::fromStdString(utils::get_color_from_string(name)) };
+      const std::string& net_name = static_cast<def::Net const*>(net)->m_name;
+
+      QStandardItem*     item     = new QStandardItem(QString::fromStdString(net_name));
+      QColor             color{ QString::fromStdString(utils::get_color_from_string(net_name)) };
 
       item->setIcon(create_icon_form_color(color));
       item->setCheckable(true);
@@ -134,11 +136,11 @@ create_gcell_tracks_list(def::GCell const* gcell)
 
   QStandardItem* root_item = standard_model->invisibleRootItem();
 
-  for(std::size_t i = 0, end = gcell->m_tracks_x.size(); i < end; ++i)
+  for(const auto [metal, _] : gcell->m_grids)
     {
-      const types::Metal metal = gcell->m_tracks_x[i].m_metal;
+      const std::size_t metal_idx = (uint8_t(metal) - 1) / 2 - 1;
 
-      if(i % 2 == 0)
+      if(metal_idx % 2 == 0)
         {
           QStandardItem* item_x = new QStandardItem(std::move(QString::fromStdString(utils::skywater130_metal_to_string(metal)) + "_x"));
           QColor         color  = get_metal_color(metal);
@@ -149,7 +151,7 @@ create_gcell_tracks_list(def::GCell const* gcell)
           root_item->appendRow(item_x);
         }
 
-      if(i % 2 != 0 || metal == types::Metal::M1)
+      if(metal_idx % 2 != 0)
         {
           QStandardItem* item_y = new QStandardItem(std::move(QString::fromStdString(utils::skywater130_metal_to_string(metal)) + "_y"));
           QColor         color  = get_metal_color(metal);

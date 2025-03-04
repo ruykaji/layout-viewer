@@ -7,8 +7,7 @@
 
 #include <defrReader.hpp>
 
-#include "Include/Geometry.hpp"
-#include "Include/Pin.hpp"
+#include "Include/DEF/GCell.hpp"
 
 namespace def
 {
@@ -48,61 +47,25 @@ struct ComponentTemplate
   types::Orientation m_orientation;
 };
 
-struct Net
-{
-  std::size_t              m_idx;
-  std::vector<std::string> m_pins;
-};
-
-struct GCell
-{
-  struct Track
-  {
-    geom::Point  m_start;
-    geom::Point  m_end;
-    double       m_step;
-    types::Metal m_metal;
-  };
-
-  std::size_t                                                      m_idx_x;
-  std::size_t                                                      m_idx_y;
-
-  geom::Polygon                                                    m_box;
-  std::vector<Track>                                               m_tracks_x;
-  std::vector<Track>                                               m_tracks_y;
-  std::vector<geom::Polygon>                                       m_obstacles;
-
-  std::unordered_map<std::string, std::pair<types::Metal, int8_t>> m_edge_pins;
-  std::unordered_map<std::string, std::vector<pin::Pin*>>          m_nets;
-
-  void
-  assign_inner_pins();
-
-  static std::vector<std::pair<GCell*, geom::Polygon>>
-  find_overlaps(const geom::Polygon& poly, const std::vector<std::vector<GCell*>>& gcells, const uint32_t width, const uint32_t height);
-};
-
 struct Data
 {
   /** General */
-  std::array<uint32_t, 4UL>                            m_box;
-  std::vector<ComponentTemplate>                       m_components;
-  std::vector<geom::Polygon>                           m_obstacles;
+  std::array<uint32_t, 4UL>                  m_box;
+  std::vector<ComponentTemplate>             m_components;
+  std::vector<geom::Polygon>                 m_obstacles;
 
   /** Pins related */
-  std::unordered_map<std::string, pin::Pin*>           m_pins;
+  std::unordered_map<std::string, pin::Pin*> m_pins;
+  std::vector<pin::Pin*>                     m_cross_pins;
 
   /** Nets related */
-  // TODO: remove from all nets maps std::string as key and replace it with net's index
-  std::unordered_map<std::string, std::vector<GCell*>> m_nets_gcells;
-  std::unordered_map<std::string, Net>                 m_nets;
+  std::unordered_map<std::string, Net*>      m_nets;
 
   /** Gcells related */
-  std::vector<TrackTemplate>                           m_tracks_x;
-  std::vector<TrackTemplate>                           m_tracks_y;
-  std::size_t                                          m_max_gcell_x;
-  std::size_t                                          m_max_gcell_y;
-  std::vector<std::vector<GCell*>>                     m_gcells;
+  std::vector<TrackTemplate>                 m_tracks;
+  std::size_t                                m_max_gcell_x;
+  std::size_t                                m_max_gcell_y;
+  std::vector<std::vector<GCell*>>           m_gcells;
 };
 
 class DEF

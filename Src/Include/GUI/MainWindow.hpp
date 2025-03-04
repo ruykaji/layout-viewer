@@ -24,9 +24,6 @@ private:
   void
   apply_global_routing();
 
-  void
-  encode();
-
 signals:
   void
   send_viewer_data(def::Data const* data);
@@ -42,10 +39,8 @@ private slots:
   create_project();
 
 private:
-  ProjectSettings m_settings;
-
-  lef::Data*      m_lef_data;
-  def::Data*      m_def_data;
+  ProjectSettings  m_settings;
+  process::Process m_proc;
 };
 
 } // namespace gui

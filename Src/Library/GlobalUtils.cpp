@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "Include/Utils.hpp"
+#include "Include/GlobalUtils.hpp"
 
 namespace utils
 {

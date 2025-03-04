@@ -4,7 +4,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include "Include/DEF.hpp"
+#include "Include/DEF/DEF.hpp"
 
 namespace gui::information
 {

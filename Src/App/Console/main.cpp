@@ -4,22 +4,33 @@
 int
 main(int argc, char const* argv[])
 {
-  const ini::Config             config      = ini::parse("./config.ini");
+  std::filesystem::path config_path = "./config.ini";
 
-  const std::string             pdk_folder  = config.at("PDK").get_as<std::string>("PATH");
-  const std::string             design_path = config.at("DESIGN").get_as<std::string>("PATH");
-  const std::string             guide_path  = config.at("DESIGN").get_as<std::string>("GUIDE");
+  if(argc > 1)
+    {
+      config_path = argv[1];
+    }
 
-  const lef::LEF                lef;
-  const lef::Data               lef_data = lef.parse(pdk_folder);
+  const ini::Config config = ini::parse(config_path);
 
-  const def::DEF                def;
-  def::Data                     def_data   = def.parse(design_path);
+  process::Process  proc;
+  proc.set_path_pdk(config.at("PDK").get_as<std::string>("PATH"));
+  proc.set_path_design(config.at("DESIGN").get_as<std::string>("PATH"));
+  proc.set_path_guide(config.at("DESIGN").get_as<std::string>("GUIDE"));
 
-  const std::vector<guide::Net> guide_nets = guide::read(guide_path);
+  proc.prepare_data();
+  std::cout << "1. Data hash been prepared" << std::endl;
 
-  process::apply_global_routing(def_data, lef_data, guide_nets);
-  std::vector<process::Task> tasks = process::encode(def_data);
+  proc.collect_overlaps();
+  std::cout << "2. Overlaps hash been collected" << std::endl;
+
+  proc.apply_guide();
+  std::cout << "3. Guide has been applied" << std::endl;
+
+  proc.remove_empty_gcells();
+  std::cout << "4. GCells has been processed" << std::endl;
+
+  proc.make_dataset();
 
   return 0;
 }

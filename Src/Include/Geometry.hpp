@@ -10,13 +10,26 @@
 namespace geom
 {
 
+using PointS = Clipper2Lib::Point<std::size_t>;
+
+struct LineS
+{
+  PointS       m_start;
+  PointS       m_end;
+  types::Metal m_metal;
+};
+
 using Point = Clipper2Lib::Point<double>;
 
-struct Polygon
+struct Line
 {
-  types::Metal       m_metal;
-  std::vector<Point> m_points;
+  Point        m_start;
+  Point        m_end;
+  types::Metal m_metal;
+};
 
+class Polygon
+{
 public:
   Polygon();
 
@@ -70,7 +83,7 @@ public:
    * @return Polygon&
    */
   Polygon&
-  operator-(const Polygon& rhs);
+  operator-=(const Polygon& rhs);
 
 public:
   /**
@@ -112,6 +125,18 @@ public:
    */
   bool
   probe_point(const Point& point) const;
+
+  /**
+   * @brief Gets the area of a polygon.
+   *
+   * @return double
+   */
+  double
+  get_area() const;
+
+public:
+  types::Metal       m_metal;
+  std::vector<Point> m_points;
 };
 
 } // namespace geom

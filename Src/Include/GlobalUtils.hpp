@@ -1,5 +1,5 @@
-#ifndef __UTILS_HPP__
-#define __UTILS_HPP__
+#ifndef __GLOBAL_UTILS_HPP__
+#define __GLOBAL_UTILS_HPP__
 
 #include <string_view>
 

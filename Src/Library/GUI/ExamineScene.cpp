@@ -9,7 +9,7 @@
 #include <QTransform>
 
 #include "Include/GUI/ExamineScene.hpp"
-#include "Include/Utils.hpp"
+#include "Include/GlobalUtils.hpp"
 
 namespace gui::examine_scene::details
 {
@@ -29,12 +29,12 @@ tess_vertex_callback(const GLvoid* data)
 }
 
 void
-draw_polygon(const geom::Polygon& poly, const std::string& net_name = "")
+draw_polygon(const geom::Polygon& poly)
 {
   static GLdouble vertices[100][3] = { 0 };
   std::size_t     i                = 0;
 
-  auto color = details::get_metal_color(poly.m_metal);
+  auto            color            = details::get_metal_color(poly.m_metal);
   glColor4f(color.redF(), color.greenF(), color.blueF(), 0.25f);
 
   GLUtesselator* tess = gluNewTess();
@@ -59,30 +59,23 @@ draw_polygon(const geom::Polygon& poly, const std::string& net_name = "")
   gluTessEndPolygon(tess);
 
   gluDeleteTess(tess);
+}
 
-  if(!net_name.empty())
-    {
-      const auto center = poly.get_center();
-      QColor     color(QString::fromStdString(utils::get_color_from_string(net_name)));
+void
+draw_text(QWidget* parent, const double x, const double y, const QString& text)
+{
+  QPen pen(Qt::white);
+  pen.setCosmetic(true);
 
-      glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
-      glBegin(GL_LINE_LOOP);
-      glVertex2d(center.x - 40, center.y - 40);
-      glVertex2d(center.x + 40, center.y - 40);
-      glVertex2d(center.x + 40, center.y + 40);
-      glVertex2d(center.x - 40, center.y + 40);
-      glEnd();
+  QPainter painter(parent);
+  painter.setRenderHint(QPainter::Antialiasing);
+  painter.setPen(std::move(pen));
+  painter.setFont(QFont("Arial", 12));
+  painter.drawText(x, y, text);
+  painter.end();
 
-      glBegin(GL_LINE_STRIP);
-      glVertex2d(center.x - 40, center.y - 40);
-      glVertex2d(center.x + 40, center.y + 40);
-      glEnd();
-
-      glBegin(GL_LINE_STRIP);
-      glVertex2d(center.x - 40, center.y + 40);
-      glVertex2d(center.x + 40, center.y - 40);
-      glEnd();
-    }
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 std::pair<QToolButton*, QAction*>
@@ -122,8 +115,6 @@ Scene::initializeGL()
 {
   initializeOpenGLFunctions();
   glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 void
@@ -148,16 +139,8 @@ Scene::paintGL()
   glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glPushAttrib(GL_ALL_ATTRIB_BITS);
-
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
-  painter.setPen(Qt::white);
-  painter.setFont(QFont("Arial", 12));
-  painter.drawText(10, height() - 20, QString("X: %1, Y: %2").arg(m_last_mouse_scene_position.x(), 0, 'd', 0).arg(m_last_mouse_scene_position.y(), 0, 'd', 0));
-  painter.end();
-
-  glPopAttrib();
+  const QString text = QString("X: %1, Y: %2").arg(m_last_mouse_scene_position.x(), 0, 'd', 0).arg(m_last_mouse_scene_position.y(), 0, 'd', 0);
+  details::draw_text(this, 10, height() - 20, text);
 
   glPushMatrix();
   glTranslatef(m_pan_x, m_pan_y, 0.0f);
@@ -172,50 +155,39 @@ Scene::paintGL()
   glVertex2d(m_data->m_box.m_points[3].x, m_data->m_box.m_points[3].y);
   glEnd();
 
-  for(const auto& track : m_data->m_tracks_x)
+  for(const auto [metal, grid] : m_data->m_grids)
     {
-      if(!m_tracks[track.m_metal].first)
+      // TODO remove x and y directions
+      if(!m_tracks[metal].first && !m_tracks[metal].second)
         {
           continue;
         }
 
-      auto color = details::get_metal_color(track.m_metal);
+      QColor color = details::get_metal_color(metal);
       glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
 
-      double y = track.m_start.y;
+      const std::size_t metal_idx = (uint8_t(metal) - 1) / 2 - 1;
 
-      while(y <= track.m_end.y)
+      if(metal_idx % 2 == 0)
+        {
+      for(double y = grid.m_start.y; y <= grid.m_end.y; y += grid.m_step)
         {
           glBegin(GL_LINE_STRIP);
-          glVertex2d(track.m_start.x, y);
-          glVertex2d(track.m_end.x, y);
+          glVertex2d(std::min(m_data->m_box.m_points[1].x, grid.m_start.x), y);
+          glVertex2d(std::max(m_data->m_box.m_points[0].x, grid.m_end.x), y);
           glEnd();
-
-          y += track.m_step;
         }
-    }
-
-  for(const auto& track : m_data->m_tracks_y)
-    {
-      if(!m_tracks[track.m_metal].second)
+        }
+      else
         {
-          continue;
-        }
-
-      auto color = details::get_metal_color(track.m_metal);
-      glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
-
-      double x = track.m_start.x;
-
-      while(x <= track.m_end.x)
+      for(double x = grid.m_start.x; x <= grid.m_end.x; x += grid.m_step)
         {
           glBegin(GL_LINE_STRIP);
-          glVertex2d(x, track.m_start.y);
-          glVertex2d(x, track.m_end.y);
+          glVertex2d(x, std::min(m_data->m_box.m_points[2].y, grid.m_start.y));
+          glVertex2d(x, std::max(m_data->m_box.m_points[0].y, grid.m_end.y));
           glEnd();
-
-          x += track.m_step;
         }
+      }
     }
 
   for(const auto& poly : m_data->m_obstacles)
@@ -228,36 +200,230 @@ Scene::paintGL()
       details::draw_polygon(poly);
     }
 
-  const auto& nets = m_data->m_nets;
-
-  for(const auto& [name, pins] : nets)
+  for(const auto pin : m_data->m_inner_pins)
     {
-      if(!m_nets[name])
+      def::Net const*    net      = reinterpret_cast<def::Net const*>(pin->m_net);
+      const std::string& net_name = net->m_name;
+
+      if(!m_nets[net_name])
         {
           continue;
         }
 
-      for(const auto& pin : pins)
+      for(const auto& poly : pin->m_ptr->m_obs)
         {
-          for(const auto& poly : pin->m_obs)
-            {
-              if(poly.m_metal != types::Metal::NONE && !m_metal_layers[poly.m_metal])
-                {
-                  continue;
-                }
-
-              details::draw_polygon(poly);
-            }
-
-          const auto& poly = pin->m_ports[0];
-
-          if(poly.m_metal != types::Metal::NONE && !m_metal_layers[poly.m_metal])
+          if(!m_metal_layers[poly.m_metal])
             {
               continue;
             }
 
-          details::draw_polygon(poly, name);
+          details::draw_polygon(poly);
         }
+
+      if(m_metal_layers[pin->m_ptr->m_ports[0].m_metal])
+        {
+          details::draw_polygon(pin->m_ptr->m_ports[0]);
+        }
+
+      if(!m_metal_layers[pin->m_access_points.m_metal])
+        {
+          continue;
+        }
+
+      for(const auto [center, _] : pin->m_access_points.m_points)
+        {
+          QColor color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+          glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+          glBegin(GL_LINE_LOOP);
+          glVertex2d(center.x - 20, center.y - 20);
+          glVertex2d(center.x + 20, center.y - 20);
+          glVertex2d(center.x + 20, center.y + 20);
+          glVertex2d(center.x - 20, center.y + 20);
+          glEnd();
+
+          glBegin(GL_LINE_STRIP);
+          glVertex2d(center.x - 20, center.y - 20);
+          glVertex2d(center.x + 20, center.y + 20);
+          glEnd();
+
+          glBegin(GL_LINE_STRIP);
+          glVertex2d(center.x - 20, center.y + 20);
+          glVertex2d(center.x + 20, center.y - 20);
+          glEnd();
+        }
+
+      const geom::Point& center = pin->m_ptr->m_center;
+      const QString      text   = QString::fromStdString(pin->m_ptr->m_name);
+      const double       x      = center.x * m_zoom_factor + m_pan_x;
+      const double       y      = center.y * m_zoom_factor + m_pan_y;
+
+      details::draw_text(this, x, y + 10, text);
+    }
+
+  for(const auto pin : m_data->m_cross_pins)
+    {
+      def::Net const*    net      = reinterpret_cast<def::Net const*>(pin->m_net);
+      const std::string& net_name = net->m_name;
+
+      if(!m_nets[net_name] || !m_metal_layers[pin->m_ptr->m_ports[0].m_metal])
+        {
+          continue;
+        }
+
+      const geom::Point& center = pin->m_ptr->m_center;
+      QColor             color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+      glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+      glBegin(GL_LINE_LOOP);
+      glVertex2d(center.x - 20, center.y - 20);
+      glVertex2d(center.x + 20, center.y - 20);
+      glVertex2d(center.x + 20, center.y + 20);
+      glVertex2d(center.x - 20, center.y + 20);
+      glEnd();
+
+      glBegin(GL_LINE_STRIP);
+      glVertex2d(center.x - 20, center.y - 20);
+      glVertex2d(center.x + 20, center.y + 20);
+      glEnd();
+
+      glBegin(GL_LINE_STRIP);
+      glVertex2d(center.x - 20, center.y + 20);
+      glVertex2d(center.x + 20, center.y - 20);
+      glEnd();
+    }
+
+  for(const auto [bottom_pin, top_pin] : m_data->m_between_stack_pins)
+    {
+      def::Net const*    net      = reinterpret_cast<def::Net const*>(bottom_pin->m_net);
+      const std::string& net_name = net->m_name;
+
+      if(!m_nets[net_name] || (!m_metal_layers[bottom_pin->m_ptr->m_ports[0].m_metal] && !m_metal_layers[top_pin->m_ptr->m_ports[0].m_metal]))
+        {
+          continue;
+        }
+
+      {
+        for(const auto [center, _] : bottom_pin->m_access_points.m_points)
+          {
+            QColor color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+            glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2d(center.x - 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y + 20);
+            glVertex2d(center.x - 20, center.y + 20);
+            glEnd();
+
+            glBegin(GL_LINE_STRIP);
+            glVertex2d(center.x - 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y + 20);
+            glEnd();
+
+            glBegin(GL_LINE_STRIP);
+            glVertex2d(center.x - 20, center.y + 20);
+            glVertex2d(center.x + 20, center.y - 20);
+            glEnd();
+          }
+
+        const geom::Point& center = bottom_pin->m_ptr->m_center;
+        const QString      text   = QString::fromStdString(bottom_pin->m_ptr->m_name);
+        const double       x      = center.x * m_zoom_factor + m_pan_x;
+        const double       y      = center.y * m_zoom_factor + m_pan_y;
+
+        details::draw_text(this, x, y + 10, text);
+      }
+
+      {
+        for(const auto [center, _] : top_pin->m_access_points.m_points)
+          {
+            QColor color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+            glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2d(center.x - 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y + 20);
+            glVertex2d(center.x - 20, center.y + 20);
+            glEnd();
+
+            glBegin(GL_LINE_STRIP);
+            glVertex2d(center.x - 20, center.y - 20);
+            glVertex2d(center.x + 20, center.y + 20);
+            glEnd();
+
+            glBegin(GL_LINE_STRIP);
+            glVertex2d(center.x - 20, center.y + 20);
+            glVertex2d(center.x + 20, center.y - 20);
+            glEnd();
+          }
+
+        const geom::Point& center = top_pin->m_ptr->m_center;
+        const QString      text   = QString::fromStdString(top_pin->m_ptr->m_name);
+        const double       x      = center.x * m_zoom_factor + m_pan_x;
+        const double       y      = center.y * m_zoom_factor + m_pan_y;
+
+        details::draw_text(this, x, y + 10, text);
+      }
+
+      // {
+      //   const geom::Point& center = bottom_pin->m_ptr->m_center;
+      //   QColor             color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+      //   glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+      //   glBegin(GL_LINE_LOOP);
+      //   glVertex2d(center.x - 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y + 20);
+      //   glVertex2d(center.x - 20, center.y + 20);
+      //   glEnd();
+
+      //   glBegin(GL_LINE_STRIP);
+      //   glVertex2d(center.x - 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y + 20);
+      //   glEnd();
+
+      //   glBegin(GL_LINE_STRIP);
+      //   glVertex2d(center.x - 20, center.y + 20);
+      //   glVertex2d(center.x + 20, center.y - 20);
+      //   glEnd();
+
+      //   const QString text = QString::fromStdString(bottom_pin->m_ptr->m_name);
+      //   const double  x    = center.x * m_zoom_factor + m_pan_x;
+      //   const double  y    = center.y * m_zoom_factor + m_pan_y;
+
+      //   details::draw_text(this, x, y + 10, text);
+      // }
+
+      // {
+      //   const geom::Point& center = top_pin->m_ptr->m_center;
+      //   QColor             color(QString::fromStdString(utils::get_color_from_string(net_name)));
+
+      //   glColor4f(color.redF(), color.greenF(), color.blueF(), 1.00f);
+      //   glBegin(GL_LINE_LOOP);
+      //   glVertex2d(center.x - 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y + 20);
+      //   glVertex2d(center.x - 20, center.y + 20);
+      //   glEnd();
+
+      //   glBegin(GL_LINE_STRIP);
+      //   glVertex2d(center.x - 20, center.y - 20);
+      //   glVertex2d(center.x + 20, center.y + 20);
+      //   glEnd();
+
+      //   glBegin(GL_LINE_STRIP);
+      //   glVertex2d(center.x - 20, center.y + 20);
+      //   glVertex2d(center.x + 20, center.y - 20);
+      //   glEnd();
+
+      //   const QString text = QString::fromStdString(top_pin->m_ptr->m_name);
+      //   const double  x    = center.x * m_zoom_factor + m_pan_x;
+      //   const double  y    = center.y * m_zoom_factor + m_pan_y;
+
+      //   details::draw_text(this, x, y + 10, text);
+      // }
     }
 
   glPopMatrix();
@@ -339,14 +505,15 @@ Scene::recv_viewer_data(def::GCell const* gcell)
 {
   m_data = gcell;
 
-  for(const auto& [name, _] : m_data->m_nets)
+  for(const auto& net : m_data->m_nets)
     {
-      m_nets[name] = true;
+      const std::string& net_name = static_cast<def::Net const*>(net)->m_name;
+      m_nets[net_name]            = true;
     }
 
-  for(const auto& track : m_data->m_tracks_x)
+  for(const auto [metal, _] : m_data->m_grids)
     {
-      m_tracks[track.m_metal] = std::make_pair(false, false);
+      m_tracks[metal] = std::make_pair(false, false);
     }
 
   const auto [left_top, right_bottom] = m_data->m_box.get_extrem_points();
